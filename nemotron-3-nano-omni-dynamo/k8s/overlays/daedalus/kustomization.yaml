@@ -1,0 +1,34 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - photo-tagger-nodeport.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    app.kubernetes.io/part-of: nemotron-omni-photo-demo
+
+images:
+  - name: photo-tagger
+    newName: daedalus.ddns.me:5050/btuttle/photo-tagger
+    newTag: latest
+
+configMapGenerator:
+  - name: photo-tagger-config
+    behavior: merge
+    literals:
+      - WRITE_SIDECAR=true
+      - SIDECAR_ROOTS=/volume2/daedalus
+      - ALLOWED_ROOTS=/volume1/homes,/volume2/daedalus
+      - PHOTO_TAGGER_REQUIRE_AUTH=true
+      - MAX_CONCURRENT_LLM=4
+
+patches:
+  - path: photo-tagger-daedalus-patch.yaml
+    target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: photo-tagger

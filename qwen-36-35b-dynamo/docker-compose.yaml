@@ -1,0 +1,12 @@
+services:
+  qwen36-35b-dynamo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: daedalus.ddns.me:5050/btuttle/qwen36-35b-dynamo:latest
+
+  photo-tagger:
+    build:
+      context: ./photo-tagger
+      dockerfile: Dockerfile
+    image: daedalus.ddns.me:5050/btuttle/photo-tagger:latest

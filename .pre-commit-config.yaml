@@ -1,0 +1,44 @@
+minimum_pre_commit_version: "3.5.0"
+
+repos:
+  - repo: local
+    hooks:
+      - id: repo-hygiene
+        name: repository hygiene and generated artifact guard
+        entry: scripts/pre-commit/check-hygiene.sh
+        language: system
+        pass_filenames: true
+
+      - id: secret-scan
+        name: secret and rendered-secret guard
+        entry: scripts/pre-commit/check-secrets.sh
+        language: system
+        pass_filenames: true
+
+      - id: shell-checks
+        name: shell syntax and optional shellcheck
+        entry: scripts/pre-commit/check-shell.sh
+        language: system
+        pass_filenames: false
+        files: '(^|/)(deploy|test-endpoint|validate)\.sh$|(^|/)scripts/.*\.sh$|(^|/)photo-tagger/deploy\.sh$'
+
+      - id: python-benchmark-compile
+        name: Python benchmark compile checks
+        entry: scripts/pre-commit/check-python.sh
+        language: system
+        pass_filenames: false
+        files: '(^|/)k8s/benchmarks/.*\.py$'
+
+      - id: kustomize-render
+        name: Kubernetes Kustomize render checks
+        entry: scripts/pre-commit/check-kustomize.sh
+        language: system
+        pass_filenames: false
+        files: '(^|/)k8s/|(^|/)kustomization\.ya?ml$|\.ya?ml$'
+
+      - id: rust-photo-tagger
+        name: Rust Photo Tagger fmt and tests
+        entry: scripts/pre-commit/check-rust.sh
+        language: system
+        pass_filenames: true
+        files: '(^|/)photo-tagger/(Cargo\.toml|Cargo\.lock|src/|static/)'

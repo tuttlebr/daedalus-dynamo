@@ -1,0 +1,12 @@
+services:
+  nemotron-3-nano-omni:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: daedalus.ddns.me:5050/btuttle/nemotron-3-nano-omni:latest
+
+  photo-tagger:
+    build:
+      context: ./photo-tagger
+      dockerfile: Dockerfile
+    image: daedalus.ddns.me:5050/btuttle/photo-tagger:latest

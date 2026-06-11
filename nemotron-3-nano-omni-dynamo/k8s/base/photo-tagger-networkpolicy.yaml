@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: photo-tagger-postgres-ingress
+  labels:
+    app.kubernetes.io/name: photo-tagger-postgres
+    app.kubernetes.io/part-of: nemotron-omni-photo-demo
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: photo-tagger-postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: photo-tagger
+      ports:
+        - protocol: TCP
+          port: 5432
