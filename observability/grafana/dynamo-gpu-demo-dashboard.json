@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Demo-oriented NVIDIA Dynamo dashboard: inference golden signals, Dynamo serving internals (KV router, batching/saturation, KV-cache, prefill/decode), error rate, GPU telemetry correlated to worker pods, and Kubernetes cluster/node health.",
+  "description": "Unified NVIDIA Dynamo dashboard for Kubernetes deployments using vLLM, SGLang, or TensorRT-LLM. It combines inference golden signals, Dynamo serving internals, KV router and cache reuse, engine saturation, GPU telemetry correlated to worker pods, and Kubernetes/node health.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 2,
@@ -336,7 +336,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "SGLang engine radix prefix-cache hit rate across the deployment's workers (sglang:cache_hit_rate). Higher = more prompt reuse, less recompute.",
+      "description": "vLLM engine prefix-cache hit rate across the deployment's workers (hits/queries). Higher = more prompt reuse, less recompute.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -399,13 +399,35 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "avg(max without (job, instance) (sglang:cache_hit_rate{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
-          "legendFormat": "radix cache",
+          "expr": "sum(max without (job, instance) (rate(vllm:prefix_cache_hits_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}[$__rate_interval]))) / clamp_min(sum(max without (job, instance) (rate(vllm:prefix_cache_queries_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}[$__rate_interval]))), 1e-9)",
+          "legendFormat": "vLLM",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "avg(max without (job, instance) (sglang:cache_hit_rate{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
+          "legendFormat": "SGLang",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "avg(max without (job, instance) (trtllm_kv_cache_hit_rate{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(trtllmworker|tensorrtllmworker|worker|prefill|decode|backend)-.*\"}))",
+          "legendFormat": "TRT-LLM",
+          "range": true,
+          "refId": "C"
         }
       ],
-      "title": "KV Cache Hit Rate",
+      "title": "KV Cache Reuse Rate",
       "type": "stat"
     },
     {
@@ -413,7 +435,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Average GPU utilization of THIS deployment's SGLang workers (DCGM, pod-mapped). NOTE: orange below 50% flags under-utilization (cost/efficiency), not a fault — for memory-bound decode, check GPU Memory-Bandwidth Util too.",
+      "description": "Average GPU utilization of THIS deployment's vLLM workers (DCGM, pod-mapped). NOTE: orange below 50% flags under-utilization (cost/efficiency), not a fault — for memory-bound decode, check GPU Memory-Bandwidth Util too.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -472,7 +494,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "avg(DCGM_FI_DEV_GPU_UTIL{exported_namespace=~\"${namespace:regex}\",exported_pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"})",
+          "expr": "avg(DCGM_FI_DEV_GPU_UTIL{exported_namespace=~\"${namespace:regex}\",exported_pod=~\"(${deployment:regex})-[0-9]+-(vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|encoder|encode)-.*\"})",
           "legendFormat": "GPU util",
           "range": true,
           "refId": "A"
@@ -486,7 +508,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Requests currently running on the SGLang workers (sum of sglang:num_running_reqs). Batch ceiling is max-running-requests=8 per worker.",
+      "description": "Requests currently running on the vLLM workers (sum of vllm:num_requests_running). Batch ceiling is max-num-seqs=4 per worker.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -540,10 +562,32 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(max without (job, instance) (sglang:num_running_reqs{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
-          "legendFormat": "running",
+          "expr": "sum(max without (job, instance) (vllm:num_requests_running{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}))",
+          "legendFormat": "vLLM",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(max without (job, instance) (sglang:num_running_reqs{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
+          "legendFormat": "SGLang",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(max without (job, instance) (trtllm_num_requests_running{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(trtllmworker|tensorrtllmworker|worker|prefill|decode|backend)-.*\"}))",
+          "legendFormat": "TRT-LLM",
+          "range": true,
+          "refId": "C"
         }
       ],
       "title": "In-flight Requests",
@@ -554,7 +598,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Requests queued in the SGLang workers waiting for a batch slot (sglang:num_queue_reqs). >0 sustained = saturation.",
+      "description": "Requests queued in the vLLM workers waiting for a batch slot (vllm:num_requests_waiting). >0 sustained = saturation.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -616,10 +660,32 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(max without (job, instance) (sglang:num_queue_reqs{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
-          "legendFormat": "waiting",
+          "expr": "sum(max without (job, instance) (vllm:num_requests_waiting{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}))",
+          "legendFormat": "vLLM",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(max without (job, instance) (sglang:num_queue_reqs{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
+          "legendFormat": "SGLang",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(max without (job, instance) (trtllm_num_requests_waiting{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(trtllmworker|tensorrtllmworker|worker|prefill|decode|backend)-.*\"}))",
+          "legendFormat": "TRT-LLM",
+          "range": true,
+          "refId": "C"
         }
       ],
       "title": "Waiting Requests",
@@ -706,7 +772,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Highest GPU KV-cache occupancy across workers (sglang:token_usage). Near 100% triggers retractions.",
+      "description": "Highest GPU KV-cache occupancy across workers (vllm:kv_cache_usage_perc). Near 100% triggers preemptions.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -769,10 +835,32 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "max(max without (job, instance) (sglang:token_usage{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
-          "legendFormat": "kv cache",
+          "expr": "max(max without (job, instance) (vllm:kv_cache_usage_perc{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}))",
+          "legendFormat": "vLLM",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "max(max without (job, instance) (sglang:token_usage{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
+          "legendFormat": "SGLang",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "max(max without (job, instance) (trtllm_kv_cache_utilization{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(trtllmworker|tensorrtllmworker|worker|prefill|decode|backend)-.*\"}))",
+          "legendFormat": "TRT-LLM",
+          "range": true,
+          "refId": "C"
         }
       ],
       "title": "Max KV-Cache Used",
@@ -783,13 +871,13 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Generation token throughput (tokens/s) across the SGLang workers (rate of sglang:generation_tokens_total). SGLang exposes no stable preemption/retraction counter.",
+      "description": "Rate of vLLM request preemptions (vllm:num_preemptions_total). Non-zero = workers over capacity, recompute cost rising.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 1,
+          "decimals": 2,
           "mappings": [],
           "min": 0,
           "thresholds": {
@@ -798,6 +886,14 @@
               {
                 "color": "#76B900",
                 "value": 0
+              },
+              {
+                "color": "#EF9100",
+                "value": 0.01
+              },
+              {
+                "color": "#E52020",
+                "value": 1
               }
             ]
           },
@@ -837,13 +933,13 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(max without (job, instance) (rate(sglang:generation_tokens_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}[$__rate_interval])))",
-          "legendFormat": "gen tokens/s",
+          "expr": "sum(max without (job, instance) (rate(dynamo_frontend_output_sequence_tokens_sum{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-frontend-.*\"}[$__rate_interval])))",
+          "legendFormat": "output tokens/s",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Generation Token Rate",
+      "title": "Output Tokens/s",
       "type": "stat"
     },
     {
@@ -851,7 +947,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Total power draw of the GPUs allocated to this Dynamo deployment's SGLang workers (DCGM, pod-mapped via exported_pod). Scoped to the selected namespace/deployment.",
+      "description": "Total power draw of the GPUs allocated to this Dynamo deployment's vLLM workers (DCGM, pod-mapped via exported_pod). Scoped to the selected namespace/deployment.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -905,7 +1001,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(DCGM_FI_DEV_POWER_USAGE{exported_namespace=~\"${namespace:regex}\",exported_pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"})",
+          "expr": "sum(DCGM_FI_DEV_POWER_USAGE{exported_namespace=~\"${namespace:regex}\",exported_pod=~\"(${deployment:regex})-[0-9]+-(vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|encoder|encode)-.*\"})",
           "legendFormat": "active",
           "range": true,
           "refId": "A"
@@ -932,7 +1028,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Max concurrent requests per worker (SGLang --max-running-requests). The batch ceiling; In-flight/Waiting are read against this.",
+      "description": "Max concurrent sequences per worker (vLLM --max-num-seqs). The batch ceiling; In-flight/Waiting are read against this.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -987,7 +1083,7 @@
           },
           "editorMode": "code",
           "expr": "max(dynamo_frontend_model_max_num_seqs{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-frontend-.*\"})",
-          "legendFormat": "max running requests",
+          "legendFormat": "max num seqs",
           "range": true,
           "refId": "A"
         }
@@ -1000,7 +1096,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Max prefill tokens per chunk (SGLang --chunked-prefill-size).",
+      "description": "Max tokens per engine step (vLLM --max-num-batched-tokens).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1055,12 +1151,12 @@
           },
           "editorMode": "code",
           "expr": "max(dynamo_frontend_model_max_num_batched_tokens{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-frontend-.*\"})",
-          "legendFormat": "chunked prefill size",
+          "legendFormat": "max batched tokens",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Chunked Prefill Size",
+      "title": "Max Batched Tokens",
       "type": "stat"
     },
     {
@@ -1272,7 +1368,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Count of SGLang worker pods currently reporting metrics for this deployment.",
+      "description": "Count of vLLM worker pods currently reporting metrics for this deployment.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1326,13 +1422,35 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "count(count by (pod) (sglang:token_usage{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
-          "legendFormat": "workers",
+          "expr": "count(count by (pod) (vllm:kv_cache_usage_perc{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}))",
+          "legendFormat": "vLLM",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "count(count by (pod) (sglang:token_usage{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
+          "legendFormat": "SGLang",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "count(count by (pod) (trtllm_kv_cache_utilization{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(trtllmworker|tensorrtllmworker|worker|prefill|decode|backend)-.*\"}))",
+          "legendFormat": "TRT-LLM",
+          "range": true,
+          "refId": "C"
         }
       ],
-      "title": "SGLang Workers",
+      "title": "Engine Workers",
       "type": "stat"
     },
     {
@@ -1950,7 +2068,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "SGLang worker generate-endpoint request rate (component-level).",
+      "description": "vLLM worker generate-endpoint request rate (component-level).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2036,13 +2154,13 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (namespace, deployment) (max without (job, instance) (label_replace(rate(dynamo_component_requests_total{dynamo_endpoint=\"generate\",namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}[$__rate_interval]), \"deployment\", \"$1\", \"pod\", \"(.+)-[0-9]+-sglangworker-.*\")))",
-          "legendFormat": "{{namespace}}/{{deployment}} generate",
+          "expr": "sum by (namespace, deployment, engine) (max without (job, instance) (label_replace(label_replace(rate(dynamo_component_requests_total{dynamo_endpoint=\"generate\",namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|encoder|encode)-.*\"}[$__rate_interval]), \"deployment\", \"$1\", \"pod\", \"(.+)-[0-9]+-(vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|encoder|encode)-.*\"), \"engine\", \"$2\", \"pod\", \"(.+)-[0-9]+-(vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|encoder|encode)-.*\")))",
+          "legendFormat": "{{namespace}}/{{deployment}} {{engine}} generate",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "SGLang Generate Request Rate",
+      "title": "Generate Request Rate",
       "type": "timeseries"
     },
     {
@@ -2136,8 +2254,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (namespace, deployment) (max without (job, instance) (label_replace(rate(dynamo_component_request_bytes_total{dynamo_endpoint=\"generate\",namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}[$__rate_interval]), \"deployment\", \"$1\", \"pod\", \"(.+)-[0-9]+-sglangworker-.*\")))",
-          "legendFormat": "{{namespace}}/{{deployment}} request",
+          "expr": "sum by (namespace, deployment, engine) (max without (job, instance) (label_replace(label_replace(rate(dynamo_component_request_bytes_total{dynamo_endpoint=\"generate\",namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|encoder|encode)-.*\"}[$__rate_interval]), \"deployment\", \"$1\", \"pod\", \"(.+)-[0-9]+-(vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|encoder|encode)-.*\"), \"engine\", \"$2\", \"pod\", \"(.+)-[0-9]+-(vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|encoder|encode)-.*\")))",
+          "legendFormat": "{{namespace}}/{{deployment}} {{engine}} request",
           "range": true,
           "refId": "A"
         },
@@ -2147,8 +2265,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (namespace, deployment) (max without (job, instance) (label_replace(rate(dynamo_component_response_bytes_total{dynamo_endpoint=\"generate\",namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}[$__rate_interval]), \"deployment\", \"$1\", \"pod\", \"(.+)-[0-9]+-sglangworker-.*\")))",
-          "legendFormat": "{{namespace}}/{{deployment}} response",
+          "expr": "sum by (namespace, deployment, engine) (max without (job, instance) (label_replace(label_replace(rate(dynamo_component_response_bytes_total{dynamo_endpoint=\"generate\",namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|encoder|encode)-.*\"}[$__rate_interval]), \"deployment\", \"$1\", \"pod\", \"(.+)-[0-9]+-(vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|encoder|encode)-.*\"), \"engine\", \"$2\", \"pod\", \"(.+)-[0-9]+-(vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|encoder|encode)-.*\")))",
+          "legendFormat": "{{namespace}}/{{deployment}} {{engine}} response",
           "range": true,
           "refId": "B"
         }
@@ -2166,7 +2284,7 @@
       },
       "id": 30,
       "panels": [],
-      "title": "Dynamo Serving Internals — KV Router & Saturation",
+      "title": "Dynamo Serving Internals - KV Router & Saturation",
       "type": "row"
     },
     {
@@ -2174,7 +2292,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Running vs waiting requests per SGLang worker. The dashed red line at 8 is max-running-requests (the per-worker batch ceiling); waiting climbing above 0 means requests are queueing for a slot.",
+      "description": "Running vs waiting requests per vLLM worker. The dashed red line at 4 is max-num-seqs (the per-worker batch ceiling); waiting climbing above 0 means requests are queueing for a slot.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2225,7 +2343,7 @@
               },
               {
                 "color": "#E52020",
-                "value": 8
+                "value": 4
               }
             ]
           },
@@ -2264,8 +2382,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (pod) (max without (job, instance) (sglang:num_running_reqs{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
-          "legendFormat": "{{pod}} running",
+          "expr": "sum by (pod) (max without (job, instance) (vllm:num_requests_running{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}))",
+          "legendFormat": "{{pod}} vLLM running",
           "range": true,
           "refId": "A"
         },
@@ -2275,10 +2393,54 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (pod) (max without (job, instance) (sglang:num_queue_reqs{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
-          "legendFormat": "{{pod}} waiting",
+          "expr": "sum by (pod) (max without (job, instance) (vllm:num_requests_waiting{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}))",
+          "legendFormat": "{{pod}} vLLM waiting",
           "range": true,
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (pod) (max without (job, instance) (sglang:num_running_reqs{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
+          "legendFormat": "{{pod}} SGLang running",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (pod) (max without (job, instance) (sglang:num_queue_reqs{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
+          "legendFormat": "{{pod}} SGLang waiting",
+          "range": true,
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (pod) (max without (job, instance) (trtllm_num_requests_running{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(trtllmworker|tensorrtllmworker|worker|prefill|decode|backend)-.*\"}))",
+          "legendFormat": "{{pod}} TRT-LLM running",
+          "range": true,
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (pod) (max without (job, instance) (trtllm_num_requests_waiting{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(trtllmworker|tensorrtllmworker|worker|prefill|decode|backend)-.*\"}))",
+          "legendFormat": "{{pod}} TRT-LLM waiting",
+          "range": true,
+          "refId": "F"
         }
       ],
       "title": "In-flight vs Waiting (per worker)",
@@ -2289,7 +2451,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "GPU KV-cache occupancy per worker (sglang:token_usage). Approaching the red line risks retractions and recompute. Driven up by long contexts and concurrency.",
+      "description": "GPU KV-cache occupancy per worker (vllm:kv_cache_usage_perc). Approaching the red line risks preemptions and recompute. Driven up by long contexts and concurrency.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2384,10 +2546,32 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (pod) (max without (job, instance) (sglang:token_usage{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
-          "legendFormat": "{{pod}}",
+          "expr": "sum by (pod) (max without (job, instance) (vllm:kv_cache_usage_perc{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}))",
+          "legendFormat": "{{pod}} vLLM",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (pod) (max without (job, instance) (sglang:token_usage{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
+          "legendFormat": "{{pod}} SGLang",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (pod) (max without (job, instance) (trtllm_kv_cache_utilization{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(trtllmworker|tensorrtllmworker|worker|prefill|decode|backend)-.*\"}))",
+          "legendFormat": "{{pod}} TRT-LLM",
+          "range": true,
+          "refId": "C"
         }
       ],
       "title": "KV-Cache Utilization (per worker)",
@@ -2398,7 +2582,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Per-worker p95 time-to-first-token (ms) from the SGLang scheduler. Rising TTFT is the classic overload signature (SGLang exposes no stable preemption/retraction counter).",
+      "description": "Left axis: p95 queue wait inside the vLLM scheduler (ms). Right axis: preemption rate. Both rising together is the classic overload signature.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2451,7 +2635,24 @@
           },
           "unit": "ms"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*preempt.*"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
@@ -2484,13 +2685,46 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "1000 * histogram_quantile(0.95, sum by (le, pod) (max without (job, instance) (rate(sglang:time_to_first_token_seconds_bucket{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}[$__rate_interval]))))",
-          "legendFormat": "{{pod}} p95 TTFT",
+          "expr": "1000 * histogram_quantile(0.95, sum by (le, pod) (max without (job, instance) (rate(vllm:request_queue_time_seconds_bucket{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}[$__rate_interval]))))",
+          "legendFormat": "{{pod}} vLLM p95 queue",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (pod) (max without (job, instance) (rate(vllm:num_preemptions_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}[$__rate_interval])))",
+          "legendFormat": "{{pod}} vLLM preemptions/s",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "1000 * histogram_quantile(0.95, sum by (le, pod) (max without (job, instance) (rate(sglang:time_to_first_token_seconds_bucket{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}[$__rate_interval]))))",
+          "legendFormat": "{{pod}} SGLang p95 TTFT",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "1000 * histogram_quantile(0.95, sum by (le, pod) (max without (job, instance) (rate(trtllm_request_queue_time_seconds_bucket{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(trtllmworker|tensorrtllmworker|worker|prefill|decode|backend)-.*\"}[$__rate_interval]))))",
+          "legendFormat": "{{pod}} TRT-LLM p95 queue",
+          "range": true,
+          "refId": "D"
         }
       ],
-      "title": "Time To First Token p95",
+      "title": "Queue Wait / TTFT / Preemptions",
       "type": "timeseries"
     },
     {
@@ -2736,7 +2970,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Prompt (prefill) tokens processed by the SGLang workers (tokens/s, sglang:prompt_tokens_total). SGLang exposes no separate recomputed-token counter, so cached-vs-recomputed cannot be split out here; see the Radix-Cache Hit Rate panel for prefix reuse.",
+      "description": "Prompt tokens served FROM the KV cache vs recomputed (tokens/s). A high cached:recomputed ratio is the payoff of KV-aware routing + prefix caching.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2822,13 +3056,57 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(max without (job, instance) (rate(sglang:prompt_tokens_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}[$__rate_interval])))",
-          "legendFormat": "prefill tokens/s",
+          "expr": "sum(max without (job, instance) (rate(vllm:prompt_tokens_cached_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}[$__rate_interval])))",
+          "legendFormat": "vLLM cached tokens/s",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(max without (job, instance) (rate(vllm:prompt_tokens_recomputed_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}[$__rate_interval])))",
+          "legendFormat": "vLLM recomputed tokens/s",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(max without (job, instance) (rate(sglang:prompt_tokens_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}[$__rate_interval])))",
+          "legendFormat": "SGLang prompt tokens/s",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(max without (job, instance) (rate(trtllm_prompt_cached_tokens_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(trtllmworker|tensorrtllmworker|worker|prefill|decode|backend)-.*\"}[$__rate_interval])))",
+          "legendFormat": "TRT-LLM cached tokens/s",
+          "range": true,
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(max without (job, instance) (trtllm_total_context_tokens{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(trtllmworker|tensorrtllmworker|worker|prefill|decode|backend)-.*\"}))",
+          "legendFormat": "TRT-LLM context tokens",
+          "range": true,
+          "refId": "E"
         }
       ],
-      "title": "Prefill Token Rate",
+      "title": "Prompt Cache Tokens",
       "type": "timeseries"
     },
     {
@@ -2836,7 +3114,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "SGLang radix prefix-cache hit rate (sglang:cache_hit_rate). SGLang serves a vision-language model but exposes no separate multimodal embedding-cache metric, so this tracks radix prefix-cache reuse instead. Higher = more prompt reuse, less recompute.",
+      "description": "Image-embedding cache hit rate (vllm:mm_cache_hits/queries). Relevant because the Photo Tagger sends images; hits avoid re-encoding repeated images. Empty when no image traffic.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2924,13 +3202,46 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "avg(max without (job, instance) (sglang:cache_hit_rate{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
-          "legendFormat": "radix cache hit rate",
+          "expr": "sum(max without (job, instance) (rate(vllm:mm_cache_hits_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}[$__rate_interval]))) / clamp_min(sum(max without (job, instance) (rate(vllm:mm_cache_queries_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}[$__rate_interval]))), 1e-9)",
+          "legendFormat": "vLLM multimodal cache",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(max without (job, instance) (rate(vllm:prefix_cache_hits_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}[$__rate_interval]))) / clamp_min(sum(max without (job, instance) (rate(vllm:prefix_cache_queries_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}[$__rate_interval]))), 1e-9)",
+          "legendFormat": "vLLM prefix cache",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "avg(max without (job, instance) (sglang:cache_hit_rate{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
+          "legendFormat": "SGLang radix cache",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "avg(max without (job, instance) (trtllm_kv_cache_hit_rate{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(trtllmworker|tensorrtllmworker|worker|prefill|decode|backend)-.*\"}))",
+          "legendFormat": "TRT-LLM KV cache",
+          "range": true,
+          "refId": "D"
         }
       ],
-      "title": "Radix-Cache Hit Rate",
+      "title": "Engine KV / MM Cache Hit Rate",
       "type": "timeseries"
     },
     {
@@ -3024,8 +3335,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "1000 * histogram_quantile(0.95, sum by (le) (max without (job, instance) (rate(sglang:time_to_first_token_seconds_bucket{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}[$__rate_interval]))))",
-          "legendFormat": "p95 prefill",
+          "expr": "1000 * histogram_quantile(0.95, sum by (le) (max without (job, instance) (rate(vllm:request_prefill_time_seconds_bucket{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}[$__rate_interval]))))",
+          "legendFormat": "vLLM p95 prefill",
           "range": true,
           "refId": "A"
         },
@@ -3035,10 +3346,54 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "1000 * histogram_quantile(0.95, sum by (le) (max without (job, instance) (rate(sglang:time_per_output_token_seconds_bucket{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}[$__rate_interval]))))",
-          "legendFormat": "p95 decode",
+          "expr": "1000 * histogram_quantile(0.95, sum by (le) (max without (job, instance) (rate(vllm:request_decode_time_seconds_bucket{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}[$__rate_interval]))))",
+          "legendFormat": "vLLM p95 decode",
           "range": true,
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "1000 * histogram_quantile(0.95, sum by (le) (max without (job, instance) (rate(sglang:time_to_first_token_seconds_bucket{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}[$__rate_interval]))))",
+          "legendFormat": "SGLang p95 prefill",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "1000 * histogram_quantile(0.95, sum by (le) (max without (job, instance) (rate(sglang:time_per_output_token_seconds_bucket{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}[$__rate_interval]))))",
+          "legendFormat": "SGLang p95 decode",
+          "range": true,
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "1000 * histogram_quantile(0.95, sum by (le) (max without (job, instance) (rate(trtllm_request_prefill_time_seconds_bucket{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(trtllmworker|tensorrtllmworker|worker|prefill|decode|backend)-.*\"}[$__rate_interval]))))",
+          "legendFormat": "TRT-LLM p95 prefill",
+          "range": true,
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "1000 * histogram_quantile(0.95, sum by (le) (max without (job, instance) (rate(trtllm_request_decode_time_seconds_bucket{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(trtllmworker|tensorrtllmworker|worker|prefill|decode|backend)-.*\"}[$__rate_interval]))))",
+          "legendFormat": "TRT-LLM p95 decode",
+          "range": true,
+          "refId": "F"
         }
       ],
       "title": "Prefill vs Decode Time p95",
@@ -3062,7 +3417,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "GPU utilization attributed to THIS deployment's SGLang worker pods via DCGM Kubernetes pod-mapping (exported_pod/exported_namespace). This is the link between raw GPU telemetry and the Dynamo workload on Kubernetes.",
+      "description": "GPU utilization attributed to THIS deployment's vLLM worker pods via DCGM Kubernetes pod-mapping (exported_pod/exported_namespace). This is the link between raw GPU telemetry and the Dynamo workload on Kubernetes.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3150,7 +3505,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "avg by (exported_pod, gpu) (DCGM_FI_DEV_GPU_UTIL{exported_namespace=~\"${namespace:regex}\",exported_pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"})",
+          "expr": "avg by (exported_pod, gpu) (DCGM_FI_DEV_GPU_UTIL{exported_namespace=~\"${namespace:regex}\",exported_pod=~\"(${deployment:regex})-[0-9]+-(vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|encoder|encode)-.*\"})",
           "legendFormat": "{{exported_pod}} gpu{{gpu}}",
           "range": true,
           "refId": "A"
@@ -3261,7 +3616,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "avg by (exported_pod, gpu) (DCGM_FI_DEV_FB_USED{exported_namespace=~\"${namespace:regex}\",exported_pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"} / (DCGM_FI_DEV_FB_USED{exported_namespace=~\"${namespace:regex}\",exported_pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"} + DCGM_FI_DEV_FB_FREE{exported_namespace=~\"${namespace:regex}\",exported_pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
+          "expr": "avg by (exported_pod, gpu) (DCGM_FI_DEV_FB_USED{exported_namespace=~\"${namespace:regex}\",exported_pod=~\"(${deployment:regex})-[0-9]+-(vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|encoder|encode)-.*\"} / (DCGM_FI_DEV_FB_USED{exported_namespace=~\"${namespace:regex}\",exported_pod=~\"(${deployment:regex})-[0-9]+-(vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|encoder|encode)-.*\"} + DCGM_FI_DEV_FB_FREE{exported_namespace=~\"${namespace:regex}\",exported_pod=~\"(${deployment:regex})-[0-9]+-(vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|encoder|encode)-.*\"}))",
           "legendFormat": "{{exported_pod}} gpu{{gpu}}",
           "range": true,
           "refId": "A"
@@ -3776,7 +4131,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "avg by (exported_pod, gpu) (DCGM_FI_DEV_MEM_COPY_UTIL{exported_namespace=~\"${namespace:regex}\",exported_pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"})",
+          "expr": "avg by (exported_pod, gpu) (DCGM_FI_DEV_MEM_COPY_UTIL{exported_namespace=~\"${namespace:regex}\",exported_pod=~\"(${deployment:regex})-[0-9]+-(vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|encoder|encode)-.*\"})",
           "legendFormat": "{{exported_pod}} gpu{{gpu}}",
           "range": true,
           "refId": "A"
@@ -4044,7 +4399,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Dynamo pods (frontend/sglangworker/modelexpress) in Running phase for the selected deployment.",
+      "description": "Dynamo pods (frontend/vllmworker/modelexpress) in Running phase for the selected deployment.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4098,7 +4453,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(kube_pod_status_phase{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(frontend|sglangworker|modelexpress)-.*\",phase=\"Running\"})",
+          "expr": "sum(kube_pod_status_phase{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(frontend|vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|processor|encoder|encode|modelexpress)-.*\",phase=\"Running\"})",
           "legendFormat": "running",
           "range": true,
           "refId": "A"
@@ -4174,7 +4529,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(kube_pod_status_phase{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(frontend|sglangworker|modelexpress)-.*\",phase=~\"Pending|Failed|Unknown\"})",
+          "expr": "sum(kube_pod_status_phase{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(frontend|vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|processor|encoder|encode|modelexpress)-.*\",phase=~\"Pending|Failed|Unknown\"})",
           "legendFormat": "attention",
           "range": true,
           "refId": "A"
@@ -4426,7 +4781,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "max by (pod, container) (kube_pod_container_status_restarts_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(frontend|sglangworker|modelexpress)-.*\"})",
+          "expr": "max by (pod, container) (kube_pod_container_status_restarts_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(frontend|vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|processor|encoder|encode|modelexpress)-.*\"})",
           "legendFormat": "{{pod}}/{{container}}",
           "range": true,
           "refId": "A"
@@ -4526,7 +4881,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (pod, reason) (kube_pod_container_status_waiting_reason{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(frontend|sglangworker|modelexpress)-.*\",reason=~\"CrashLoopBackOff|ImagePullBackOff|ErrImagePull|CreateContainerError\"})",
+          "expr": "sum by (pod, reason) (kube_pod_container_status_waiting_reason{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(frontend|vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|processor|encoder|encode|modelexpress)-.*\",reason=~\"CrashLoopBackOff|ImagePullBackOff|ErrImagePull|CreateContainerError\"})",
           "legendFormat": "{{pod}} {{reason}}",
           "range": true,
           "refId": "A"
@@ -4537,7 +4892,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (pod, reason) (kube_pod_container_status_terminated_reason{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(frontend|sglangworker|modelexpress)-.*\",reason=~\"OOMKilled|Error|ContainerCannotRun\"})",
+          "expr": "sum by (pod, reason) (kube_pod_container_status_terminated_reason{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(frontend|vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|processor|encoder|encode|modelexpress)-.*\",reason=~\"OOMKilled|Error|ContainerCannotRun\"})",
           "legendFormat": "{{pod}} {{reason}} (terminated)",
           "range": true,
           "refId": "B"
@@ -4551,7 +4906,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Time the SGLang workers took to load model weights (served from the ModelExpress cache). Spikes on a cold cache; flat once warm.",
+      "description": "Time the vLLM workers took to load model weights (served from the ModelExpress cache). Spikes on a cold cache; flat once warm.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4605,7 +4960,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "max(dynamo_component_model_load_time_seconds{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"})",
+          "expr": "max(dynamo_component_model_load_time_seconds{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|encoder|encode)-.*\"})",
           "legendFormat": "load time",
           "range": true,
           "refId": "A"
@@ -4741,7 +5096,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(kube_pod_status_phase{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(frontend|sglangworker|modelexpress)-.*\",phase=\"Running\"})",
+          "expr": "sum(kube_pod_status_phase{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(frontend|vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|processor|encoder|encode|modelexpress)-.*\",phase=\"Running\"})",
           "legendFormat": "Running",
           "range": true,
           "refId": "A"
@@ -4752,7 +5107,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(kube_pod_status_phase{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(frontend|sglangworker|modelexpress)-.*\",phase=\"Pending\"})",
+          "expr": "sum(kube_pod_status_phase{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(frontend|vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|processor|encoder|encode|modelexpress)-.*\",phase=\"Pending\"})",
           "legendFormat": "Pending",
           "range": true,
           "refId": "B"
@@ -4763,7 +5118,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(kube_pod_status_phase{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(frontend|sglangworker|modelexpress)-.*\",phase=\"Failed\"})",
+          "expr": "sum(kube_pod_status_phase{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(frontend|vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|processor|encoder|encode|modelexpress)-.*\",phase=\"Failed\"})",
           "legendFormat": "Failed",
           "range": true,
           "refId": "C"
@@ -4774,7 +5129,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(kube_pod_status_phase{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(frontend|sglangworker|modelexpress)-.*\",phase=\"Unknown\"})",
+          "expr": "sum(kube_pod_status_phase{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(frontend|vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|processor|encoder|encode|modelexpress)-.*\",phase=\"Unknown\"})",
           "legendFormat": "Unknown",
           "range": true,
           "refId": "D"
@@ -5128,11 +5483,14 @@
   "refresh": "auto",
   "schemaVersion": 42,
   "tags": [
+    "demo",
     "dynamo",
-    "nvidia",
     "gpu",
     "kubernetes",
-    "demo"
+    "nvidia",
+    "sglang",
+    "trtllm",
+    "vllm"
   ],
   "templating": {
     "list": [
@@ -5146,14 +5504,14 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(kube_pod_info{created_by_kind=\"PodClique\",created_by_name=~\".+-[0-9]+-(frontend|sglangworker|modelexpress)\"}, namespace)",
+        "definition": "label_values(kube_pod_info{created_by_kind=\"PodClique\",created_by_name=~\".+-[0-9]+-(frontend|vllmworker|modelexpress)\"}, namespace)",
         "includeAll": true,
         "label": "Namespace",
         "multi": true,
         "name": "namespace",
         "options": [],
         "query": {
-          "query": "label_values(kube_pod_info{created_by_kind=\"PodClique\",created_by_name=~\".+-[0-9]+-(frontend|sglangworker|modelexpress)\"}, namespace)",
+          "query": "label_values(kube_pod_info{created_by_kind=\"PodClique\",created_by_name=~\".+-[0-9]+-(frontend|vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|processor|encoder|encode|modelexpress)\"}, namespace)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,
@@ -5172,14 +5530,14 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "query_result(count by (deployment) (label_replace(kube_pod_info{namespace=~\"${namespace:regex}\",created_by_kind=\"PodClique\",created_by_name=~\".+-[0-9]+-(frontend|sglangworker|modelexpress)\"}, \"deployment\", \"$1\", \"created_by_name\", \"(.+)-[0-9]+-(frontend|sglangworker|modelexpress)\")))",
+        "definition": "query_result(count by (deployment) (label_replace(kube_pod_info{namespace=~\"${namespace:regex}\",created_by_kind=\"PodClique\",created_by_name=~\".+-[0-9]+-(frontend|vllmworker|modelexpress)\"}, \"deployment\", \"$1\", \"created_by_name\", \"(.+)-[0-9]+-(frontend|vllmworker|modelexpress)\")))",
         "includeAll": true,
         "label": "Deployment",
         "multi": true,
         "name": "deployment",
         "options": [],
         "query": {
-          "query": "query_result(count by (deployment) (label_replace(kube_pod_info{namespace=~\"${namespace:regex}\",created_by_kind=\"PodClique\",created_by_name=~\".+-[0-9]+-(frontend|sglangworker|modelexpress)\"}, \"deployment\", \"$1\", \"created_by_name\", \"(.+)-[0-9]+-(frontend|sglangworker|modelexpress)\")))",
+          "query": "query_result(count by (deployment) (label_replace(kube_pod_info{namespace=~\"${namespace:regex}\",created_by_kind=\"PodClique\",created_by_name=~\".+-[0-9]+-(frontend|vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|processor|encoder|encode|modelexpress)\"}, \"deployment\", \"$1\", \"created_by_name\", \"(.+)-[0-9]+-(frontend|vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|processor|encoder|encode|modelexpress)\")))",
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,
@@ -5269,13 +5627,13 @@
     ]
   },
   "time": {
-    "from": "now-5m",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "NVIDIA Dynamo GPU Demo Dashboard",
-  "uid": "dynamo-gpu-demo",
-  "version": 15,
+  "title": "NVIDIA Dynamo Unified GPU Dashboard",
+  "uid": "dynamo-gpu-unified",
+  "version": 5,
   "weekStart": ""
 }

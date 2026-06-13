@@ -11,6 +11,11 @@ using vLLM with an aggregated Dynamo deployment.
 This recipe builds a custom container on top of the Dynamo vLLM runtime image —
 no source build, no Rust toolchain.
 
+> Deployment note: use the repository-root `deploy.sh` as the authoritative
+> deployment entrypoint. This folder's `deploy.sh` is a compatibility wrapper
+> that forwards to `../deploy.sh deploy nemotron`; any older standalone
+> Kustomize deployment notes below are backend implementation context.
+
 ## Topology
 
 | Role            | Replicas | GPUs/replica | Notes                                                   |
@@ -473,9 +478,6 @@ nemotron-3-nano-omni-dynamo/
   Makefile                          # `make validate` entry point
   scripts/
     validate.sh                     # shell/Python/kustomize/cargo checks
-  observability/
-    README.md                       # monitoring-stack prerequisites + install
-    grafana/                        # Dynamo GPU demo Grafana dashboard
   k8s/
     base/                           # integrated Dynamo + Redis + Postgres + app
     overlays/

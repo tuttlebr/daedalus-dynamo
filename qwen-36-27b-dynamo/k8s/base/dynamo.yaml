@@ -43,7 +43,7 @@ spec:
             - name: DYN_TOKENIZER
               value: "fastokens"
             - name: DYN_ROUTER_QUEUE_POLICY
-              value: "fcfs"
+              value: "wspt"
           command:
             - /bin/bash
             - -lc

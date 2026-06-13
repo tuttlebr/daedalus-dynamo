@@ -12,6 +12,11 @@ deployment.
 This recipe builds a custom container on top of the Dynamo SGLang runtime image —
 no source build, no Rust toolchain.
 
+> Deployment note: use the repository-root `deploy.sh` as the authoritative
+> deployment entrypoint. This folder's `deploy.sh` is a compatibility wrapper
+> that forwards to `../deploy.sh deploy qwen27b`; any older standalone
+> Kustomize deployment notes below are backend implementation context.
+
 ## Topology
 
 | Role            | Replicas | GPUs/replica | Notes                                                   |
@@ -354,7 +359,7 @@ the final `DynamoGraphDeployment` under
 - `--schedule-policy priority --enable-priority-scheduling` make the SGLang
   scheduler honor `nvext.agent_hints.priority` (higher value scheduled first).
 - `--enable-metrics` exposes `sglang:*` Prometheus metrics on the worker's
-  Dynamo system port (scraped on :9090) for the Grafana dashboard.
+  Dynamo system port (scraped on :9090) for the shared Grafana dashboard.
 - `--enable-anthropic-api`, `--strip-anthropic-preamble`,
   `--enable-streaming-tool-dispatch`, and
   `--enable-streaming-reasoning-dispatch` enable the agent-harness frontend
@@ -458,9 +463,6 @@ qwen-36-27b-dynamo/
   Makefile                          # `make validate` entry point
   scripts/
     validate.sh                     # shell/Python/kustomize/cargo checks
-  observability/
-    README.md                       # monitoring-stack prerequisites + install
-    grafana/                        # Dynamo + SGLang Grafana dashboard
   k8s/
     base/                           # integrated Dynamo + Redis + Postgres + app
     overlays/

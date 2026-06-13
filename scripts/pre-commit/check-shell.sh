@@ -8,6 +8,10 @@ mapfile -t scripts < <(
   find "${EXAMPLES[@]}" scripts -type f -name '*.sh' 2> /dev/null | sort
 )
 
+if [[ -f deploy.sh ]]; then
+  scripts=(deploy.sh "${scripts[@]}")
+fi
+
 if [[ "${#scripts[@]}" -eq 0 ]]; then
   exit 0
 fi
