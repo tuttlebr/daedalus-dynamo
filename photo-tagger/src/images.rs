@@ -6,12 +6,12 @@ use uuid::Uuid;
 /// An in-memory, short-lived store of prepared image bytes that are served over
 /// HTTP to the inference workers.
 ///
-/// Dynamo's SGLang multimodal path only accepts HTTP(S) image URLs (not base64
-/// `data:` URLs), so in `url` delivery mode the analyzer registers each prepared
-/// image here, hands the worker a content-addressless random URL, and removes
-/// the entry as soon as the LLM call returns (see [`ImageHandle`]). Entries are
-/// therefore only fetchable for the lifetime of one `analyze()` call and are
-/// bounded by `MAX_CONCURRENT_LLM` in-flight images.
+/// Some OpenAI-compatible multimodal backends only accept HTTP(S) image URLs
+/// rather than base64 `data:` URLs. In `url` delivery mode the analyzer
+/// registers each prepared image here, hands the worker a content-addressless
+/// random URL, and removes the entry as soon as the LLM call returns (see
+/// [`ImageHandle`]). Entries are therefore only fetchable for the lifetime of
+/// one `analyze()` call and are bounded by `MAX_CONCURRENT_LLM` in-flight images.
 #[derive(Debug, Default)]
 pub struct ImageStore {
     inner: Mutex<HashMap<String, StoredImage>>,

@@ -23,8 +23,6 @@ no source build, no Rust toolchain.
 | Dynamo frontend | 1        | 0            | Event-backed KV routing, ClusterIP only by default      |
 | ModelExpress    | 1        | 0            | Downloads and serves model cache metadata with Redis    |
 | vLLM worker     | 2        | 2            | TP=2 workers on separate eligible high-memory GPU nodes |
-| Photo Tagger    | 1        | 0            | Rust UI/API that scans NFS-mounted photo folders        |
-| Photo Tagger DB | 1        | 0            | Postgres StatefulSet for metadata and full-text search  |
 
 ## Step 1: Deploy Everything
 
@@ -35,9 +33,10 @@ export HF_TOKEN=<your-hf-token>
 ./deploy.sh
 ```
 
-`deploy.sh` builds and pushes both images, creates/updates the namespace and
-`hf-token-secret`, creates the Photo Tagger Postgres password secret and auth
-token secret if they are missing, then applies the integrated Kustomize overlay.
+`deploy.sh` forwards to the repository-root deployment entrypoint. It builds
+and pushes the selected backend image and the single shared Photo Tagger image
+unless `DEPLOY_PHOTO_TAGGER=0`, creates required secrets, and applies the shared
+Gateway API Inference Extension deployment.
 
 Useful build args:
 
@@ -50,7 +49,8 @@ Useful deploy env overrides:
 - `ALLOW_LATEST=1` — suppress the warning when explicitly using `IMAGE_TAG=latest`.
 - `QWEN_IMAGE_REPOSITORY=...` — default `${REGISTRY}/qwen36-35b-dynamo`.
 - `PHOTO_TAGGER_IMAGE_REPOSITORY=...` — default `${REGISTRY}/photo-tagger`.
-- `NAMESPACE=...` — default `qwen36-35b`
+- `DEPLOY_PHOTO_TAGGER=0` — deploy only the gateway and model backends for a custom OpenAI-compatible app.
+- `NAMESPACE=...` — default `daedalus-dynamo`
 - `POSTGRES_PASSWORD=...` — optional; used only when creating the Photo Tagger Postgres secret for the first time.
 - `PHOTO_TAGGER_AUTH_TOKEN=...` — optional; used only when creating the Photo Tagger auth secret for the first time.
 - `PHOTO_TAGGER_AUTH_USER=...` — default `photo-tagger`; HTTP Basic username for the Photo Tagger UI/API.
@@ -60,7 +60,7 @@ Useful deploy env overrides:
 
 ### Local image build
 
-`docker-compose.yaml` is a thin convenience for building both images without
+`docker-compose.yaml` is a thin convenience for building the backend image without
 running the full `deploy.sh` pipeline:
 
 ```bash
@@ -105,22 +105,13 @@ ACTION=delete NAMESPACE=${NAMESPACE} ./deploy.sh
 NAMESPACE=${NAMESPACE} HF_TOKEN=${HF_TOKEN} ./deploy.sh
 ```
 
-## Step 2: Manual Apply
+## Step 2: Render or Apply
 
-If images, `hf-token-secret`, `photo-tagger-postgres`, and
-`photo-tagger-auth` already exist, the Daedalus overlay can still be applied
-directly:
+Render this backend through the root deployment path:
 
 ```bash
-kubectl create secret generic photo-tagger-postgres \
-  --from-literal=password='<strong-password>' \
-  -n ${NAMESPACE} \
-  --dry-run=client -o yaml | kubectl apply -f -
-kubectl create secret generic photo-tagger-auth \
-  --from-literal=token='<strong-ui-token>' \
-  -n ${NAMESPACE} \
-  --dry-run=client -o yaml | kubectl apply -f -
-kubectl apply -n ${NAMESPACE} -k k8s/overlays/daedalus
+./deploy.sh render
+IMAGE_TAG=test ../deploy.sh render qwen35b | kubectl apply --dry-run=client -f -
 ```
 
 Monitor startup:
@@ -131,24 +122,21 @@ kubectl get pods -n ${NAMESPACE} -l nvidia.com/dynamo-graph-deployment-name=qwen
 
 ## Step 3: Test
 
-Open the Photo Tagger UI:
+When `DEPLOY_PHOTO_TAGGER=1`, open the shared Photo Tagger UI:
 
 ```text
-http://<any-cluster-node>:30151/
+http://<any-cluster-node>:30153/
 ```
 
-The Daedalus overlay intentionally exposes this UI through NodePort `30151` for
-the demo-prod workflow. It requires HTTP Basic auth by default; use username
-`photo-tagger` and the token stored in the `photo-tagger-auth` secret. Keep the
-NodePort behind trusted cluster/network boundaries.
+The shared root deployment exposes this UI through NodePort `30153` by default.
+It requires HTTP Basic auth by default; use username `photo-tagger` and the
+token stored in the `photo-tagger-auth` secret. Keep the NodePort behind trusted
+cluster/network boundaries.
 
 ```bash
 kubectl get secret photo-tagger-auth -n ${NAMESPACE} \
   -o jsonpath='{.data.token}' | base64 -d
 ```
-
-Only `/health` and `/ready` are unauthenticated. The UI and API also accept the
-same token as `Authorization: Bearer <token>` or `X-Photo-Tagger-Token`.
 
 For direct Qwen API testing, port-forward the internal Dynamo frontend:
 
@@ -391,56 +379,19 @@ ZMQ there makes Dynamo auto-generate vLLM KV event config, which is not
 compatible with this hybrid Qwen model. The request plane is set explicitly
 with `DYN_REQUEST_PLANE=tcp`.
 
-## Companion app: Photo Tagger
+## Shared app: Photo Tagger
 
-[`photo-tagger/`](./photo-tagger/) is a Rust service that walks NAS-resident
-photo directories, sends each unseen image to this Qwen endpoint, and
-persists structured metadata for text-based search. It ships with a
-single-page UI for triggering scans, watching SSE progress, browsing recently
-processed images, and full-text search.
+Photo Tagger now lives once at [`../photo-tagger/`](../photo-tagger/). The root
+deployment wires that shared reference app to the Gateway API Inference
+Extension endpoint:
 
-Highlights:
-
-- **Process-once guarantee**: identity = SHA256 of file contents (rename-tolerant);
-  state survives pod restarts in the `photo-tagger-postgres` StatefulSet. Files
-  that previously failed are retried on later scans instead of being skipped.
-- **Protected UI/API**: the Daedalus overlay requires auth for all UI/API routes
-  except `/health` and `/ready`; `deploy.sh` creates `photo-tagger-auth` when it
-  is missing.
-- **Format normalization**: PNG/JPG sent verbatim; WebP / GIF / BMP / TIFF
-  transcoded to JPEG q85; oversized images downscaled to 2048px on the longest
-  edge before submission. `MAX_FILE_BYTES` and `MAX_IMAGE_PIXELS` reject
-  unexpectedly large inputs before expensive processing.
-- **Observable scan outcomes**: jobs report `completed`, `completed_with_failures`,
-  or `failed`, and directory-walk errors are counted in job progress.
-- **Defensive JSON**: requests `response_format: json_object` and strips any
-  leaked `<think>...</think>` reasoning blocks before parsing. Parsed metadata is
-  validated for expected setting, age-range, quality, and score values.
-- **Search-friendly schema**: each row stores caption, multi-sentence
-  description, 5–25 tags, scene, setting type, OCR-extracted text, dominant
-  colors, people observations, objects, and a quality assessment. Indexed via
-  Postgres full-text search.
-- **Sidecar export**: writes `<image>.metadata.json` next to each image so the
-  metadata is browsable on the NAS without going through the service.
-- **Scoped database access**: the base manifests include a NetworkPolicy allowing
-  Postgres ingress only from the Photo Tagger pod.
-
-Deploy:
-
-```bash
-HF_TOKEN=<your-hf-token> NAMESPACE=${NAMESPACE:-default} ./deploy.sh
-# UI on NodePort 30151 — http://<any-cluster-node>:30151/
+```text
+LLM_ENDPOINT=http://inference-gateway:80/v1/chat/completions
 ```
 
-NAS shares are mounted directly via NFS volumes inside the pod (no `hostPath`
-dependency on the worker node) — the deployment defaults to mounting
-`192.168.1.232:/volume1/homes` read-only and `192.168.1.77:/var/nfs/shared/daedalus`
-read-write, reproducing the same paths the developer workstation sees.
-NodeAffinity is set to `daedalus-02|03|04` for the app pod. Dynamo workers are
-restricted to nodes with `nvidia.com/gpu.memory > 40959` and required
-anti-affinity. The default deployment schedules two TP=2 workers on two
-eligible nodes. See [`photo-tagger/README.md`](./photo-tagger/README.md) for
-the full endpoint reference and configuration.
+Set `DEPLOY_PHOTO_TAGGER=0` when deploying a custom OpenAI-compatible
+application instead. Custom apps should use `http://inference-gateway:80/v1` as
+their OpenAI base URL and choose a model returned by `/v1/models`.
 
 ## File Layout
 
@@ -455,17 +406,10 @@ qwen-36-35b-dynamo/
   scripts/
     validate.sh                     # shell/Python/kustomize/cargo checks
   k8s/
-    base/                           # integrated Dynamo + Redis + Postgres + app
+    base/                           # backend DynamoGraphDeployment + Redis/PVCs
     overlays/
-      daedalus/                     # NFS mounts, UI NodePort, Daedalus defaults
+      daedalus/                     # Daedalus backend defaults
     benchmarks/
       aiperf/                       # opt-in router benchmark Job
       dynosim-aiperf/               # opt-in DynoSim + AIPerf comparison Job
-  photo-tagger/                     # companion Rust app — image cataloging UI
-    README.md
-    Cargo.toml
-    Dockerfile
-    deploy.sh
-    src/                            # axum + tokio + Postgres + image
-    static/index.html
 ```

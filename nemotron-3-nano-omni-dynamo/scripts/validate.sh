@@ -53,7 +53,7 @@ photo_tagger_native_deps_available() {
 }
 
 echo "==> Checking shell syntax"
-for script in deploy.sh test-endpoint.sh photo-tagger/deploy.sh scripts/validate.sh; do
+for script in deploy.sh test-endpoint.sh scripts/validate.sh ../deploy.sh ../photo-tagger/deploy.sh; do
   bash -n "${script}"
 done
 
@@ -85,9 +85,9 @@ else
 fi
 
 if command -v cargo > /dev/null 2>&1; then
-  echo "==> Running Photo Tagger Rust tests"
+  echo "==> Running shared Photo Tagger Rust tests"
   if photo_tagger_native_deps_available; then
-    cargo test --manifest-path photo-tagger/Cargo.toml
+    cargo test --manifest-path ../photo-tagger/Cargo.toml
   fi
 else
   warn_or_fail "cargo not found; skipping Photo Tagger Rust tests"

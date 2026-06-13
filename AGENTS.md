@@ -10,12 +10,12 @@ Gateway API Inference Extension deployment:
 - `qwen-36-27b-dynamo/` for Qwen 27B on SGLang.
 
 Each example keeps its top-level `README.md`, `Dockerfile`,
-`docker-compose.yaml`, `test-endpoint.sh`, `Makefile`, `scripts/`, `k8s/`, and
-`photo-tagger/`. Example-level `deploy.sh` files are compatibility wrappers
-only; the repository-root `deploy.sh` is the single source of deployment
-configuration. Shared Grafana dashboard assets live under the repository-level
-`observability/` directory. The Rust app lives in `photo-tagger/src/`, UI assets
-in `photo-tagger/static/`, and Rust tests are inline under `#[cfg(test)]`.
+`docker-compose.yaml`, `test-endpoint.sh`, `Makefile`, `scripts/`, and `k8s/`.
+Example-level `deploy.sh` files are compatibility wrappers only; the
+repository-root `deploy.sh` is the single source of deployment configuration.
+Shared Grafana dashboard assets live under `observability/`. The shared Rust
+reference app lives once in the repository-level `photo-tagger/` directory, UI
+assets in `photo-tagger/static/`, and Rust tests are inline under `#[cfg(test)]`.
 
 ## Build, Test, and Development Commands
 
@@ -25,7 +25,9 @@ Run validation/build commands from an example folder unless noted:
   rendering, and Photo Tagger Rust tests when local dependencies are available.
 - `STRICT=1 SERVER_DRY_RUN=1 make validate` adds stricter failures and
   server-side Kubernetes validation on a configured cluster host.
-- `docker compose build` builds the model image and Photo Tagger image.
+- `docker compose build` inside an example builds that backend image.
+- From the repository root, `docker build -t <image> -f photo-tagger/Dockerfile
+  photo-tagger` builds the shared reference app image.
 - From the repository root, `NAMESPACE=<ns> HF_TOKEN=<token> ./deploy.sh deploy
   <backend...>` builds, pushes, creates secrets, and applies the shared GAIE
   deployment.
@@ -35,11 +37,12 @@ Run validation/build commands from an example folder unless noted:
 
 ## Coding Style & Naming Conventions
 
-Keep the three examples structurally parallel. Prefer model-neutral Photo Tagger
-settings such as `LLM_ENDPOINT`; keep model-specific names only where required,
-for example `NEMOTRON_IMAGE_REPOSITORY` or `QWEN_IMAGE_REPOSITORY`. Rust code
-uses standard `cargo fmt` style, snake_case modules/functions, and small focused
-modules. Shell scripts should use `set -euo pipefail`.
+Keep the three backend examples structurally parallel. Keep application code in
+the single `photo-tagger/` tree, and prefer model-neutral app settings such as
+`LLM_ENDPOINT`; keep model-specific names only where required, for example
+`NEMOTRON_IMAGE_REPOSITORY` or `QWEN_IMAGE_REPOSITORY`. Rust code uses standard
+`cargo fmt` style, snake_case modules/functions, and small focused modules.
+Shell scripts should use `set -euo pipefail`.
 
 ## Testing Guidelines
 

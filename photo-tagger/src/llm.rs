@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use base64::Engine;
@@ -6,7 +7,9 @@ use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
 
+use crate::config::ImageDelivery;
 use crate::error::AppError;
+use crate::images::ImageStore;
 use crate::models::{PhotoContent, PROMPT_VERSION};
 use crate::transcode::PreparedImage;
 
@@ -45,6 +48,9 @@ pub struct LlmClient {
     endpoint: String,
     model: String,
     max_retries: u32,
+    delivery: ImageDelivery,
+    image_base_url: String,
+    images: Arc<ImageStore>,
 }
 
 #[derive(Debug, Clone)]
@@ -60,6 +66,9 @@ impl LlmClient {
         model: String,
         timeout: Duration,
         max_retries: u32,
+        delivery: ImageDelivery,
+        image_base_url: String,
+        images: Arc<ImageStore>,
     ) -> Result<Self, AppError> {
         let http = Client::builder()
             .timeout(timeout)
@@ -71,6 +80,9 @@ impl LlmClient {
             endpoint,
             model,
             max_retries,
+            delivery,
+            image_base_url,
+            images,
         })
     }
 
@@ -95,7 +107,22 @@ impl LlmClient {
     }
 
     pub async fn analyze(&self, prepared: &PreparedImage) -> Result<LlmOutput, AppError> {
-        let data_url = build_data_url(prepared);
+        // In `url` mode, register the prepared bytes and hand the worker a
+        // short-lived HTTP URL for backends that cannot consume data URLs.
+        // `_image_handle` keeps the entry alive across retries and removes it
+        // from the store when this call returns.
+        let mut _image_handle = None;
+        let image_url = match self.delivery {
+            ImageDelivery::DataUrl => build_data_url(prepared),
+            ImageDelivery::Url => {
+                let handle = self
+                    .images
+                    .insert(prepared.bytes.clone(), prepared.content_type.mime());
+                let url = format!("{}/llm-image/{}", self.image_base_url, handle.token());
+                _image_handle = Some(handle);
+                url
+            }
+        };
 
         // Initial attempt — strict JSON instruction, low temperature.
         let mut last_err: Option<String> = None;
@@ -118,7 +145,7 @@ impl LlmClient {
                 "messages": [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": [
-                        {"type": "image_url", "image_url": {"url": data_url}},
+                        {"type": "image_url", "image_url": {"url": image_url}},
                         {"type": "text", "text": user_text}
                     ]}
                 ]
@@ -168,7 +195,7 @@ impl LlmClient {
                 }
             };
 
-            // Qwen's reasoning parser sometimes routes the structured-JSON
+            // Some reasoning parsers route the structured-JSON
             // answer into `reasoning_content` instead of `content`. Prefer
             // `content` when it has anything; fall back to `reasoning_content`.
             let content_str = raw_body
@@ -379,7 +406,7 @@ mod tests {
 
     #[test]
     fn parses_response_with_null_content_and_reasoning() {
-        // Mirrors what Qwen + qwen3 reasoning parser can return.
+        // Mirrors what reasoning parsers can return.
         let body = r#"{"choices":[{"message":{"content":null,"role":"assistant","reasoning_content":"{\"caption\":\"x\"}"}}]}"#;
         let r: ChatCompletionResponse = serde_json::from_str(body).unwrap();
         let msg = &r.choices[0].message;

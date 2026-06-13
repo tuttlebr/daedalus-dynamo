@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Photo Tagger - Qwen</title>
+<title>Photo Tagger</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
@@ -25,7 +25,7 @@
       <div class="w-9 h-9 rounded-md bg-nv-green flex items-center justify-center font-bold text-black">PT</div>
       <div>
         <h1 class="text-lg font-semibold">Photo Tagger</h1>
-        <div class="text-xs text-zinc-400">Qwen image cataloging</div>
+        <div class="text-xs text-zinc-400">OpenAI-compatible image cataloging</div>
       </div>
     </div>
     <nav class="flex gap-1 bg-zinc-800/60 rounded-md p-1">
@@ -36,7 +36,7 @@
     </nav>
     <div class="text-sm flex items-center gap-3" id="status-bar">
       <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-zinc-500" id="hb-database"></span> database</span>
-      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-zinc-500" id="hb-endpoint"></span> qwen</span>
+      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-zinc-500" id="hb-endpoint"></span> endpoint</span>
       <span class="text-zinc-400" id="hb-stats">— processed</span>
     </div>
   </div>
@@ -64,7 +64,7 @@
         </button>
       </form>
       <p class="text-xs text-zinc-500 mt-3">
-        Paths must be inside the allowed roots (default <code class="text-zinc-300">/volume1</code>, <code class="text-zinc-300">/volume2</code>).
+        Paths must be inside the configured allowed roots.
       </p>
     </div>
 

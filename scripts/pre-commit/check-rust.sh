@@ -31,38 +31,24 @@ photo_tagger_native_deps_available() {
   pkg-config --exists 'libheif >= 1.17'
 }
 
-declare -A selected=()
-if [[ "$#" -eq 0 ]]; then
-  for example in "${EXAMPLES[@]}"; do
-    selected["${example}"]=1
-  done
-else
+manifest="photo-tagger/Cargo.toml"
+if [[ "$#" -gt 0 ]]; then
+  selected=0
   for file in "$@"; do
-    for example in "${EXAMPLES[@]}"; do
-      case "${file}" in
-        "${example}/photo-tagger/"*) selected["${example}"]=1 ;;
-      esac
-    done
+    case "${file}" in
+      photo-tagger/*) selected=1 ;;
+    esac
   done
+  [[ "${selected}" -eq 1 ]] || exit 0
 fi
 
-if [[ "${#selected[@]}" -eq 0 ]]; then
-  exit 0
-fi
-
-for example in "${!selected[@]}"; do
-  manifest="${example}/photo-tagger/Cargo.toml"
-  echo "==> cargo fmt --check ${manifest}"
-  cargo fmt --manifest-path "${manifest}" -- --check
-done
+echo "==> cargo fmt --check ${manifest}"
+cargo fmt --manifest-path "${manifest}" -- --check
 
 if ! photo_tagger_native_deps_available; then
   warn "native Photo Tagger deps missing; skipped cargo test. Install build-essential, pkg-config, libheif-dev, and zlib1g-dev."
   exit 0
 fi
 
-for example in "${!selected[@]}"; do
-  manifest="${example}/photo-tagger/Cargo.toml"
-  echo "==> cargo test ${manifest}"
-  cargo test --manifest-path "${manifest}"
-done
+echo "==> cargo test ${manifest}"
+cargo test --manifest-path "${manifest}"

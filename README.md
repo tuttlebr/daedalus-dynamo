@@ -16,6 +16,8 @@ not contain separate Kubernetes configuration.
 | `qwen27b` | `qwen-36-27b-dynamo/` | `Qwen/Qwen3.6-27B-FP8` | SGLang |
 
 Shared Grafana dashboard assets live in [`observability/`](./observability/).
+The shared reference application lives once at [`photo-tagger/`](./photo-tagger/);
+backend folders no longer contain their own app copies.
 
 ## Deploy
 
@@ -53,6 +55,7 @@ The upstream NVIDIA Dynamo GAIE reference is here:
 ./deploy.sh delete qwen27b
 DELETE_DATA=1 ./deploy.sh delete all
 kubectl port-forward -n daedalus-dynamo svc/inference-gateway 8000:80
+DEPLOY_PHOTO_TAGGER=0 ./deploy.sh render all
 ```
 
 The shared Photo Tagger UI is exposed through NodePort `30153` by default:
@@ -138,8 +141,9 @@ Important root-level environment variables:
 | --- | --- | --- |
 | `NAMESPACE` | `daedalus-dynamo` | Shared Kubernetes namespace. |
 | `REGISTRY` | `daedalus.ddns.me:5050/btuttle` | Image registry prefix. |
-| `IMAGE_TAG` | UTC timestamp | Immutable image tag for model and Photo Tagger images. |
+| `IMAGE_TAG` | UTC timestamp | Immutable image tag for model and reference app images. |
 | `SKIP_BUILD` / `SKIP_PUSH` / `SKIP_DEPLOY` | unset | Skip build, push, or apply phases. |
+| `DEPLOY_PHOTO_TAGGER` | `1` | Deploy the shared reference app; set `0` for gateway/backends only. |
 | `DEFAULT_BACKEND` | first selected backend | Photo Tagger default backend. |
 | `DEFAULT_MODEL` | backend model id | Photo Tagger model override. |
 | `DYNAMO_EPP_IMAGE` | `nvcr.io/nvidia/ai-dynamo/dynamo-frontend:${DYNAMO_VERSION:-1.2.0}` | EPP container image. |
@@ -167,8 +171,8 @@ The root deployment creates one shared frontend:
 - One worker-side Dynamo frontend sidecar per worker, running
   `python3 -m dynamo.frontend --router-mode direct` so the EPP routing decision
   is honored.
-- One shared Photo Tagger deployment configured with
-  `LLM_ENDPOINT=http://inference-gateway:80/v1/chat/completions`.
+- When `DEPLOY_PHOTO_TAGGER=1`, one shared Photo Tagger deployment configured
+  with `LLM_ENDPOINT=http://inference-gateway:80/v1/chat/completions`.
 
 The EPP config uses the Dynamo GAIE plugin chain:
 
@@ -188,6 +192,20 @@ extends `LD_LIBRARY_PATH`.
 Keep deployment behavior centralized in the root [`deploy.sh`](./deploy.sh).
 Do not add model-specific Kubernetes apply logic back into example-level
 `deploy.sh` files.
+
+### Application Integration
+
+Photo Tagger is a reference app, not a per-model component. It calls the shared
+gateway like any other OpenAI-compatible client:
+
+- Chat completions: `http://inference-gateway:80/v1/chat/completions`
+- Model catalog: `http://inference-gateway:80/v1/models`
+- Routing key: the OpenAI request body `model` field
+
+To integrate a different application, deploy the backends with
+`DEPLOY_PHOTO_TAGGER=0`, deploy your app in the same namespace, and configure its
+OpenAI base URL as `http://inference-gateway:80/v1`. The app must choose one of
+the model ids returned by `/v1/models`.
 
 To add a backend:
 

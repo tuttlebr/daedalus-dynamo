@@ -10,7 +10,7 @@ for file in "$@"; do
   [[ -e "${file}" ]] || continue
 
   case "${file}" in
-    */photo-tagger/target/*|*/__pycache__/*|*.pyc|*.pyo|*.pyd|*.so|*.rlib|*.rmeta)
+    photo-tagger/target/*|*/photo-tagger/target/*|*/__pycache__/*|*.pyc|*.pyo|*.pyd|*.so|*.rlib|*.rmeta)
       echo "Generated build artifact is not allowed: ${file}" >&2
       status=1
       continue

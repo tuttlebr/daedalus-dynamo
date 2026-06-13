@@ -5,33 +5,8 @@ resources:
   - model-cache.yaml
   - redis.yaml
   - dynamo.yaml
-  - photo-tagger-postgres.yaml
-  - photo-tagger-networkpolicy.yaml
-  - photo-tagger.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
   labels:
     app.kubernetes.io/part-of: nemotron-omni-photo-demo
-
-configMapGenerator:
-  - name: photo-tagger-config
-    literals:
-      - LISTEN_ADDR=0.0.0.0:3000
-      - LLM_ENDPOINT=http://nemotron-omni-vllm-agg-frontend:8000/v1/chat/completions
-      - MODEL_NAME=nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8
-      - PHOTO_TAGGER_REQUIRE_AUTH=false
-      - PHOTO_TAGGER_AUTH_USER=photo-tagger
-      - WRITE_SIDECAR=false
-      - SIDECAR_ROOTS=
-      - ALLOWED_ROOTS=/data/photos
-      - MAX_CONCURRENT_LLM=4
-      - MAX_CONCURRENT_HASH=8
-      - MAX_FILE_BYTES=104857600
-      - MAX_IMAGE_PIXELS=80000000
-      - MAX_EDGE_PIXELS=2048
-      - DOWNSCALE_LARGE=true
-      - LLM_TIMEOUT_SECS=180
-      - LLM_MAX_RETRIES=3
-      - JPEG_QUALITY=85
-      - RUST_LOG=info,photo_tagger=info

@@ -5,12 +5,12 @@ use std::str::FromStr;
 /// How prepared images are delivered to the inference backend.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ImageDelivery {
-    /// Serve each prepared image over HTTP and hand the worker a URL. Required
-    /// by Dynamo's SGLang multimodal backend, which only accepts HTTP(S) image
-    /// URLs and rejects base64 `data:` URLs.
+    /// Serve each prepared image over HTTP and hand the worker a URL. Use this
+    /// for backends whose OpenAI-compatible image path accepts HTTP(S) URLs but
+    /// rejects base64 `data:` URLs.
     Url,
     /// Inline each image as a base64 `data:` URL in the request body. Works with
-    /// backends that accept data URLs (e.g. the Dynamo vLLM multimodal path).
+    /// backends that accept data URLs.
     DataUrl,
 }
 
@@ -95,7 +95,7 @@ impl Config {
             ));
         }
 
-        let image_delivery = parse_image_delivery("IMAGE_DELIVERY", "url")?;
+        let image_delivery = parse_image_delivery("IMAGE_DELIVERY", "data-url")?;
         // Cluster-internal base URL the inference workers use to fetch images in
         // `url` delivery mode. Defaults to this service's in-namespace DNS name.
         let image_base_url = env_or("IMAGE_BASE_URL", "http://photo-tagger:3000")
@@ -110,11 +110,12 @@ impl Config {
                 "DATABASE_URL",
                 "postgres://photo_tagger:photo_tagger@photo-tagger-postgres:5432/photo_tagger",
             ),
-            llm_endpoint: env_or_any(
-                &["LLM_ENDPOINT", "QWEN_ENDPOINT", "NEMOTRON_ENDPOINT"],
-                "http://qwen36-dynamo-fd-ec-frontend:8000/v1/chat/completions",
-            ),
-            model_name: env_or("MODEL_NAME", "Qwen/Qwen3.6-27B-FP8"),
+            llm_endpoint: required_env_any(&[
+                "LLM_ENDPOINT",
+                "QWEN_ENDPOINT",
+                "NEMOTRON_ENDPOINT",
+            ])?,
+            model_name: required_env("MODEL_NAME")?,
             image_delivery,
             image_base_url,
             require_auth: parse_bool_env("PHOTO_TAGGER_REQUIRE_AUTH", "false")?,
@@ -150,10 +151,14 @@ fn env_or(key: &str, default: &str) -> String {
     std::env::var(key).unwrap_or_else(|_| default.to_string())
 }
 
-fn env_or_any(keys: &[&str], default: &str) -> String {
+fn required_env(key: &str) -> Result<String, String> {
+    optional_env(key).ok_or_else(|| format!("{key} is required"))
+}
+
+fn required_env_any(keys: &[&str]) -> Result<String, String> {
     keys.iter()
-        .find_map(|key| std::env::var(key).ok())
-        .unwrap_or_else(|| default.to_string())
+        .find_map(|key| optional_env(key))
+        .ok_or_else(|| format!("One of {} is required", keys.join(", ")))
 }
 
 fn optional_env(key: &str) -> Option<String> {

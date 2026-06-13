@@ -91,6 +91,7 @@ Common environment:
   EPP_ENABLE_DYN_DECODE=1      enable Dynamo KV-aware EPP scorer
   EPP_ENABLE_DYN_DECODE=0      disable only the dyn-decode scorer if EPP cannot initialize NIXL
   EPP_NODE_HOSTNAMES=a,b,c     optional comma-separated node hostnames for EPP pods
+  DEPLOY_PHOTO_TAGGER=1        deploy the shared reference app; set 0 to deploy gateway/backends only
   DEFAULT_BACKEND=<backend>    Photo Tagger model backend; defaults to first selected backend
   DEFAULT_MODEL=<model-id>     Photo Tagger model; defaults from DEFAULT_BACKEND
   PHOTO_TAGGER_NODEPORT=30153  shared Photo Tagger UI NodePort
@@ -232,6 +233,11 @@ photo_tagger_image_delivery() {
   else
     printf 'data-url\n'
   fi
+}
+
+photo_tagger_enabled() {
+  local value="${DEPLOY_PHOTO_TAGGER:-1}"
+  [[ "${value,,}" != "0" && "${value,,}" != "false" && "${value,,}" != "no" ]]
 }
 
 json_escape() {
@@ -394,10 +400,12 @@ build_images() {
     docker build "${build_args[@]}" -t "${image}" -f "${dir}/Dockerfile" "${dir}"
   done
 
-  echo "==> Building ${PHOTO_TAGGER_IMAGE}"
-  docker build -t "${PHOTO_TAGGER_IMAGE}" \
-    -f qwen-36-27b-dynamo/photo-tagger/Dockerfile \
-    qwen-36-27b-dynamo/photo-tagger
+  if photo_tagger_enabled; then
+    echo "==> Building ${PHOTO_TAGGER_IMAGE}"
+    docker build -t "${PHOTO_TAGGER_IMAGE}" \
+      -f photo-tagger/Dockerfile \
+      photo-tagger
+  fi
 }
 
 push_images() {
@@ -413,8 +421,10 @@ push_images() {
     docker push "${image}"
   done
 
-  echo "==> Pushing ${PHOTO_TAGGER_IMAGE}"
-  docker push "${PHOTO_TAGGER_IMAGE}"
+  if photo_tagger_enabled; then
+    echo "==> Pushing ${PHOTO_TAGGER_IMAGE}"
+    docker push "${PHOTO_TAGGER_IMAGE}"
+  fi
 }
 
 render_backend_storage() {
@@ -1978,7 +1988,9 @@ render_manifest() {
   local backend
   render_gateway_resources
   render_model_catalog
-  render_photo_tagger
+  if photo_tagger_enabled; then
+    render_photo_tagger
+  fi
   for backend in "${SELECTED_BACKENDS[@]}"; do
     render_backend "${backend}"
   done
@@ -1998,8 +2010,10 @@ apply_deployment() {
 
   preflight_cluster
   ensure_hf_token_secret
-  ensure_photo_tagger_postgres_secret
-  ensure_photo_tagger_auth_secret
+  if photo_tagger_enabled; then
+    ensure_photo_tagger_postgres_secret
+    ensure_photo_tagger_auth_secret
+  fi
 
   build_images
   push_images
@@ -2014,8 +2028,13 @@ apply_deployment() {
   echo "Port-forward the shared inference gateway:"
   echo "  kubectl port-forward -n ${NAMESPACE} svc/${GATEWAY_NAME} 8000:80"
   echo
-  echo "Open the shared Photo Tagger UI:"
-  echo "  http://<any-node-ip>:${PHOTO_TAGGER_NODEPORT}/"
+  if photo_tagger_enabled; then
+    echo "Open the shared Photo Tagger UI:"
+    echo "  http://<any-node-ip>:${PHOTO_TAGGER_NODEPORT}/"
+  else
+    echo "Deploy your application separately and point it at:"
+    echo "  http://${GATEWAY_NAME}.${NAMESPACE}.svc.cluster.local:80/v1"
+  fi
 }
 
 delete_deployment() {
