@@ -5,7 +5,7 @@ cd "$(dirname "$0")/../.."
 source scripts/pre-commit/common.sh
 
 status=0
-secret_re='(HF_TOKEN|NGC_API_KEY|NVIDIA_API_KEY|OPENAI_API_KEY|AWS_SECRET_ACCESS_KEY|PHOTO_TAGGER_AUTH_TOKEN|POSTGRES_PASSWORD|REGISTRY_PASSWORD)[[:space:]]*[:=][[:space:]]*["'\'']?[A-Za-z0-9_./+=:@-]{12,}'
+secret_re='(HF_TOKEN|NGC_API_KEY|NVIDIA_API_KEY|OPENAI_API_KEY|AWS_SECRET_ACCESS_KEY|WORKBENCH_AUTH_TOKEN|PHOTO_TAGGER_AUTH_TOKEN|POSTGRES_PASSWORD|REGISTRY_PASSWORD)[[:space:]]*[:=][[:space:]]*["'\'']?[A-Za-z0-9_./+=:@-]{12,}'
 
 for file in "$@"; do
   [[ -f "${file}" ]] || continue

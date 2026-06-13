@@ -3114,7 +3114,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Image-embedding cache hit rate (vllm:mm_cache_hits/queries). Relevant because the Photo Tagger sends images; hits avoid re-encoding repeated images. Empty when no image traffic.",
+      "description": "Image-embedding cache hit rate (vllm:mm_cache_hits/queries). Empty for the default text-only Routing Workbench demo and useful only for optional multimodal traffic.",
       "fieldConfig": {
         "defaults": {
           "color": {

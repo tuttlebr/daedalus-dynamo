@@ -35,9 +35,9 @@ export HF_TOKEN=<your-hf-token>
 ```
 
 `deploy.sh` forwards to the repository-root deployment entrypoint. It builds
-and pushes the selected backend image and the single shared Photo Tagger image
-unless `DEPLOY_PHOTO_TAGGER=0`, creates required secrets, and applies the shared
-Gateway API Inference Extension deployment.
+and pushes the selected backend image and the single shared Routing Workbench
+image unless `DEPLOY_WORKBENCH=0`, creates required secrets, and applies the
+shared Gateway API Inference Extension deployment.
 
 Useful build args:
 
@@ -49,14 +49,13 @@ Useful deploy env overrides:
 - `IMAGE_TAG=...` — default is a UTC timestamp tag for repeatable deploys.
 - `ALLOW_LATEST=1` — suppress the warning when explicitly using `IMAGE_TAG=latest`.
 - `QWEN_IMAGE_REPOSITORY=...` — default `${REGISTRY}/qwen36-27b-dynamo`.
-- `PHOTO_TAGGER_IMAGE_REPOSITORY=...` — default `${REGISTRY}/photo-tagger`.
-- `DEPLOY_PHOTO_TAGGER=0` — deploy only the gateway and model backends for a custom OpenAI-compatible app.
+- `WORKBENCH_IMAGE_REPOSITORY=...` — default `${REGISTRY}/routing-workbench`.
+- `DEPLOY_WORKBENCH=0` — deploy only the gateway and model backends for a custom OpenAI-compatible app.
+- `DEPLOY_PHOTO_TAGGER=0` — compatibility alias for disabling the shared demo app.
 - `NAMESPACE=...` — default `daedalus-dynamo`
-- `POSTGRES_PASSWORD=...` — optional; used only when creating the Photo Tagger Postgres secret for the first time.
-- `PHOTO_TAGGER_AUTH_TOKEN=...` — optional; used only when creating the Photo Tagger auth secret for the first time.
-- `PHOTO_TAGGER_AUTH_USER=...` — default `photo-tagger`; HTTP Basic username for the Photo Tagger UI/API.
-- `MAX_FILE_BYTES=...` — default `104857600`; rejects oversized images before reading them into memory.
-- `MAX_IMAGE_PIXELS=...` — default `80000000`; rejects images above this decoded-pixel count.
+- `WORKBENCH_AUTH_TOKEN=...` — optional; used only when creating the Workbench auth secret for the first time.
+- `WORKBENCH_AUTH_USER=...` — default `routing-workbench`; HTTP Basic username for the Workbench UI/API.
+- `WORKER_REPLICAS=...` — default `2`; worker replicas for this backend.
 - `SKIP_BUILD=1`, `SKIP_PUSH=1`, or `SKIP_DEPLOY=1` for partial runs
 
 ### Local image build
@@ -88,11 +87,11 @@ STRICT=1 SERVER_DRY_RUN=1 make validate
 The validation script checks shell syntax, Python benchmark scripts, Kustomize
 rendering, and Rust tests when `cargo` is installed.
 
-For local Photo Tagger Rust tests on Ubuntu/Debian hosts, install the native
-build and HEIF development dependencies first:
+For local Routing Workbench Rust tests on Ubuntu/Debian hosts, install native
+linker prerequisites first:
 
 ```bash
-sudo apt-get install -y build-essential pkg-config libc6-dev libheif-dev zlib1g-dev
+sudo apt-get install -y build-essential libc6-dev
 ```
 
 The default worker shape starts two TP=2 SGLang workers. On Daedalus this
@@ -123,19 +122,19 @@ kubectl get pods -n ${NAMESPACE} -l nvidia.com/dynamo-graph-deployment-name=qwen
 
 ## Step 3: Test
 
-When `DEPLOY_PHOTO_TAGGER=1`, open the shared Photo Tagger UI:
+When `DEPLOY_WORKBENCH=1`, open the shared Routing Workbench UI:
 
 ```text
 http://<any-cluster-node>:30153/
 ```
 
 The shared root deployment exposes this UI through NodePort `30153` by default.
-It requires HTTP Basic auth by default; use username `photo-tagger` and the
-token stored in the `photo-tagger-auth` secret. Keep the NodePort behind trusted
-cluster/network boundaries.
+It requires HTTP Basic auth by default; use username `routing-workbench` and the
+token stored in the `routing-workbench-auth` secret. Keep the NodePort behind
+trusted cluster/network boundaries.
 
 ```bash
-kubectl get secret photo-tagger-auth -n ${NAMESPACE} \
+kubectl get secret routing-workbench-auth -n ${NAMESPACE} \
   -o jsonpath='{.data.token}' | base64 -d
 ```
 
@@ -328,10 +327,8 @@ the final `DynamoGraphDeployment` under
   so SGLang auto-detects and serves its image path with no special flag — there
   is no `--enable-multimodal`/embedding-cache equivalent on this backend.
 - Images must be supplied as HTTP(S) URLs; the Dynamo SGLang multimodal path
-  does not accept base64 `data:` URLs. The Photo Tagger therefore serves each
-  prepared image over HTTP and hands the worker a URL (`IMAGE_DELIVERY=url`) —
-  see [`../photo-tagger/README.md`](../photo-tagger/README.md). The `image_url`
-  examples below already use HTTP URLs and work as-is.
+  does not accept base64 `data:` URLs. The default Routing Workbench is
+  text-only and does not exercise this multimodal path.
 - `--dyn-tool-call-parser qwen3_coder` and `--dyn-reasoning-parser qwen3`
   enable Qwen tool-call and reasoning parsing. Dynamo's frontend does the
   parsing, and these `--dyn-*` flags override SGLang's native parsers.
@@ -388,17 +385,17 @@ router in prediction-based mode (`--no-router-kv-events`), the worker does not
 need to publish worker-side KV events. The request plane is set explicitly with
 `DYN_REQUEST_PLANE=tcp`.
 
-## Shared app: Photo Tagger
+## Shared app: Routing Workbench
 
-Photo Tagger now lives once at [`../photo-tagger/`](../photo-tagger/). The root
-deployment wires that shared reference app to the Gateway API Inference
-Extension endpoint:
+Routing Workbench lives once at
+[`../routing-workbench/`](../routing-workbench/). The root deployment wires that
+shared text-only demo app to the Gateway API Inference Extension endpoint:
 
 ```text
-LLM_ENDPOINT=http://inference-gateway:80/v1/chat/completions
+OPENAI_BASE_URL=http://inference-gateway:80/v1
 ```
 
-Set `DEPLOY_PHOTO_TAGGER=0` when deploying a custom OpenAI-compatible
+Set `DEPLOY_WORKBENCH=0` when deploying a custom OpenAI-compatible
 application instead. Custom apps should use `http://inference-gateway:80/v1` as
 their OpenAI base URL and choose a model returned by `/v1/models`.
 

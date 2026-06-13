@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dynamo Routing Workbench</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --line: #d8dde5;
+      --text: #18202b;
+      --muted: #5f6b7a;
+      --accent: #0f766e;
+      --accent-dark: #0b5f59;
+      --warn: #b45309;
+      --error: #b91c1c;
+      --ok: #177245;
+      --code: #111827;
+      --code-bg: #eef2f7;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 64px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--line);
+      background: #ffffff;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr);
+      gap: 0;
+      min-height: calc(100vh - 65px);
+    }
+
+    aside, section {
+      min-width: 0;
+    }
+
+    aside {
+      border-right: 1px solid var(--line);
+      background: #fbfcfe;
+      padding: 16px;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-rows: auto minmax(280px, 1fr);
+      gap: 16px;
+      padding: 16px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      min-width: 0;
+    }
+
+    .stack { display: grid; gap: 14px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 0.8fr); gap: 16px; }
+
+    label {
+      display: grid;
+      gap: 5px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    input, select {
+      width: 100%;
+      min-height: 36px;
+      border: 1px solid #c7ced8;
+      border-radius: 6px;
+      padding: 7px 9px;
+      color: var(--text);
+      background: #ffffff;
+      font: inherit;
+      font-size: 14px;
+    }
+
+    input[type="checkbox"] {
+      width: 18px;
+      min-height: 18px;
+      accent-color: var(--accent);
+    }
+
+    button {
+      min-height: 36px;
+      border: 1px solid var(--accent-dark);
+      border-radius: 6px;
+      padding: 7px 12px;
+      color: #ffffff;
+      background: var(--accent);
+      font: inherit;
+      font-weight: 650;
+      cursor: pointer;
+    }
+
+    button:hover { background: var(--accent-dark); }
+    button.secondary {
+      color: var(--text);
+      background: #ffffff;
+      border-color: #b8c0cc;
+    }
+    button.secondary:hover { background: #f0f3f7; }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--warn);
+    }
+    .dot.ok { background: var(--ok); }
+    .dot.err { background: var(--error); }
+
+    .model-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: 13px;
+    }
+
+    .model-list li {
+      overflow-wrap: anywhere;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+    }
+
+    .model-list li.active {
+      border-color: var(--accent);
+      background: #edf8f6;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(110px, 1fr));
+      gap: 10px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px;
+      background: #fbfcfe;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 5px;
+      font-size: 20px;
+      line-height: 1.1;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th, td {
+      padding: 8px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      background: #fbfcfe;
+      position: sticky;
+      top: 0;
+    }
+
+    .table-wrap {
+      max-height: 420px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+
+    pre {
+      margin: 0;
+      max-height: 520px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 12px;
+      background: var(--code-bg);
+      color: var(--code);
+      font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .muted { color: var(--muted); }
+    .ok-text { color: var(--ok); font-weight: 650; }
+    .err-text { color: var(--error); font-weight: 650; }
+
+    @media (max-width: 960px) {
+      main { grid-template-columns: 1fr; }
+      aside { border-right: 0; border-bottom: 1px solid var(--line); }
+      .split { grid-template-columns: 1fr; }
+      .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 560px) {
+      header { align-items: flex-start; flex-direction: column; }
+      .workspace { padding: 12px; }
+      aside { padding: 12px; }
+      .metric-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Dynamo Routing Workbench</h1>
+    <div class="status"><span id="status-dot" class="dot"></span><span id="status-text">Checking gateway</span></div>
+  </header>
+
+  <main>
+    <aside class="stack">
+      <div class="panel">
+        <h2>Models</h2>
+        <ul id="models" class="model-list"></ul>
+      </div>
+
+      <div class="panel">
+        <h2>Run</h2>
+        <form id="run-form" class="stack">
+          <label>
+            Model
+            <select id="model"></select>
+          </label>
+          <label>
+            Preset
+            <select id="preset">
+              <option value="repeated-shared-prefix">Repeated shared prefix</option>
+              <option value="cold-prompt">Cold prompt</option>
+              <option value="mixed-prefixes">Mixed prefixes</option>
+              <option value="priority-hints">Priority hints</option>
+            </select>
+          </label>
+          <div class="row">
+            <label style="flex:1 1 120px">
+              Requests
+              <input id="total_requests" type="number" min="1" max="128" value="8">
+            </label>
+            <label style="flex:1 1 120px">
+              Concurrency
+              <input id="concurrency" type="number" min="1" max="16" value="2">
+            </label>
+          </div>
+          <div class="row">
+            <label style="flex:1 1 120px">
+              Shared tokens
+              <input id="shared_prefix_tokens" type="number" min="0" max="4096" value="512">
+            </label>
+            <label style="flex:1 1 120px">
+              Max tokens
+              <input id="max_tokens" type="number" min="1" max="8192" value="96">
+            </label>
+          </div>
+          <label>
+            Temperature
+            <input id="temperature" type="number" min="0" max="2" step="0.1" value="0.2">
+          </label>
+          <label class="row" style="display:flex">
+            <input id="include_nvext" type="checkbox" checked>
+            Include nvext extra fields
+          </label>
+          <div class="row">
+            <button type="submit">Start Run</button>
+            <button type="button" id="refresh" class="secondary">Refresh</button>
+          </div>
+        </form>
+      </div>
+    </aside>
+
+    <section class="workspace">
+      <div class="panel">
+        <h2>Results</h2>
+        <div class="metric-grid">
+          <div class="metric"><span>Status</span><strong id="run-status">Idle</strong></div>
+          <div class="metric"><span>Completed</span><strong id="completed">0/0</strong></div>
+          <div class="metric"><span>Avg Latency</span><strong id="latency">-</strong></div>
+          <div class="metric"><span>Avg TTFT</span><strong id="ttft">-</strong></div>
+          <div class="metric"><span>Errors</span><strong id="errors">0</strong></div>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="panel">
+          <h2>Requests</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Group</th>
+                  <th>Status</th>
+                  <th>Latency</th>
+                  <th>TTFT</th>
+                  <th>Worker</th>
+                  <th>Error</th>
+                </tr>
+              </thead>
+              <tbody id="results"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>OpenAI JSON</h2>
+          <pre id="request-json">{}</pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const state = {
+      defaultModel: "",
+      models: [],
+      currentRunId: null,
+      events: null
+    };
+
+    const el = id => document.getElementById(id);
+
+    function fmtMs(value) {
+      if (value === null || value === undefined) return "-";
+      return `${Number(value).toFixed(0)} ms`;
+    }
+
+    function payloadFromForm() {
+      return {
+        model: el("model").value || state.defaultModel,
+        preset: el("preset").value,
+        total_requests: Number(el("total_requests").value),
+        concurrency: Number(el("concurrency").value),
+        shared_prefix_tokens: Number(el("shared_prefix_tokens").value),
+        max_tokens: Number(el("max_tokens").value),
+        temperature: Number(el("temperature").value),
+        include_nvext: el("include_nvext").checked
+      };
+    }
+
+    function setGatewayStatus(ok, text) {
+      el("status-dot").className = `dot ${ok ? "ok" : "err"}`;
+      el("status-text").textContent = text;
+    }
+
+    async function loadStatus() {
+      const response = await fetch("/api/status");
+      const status = await response.json();
+      state.defaultModel = status.selected_model;
+      state.models = status.discovered_models || [];
+      setGatewayStatus(status.gateway_reachable, status.gateway_reachable ? "Gateway reachable" : (status.error || "Gateway unavailable"));
+      renderModels();
+    }
+
+    function renderModels() {
+      const list = el("models");
+      const select = el("model");
+      list.innerHTML = "";
+      select.innerHTML = "";
+      const models = state.models.length ? state.models : [state.defaultModel].filter(Boolean);
+      for (const model of models) {
+        const item = document.createElement("li");
+        item.textContent = model;
+        if (model === state.defaultModel) item.classList.add("active");
+        list.appendChild(item);
+
+        const option = document.createElement("option");
+        option.value = model;
+        option.textContent = model;
+        option.selected = model === state.defaultModel;
+        select.appendChild(option);
+      }
+    }
+
+    function renderRun(run) {
+      const summary = run.summary;
+      const metrics = summary.metrics || {};
+      el("run-status").textContent = summary.status;
+      el("completed").textContent = `${summary.completed_requests}/${summary.config.total_requests}`;
+      el("latency").textContent = fmtMs(metrics.latency_ms_avg);
+      el("ttft").textContent = fmtMs(metrics.ttft_ms_avg);
+      el("errors").textContent = String(summary.errors);
+      el("request-json").textContent = JSON.stringify(run.request_body, null, 2);
+
+      const rows = el("results");
+      rows.innerHTML = "";
+      for (const result of run.results || []) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${result.index}</td>
+          <td>${escapeHtml(result.prompt_group || "")}</td>
+          <td class="${result.status === "ok" ? "ok-text" : "err-text"}">${escapeHtml(result.status)}</td>
+          <td>${fmtMs(result.latency_ms)}</td>
+          <td>${fmtMs(result.ttft_ms)}</td>
+          <td>${escapeHtml(result.worker_id || "-")}</td>
+          <td>${escapeHtml(result.error || "")}</td>
+        `;
+        rows.appendChild(tr);
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    async function refreshCurrentRun() {
+      if (!state.currentRunId) return;
+      const response = await fetch(`/api/runs/${state.currentRunId}`);
+      if (response.ok) renderRun(await response.json());
+    }
+
+    function connectEvents(id) {
+      if (state.events) state.events.close();
+      state.events = new EventSource(`/api/runs/${id}/events`);
+      for (const name of ["snapshot", "run_started", "request_finished", "run_finished"]) {
+        state.events.addEventListener(name, event => {
+          const payload = JSON.parse(event.data);
+          if (name === "snapshot") {
+            renderRun(payload);
+          } else {
+            refreshCurrentRun();
+          }
+        });
+      }
+    }
+
+    el("run-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      const response = await fetch("/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payloadFromForm())
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        alert(body.error || "failed to start run");
+        return;
+      }
+      state.currentRunId = body.summary.id;
+      renderRun(body);
+      connectEvents(state.currentRunId);
+    });
+
+    el("refresh").addEventListener("click", async () => {
+      await loadStatus();
+      await refreshCurrentRun();
+    });
+
+    loadStatus().catch(error => {
+      setGatewayStatus(false, error.message);
+    });
+  </script>
+</body>
+</html>

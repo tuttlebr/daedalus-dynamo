@@ -21,7 +21,7 @@ if [[ "$#" -gt 0 ]]; then
 elif [[ -n "${BACKENDS:-}" ]]; then
   IFS=',' read -r -a REQUESTED_BACKENDS <<< "${BACKENDS}"
 else
-  REQUESTED_BACKENDS=("all")
+  REQUESTED_BACKENDS=("qwen35b")
 fi
 
 REGISTRY="${REGISTRY:-daedalus.ddns.me:5050/btuttle}"
@@ -32,14 +32,14 @@ fi
 NAMESPACE="${NAMESPACE:-daedalus-dynamo}"
 GATEWAY_NAME="${GATEWAY_NAME:-inference-gateway}"
 HF_TOKEN_SECRET="${HF_TOKEN_SECRET:-hf-token-secret}"
-POSTGRES_SECRET="${POSTGRES_SECRET:-photo-tagger-postgres}"
-PHOTO_TAGGER_AUTH_SECRET="${PHOTO_TAGGER_AUTH_SECRET:-photo-tagger-auth}"
+WORKBENCH_AUTH_SECRET="${WORKBENCH_AUTH_SECRET:-routing-workbench-auth}"
 APP_LABEL_VALUE="daedalus-dynamo-demo"
 APP_LABEL="app.kubernetes.io/part-of=${APP_LABEL_VALUE}"
 PREFLIGHT_TIMEOUT_SECONDS="${PREFLIGHT_TIMEOUT_SECONDS:-20}"
-PHOTO_TAGGER_NODEPORT="${PHOTO_TAGGER_NODEPORT:-30153}"
+WORKBENCH_NODEPORT="${WORKBENCH_NODEPORT:-30153}"
 GATEWAY_REQUEST_TIMEOUT="${GATEWAY_REQUEST_TIMEOUT:-300s}"
 KV_CACHE_BLOCK_SIZE="${KV_CACHE_BLOCK_SIZE:-16}"
+WORKER_REPLICAS="${WORKER_REPLICAS:-2}"
 KV_EVENTS_ENDPOINT="${KV_EVENTS_ENDPOINT:-tcp://*:5557}"
 MODEL_CATALOG_IMAGE="${MODEL_CATALOG_IMAGE:-python:3.12-alpine}"
 DYNAMO_VERSION="${DYNAMO_VERSION:-1.2.0}"
@@ -55,12 +55,12 @@ EPP_NODE_HOSTNAMES="${EPP_NODE_HOSTNAMES:-}"
 NEMOTRON_IMAGE_REPOSITORY="${NEMOTRON_IMAGE_REPOSITORY:-${REGISTRY}/nemotron-3-nano-omni}"
 QWEN35B_IMAGE_REPOSITORY="${QWEN35B_IMAGE_REPOSITORY:-${REGISTRY}/qwen36-35b-dynamo}"
 QWEN27B_IMAGE_REPOSITORY="${QWEN27B_IMAGE_REPOSITORY:-${REGISTRY}/qwen36-27b-dynamo}"
-PHOTO_TAGGER_IMAGE_REPOSITORY="${PHOTO_TAGGER_IMAGE_REPOSITORY:-${REGISTRY}/photo-tagger}"
+WORKBENCH_IMAGE_REPOSITORY="${WORKBENCH_IMAGE_REPOSITORY:-${REGISTRY}/routing-workbench}"
 
 NEMOTRON_IMAGE="${NEMOTRON_IMAGE_REPOSITORY}:${IMAGE_TAG}"
 QWEN35B_IMAGE="${QWEN35B_IMAGE_REPOSITORY}:${IMAGE_TAG}"
 QWEN27B_IMAGE="${QWEN27B_IMAGE_REPOSITORY}:${IMAGE_TAG}"
-PHOTO_TAGGER_IMAGE="${PHOTO_TAGGER_IMAGE_REPOSITORY}:${IMAGE_TAG}"
+WORKBENCH_IMAGE="${WORKBENCH_IMAGE_REPOSITORY}:${IMAGE_TAG}"
 
 usage() {
   cat <<EOF
@@ -73,6 +73,7 @@ Backends:
   all          Deploy all backends
 
 Examples:
+  HF_TOKEN=... ./deploy.sh deploy
   HF_TOKEN=... ./deploy.sh deploy qwen35b qwen27b
   BACKENDS=nemotron,qwen35b ./deploy.sh render
   INSTALL_GATEWAY=1 HF_TOKEN=... ./deploy.sh deploy all
@@ -91,10 +92,12 @@ Common environment:
   EPP_ENABLE_DYN_DECODE=1      enable Dynamo KV-aware EPP scorer
   EPP_ENABLE_DYN_DECODE=0      disable only the dyn-decode scorer if EPP cannot initialize NIXL
   EPP_NODE_HOSTNAMES=a,b,c     optional comma-separated node hostnames for EPP pods
-  DEPLOY_PHOTO_TAGGER=1        deploy the shared reference app; set 0 to deploy gateway/backends only
-  DEFAULT_BACKEND=<backend>    Photo Tagger model backend; defaults to first selected backend
-  DEFAULT_MODEL=<model-id>     Photo Tagger model; defaults from DEFAULT_BACKEND
-  PHOTO_TAGGER_NODEPORT=30153  shared Photo Tagger UI NodePort
+  DEPLOY_WORKBENCH=1           deploy the shared Dynamo Routing Workbench; set 0 for gateway/backends only
+  DEPLOY_PHOTO_TAGGER=0        compatibility alias for disabling the shared demo app
+  DEFAULT_BACKEND=<backend>    Workbench model backend; defaults to first selected backend
+  WORKBENCH_DEFAULT_MODEL=<id> Workbench model override; defaults from DEFAULT_BACKEND
+  WORKBENCH_NODEPORT=30153     shared Workbench UI NodePort
+  WORKER_REPLICAS=2            worker replicas for each selected backend
   KV_CACHE_BLOCK_SIZE=16       EPP and worker KV block/page size
 EOF
 }
@@ -216,6 +219,10 @@ default_backend() {
 }
 
 default_model() {
+  if [[ -n "${WORKBENCH_DEFAULT_MODEL:-}" ]]; then
+    printf '%s\n' "${WORKBENCH_DEFAULT_MODEL}"
+    return
+  fi
   if [[ -n "${DEFAULT_MODEL:-}" ]]; then
     printf '%s\n' "${DEFAULT_MODEL}"
     return
@@ -223,20 +230,12 @@ default_model() {
   backend_model "$(default_backend)"
 }
 
-photo_tagger_image_delivery() {
-  if [[ -n "${PHOTO_TAGGER_IMAGE_DELIVERY:-}" ]]; then
-    printf '%s\n' "${PHOTO_TAGGER_IMAGE_DELIVERY}"
-    return
+workbench_enabled() {
+  local value="${DEPLOY_WORKBENCH:-}"
+  if [[ -z "${value}" && -n "${DEPLOY_PHOTO_TAGGER:-}" ]]; then
+    value="${DEPLOY_PHOTO_TAGGER}"
   fi
-  if [[ "$(default_backend)" == "qwen27b" ]]; then
-    printf 'url\n'
-  else
-    printf 'data-url\n'
-  fi
-}
-
-photo_tagger_enabled() {
-  local value="${DEPLOY_PHOTO_TAGGER:-1}"
+  value="${value:-1}"
   [[ "${value,,}" != "0" && "${value,,}" != "false" && "${value,,}" != "no" ]]
 }
 
@@ -345,38 +344,21 @@ generate_secret_value() {
   printf '\n'
 }
 
-ensure_photo_tagger_postgres_secret() {
+ensure_workbench_auth_secret() {
   ensure_namespace
 
-  if kubectl get secret "${POSTGRES_SECRET}" -n "${NAMESPACE}" > /dev/null 2>&1; then
-    echo "==> Reusing existing ${POSTGRES_SECRET} in namespace ${NAMESPACE}"
-    kubectl label secret "${POSTGRES_SECRET}" -n "${NAMESPACE}" "${APP_LABEL}" --overwrite > /dev/null
+  if kubectl get secret "${WORKBENCH_AUTH_SECRET}" -n "${NAMESPACE}" > /dev/null 2>&1; then
+    echo "==> Reusing existing ${WORKBENCH_AUTH_SECRET} in namespace ${NAMESPACE}"
+    kubectl label secret "${WORKBENCH_AUTH_SECRET}" -n "${NAMESPACE}" "${APP_LABEL}" --overwrite > /dev/null
     return
   fi
 
-  echo "==> Creating ${POSTGRES_SECRET} in namespace ${NAMESPACE}"
-  kubectl create secret generic "${POSTGRES_SECRET}" \
-    --from-literal=password="${POSTGRES_PASSWORD:-$(generate_secret_value)}" \
+  echo "==> Creating ${WORKBENCH_AUTH_SECRET} in namespace ${NAMESPACE}"
+  kubectl create secret generic "${WORKBENCH_AUTH_SECRET}" \
+    --from-literal=token="${WORKBENCH_AUTH_TOKEN:-$(generate_secret_value)}" \
     -n "${NAMESPACE}" \
     --dry-run=client -o yaml | kubectl apply -f -
-  kubectl label secret "${POSTGRES_SECRET}" -n "${NAMESPACE}" "${APP_LABEL}" --overwrite > /dev/null
-}
-
-ensure_photo_tagger_auth_secret() {
-  ensure_namespace
-
-  if kubectl get secret "${PHOTO_TAGGER_AUTH_SECRET}" -n "${NAMESPACE}" > /dev/null 2>&1; then
-    echo "==> Reusing existing ${PHOTO_TAGGER_AUTH_SECRET} in namespace ${NAMESPACE}"
-    kubectl label secret "${PHOTO_TAGGER_AUTH_SECRET}" -n "${NAMESPACE}" "${APP_LABEL}" --overwrite > /dev/null
-    return
-  fi
-
-  echo "==> Creating ${PHOTO_TAGGER_AUTH_SECRET} in namespace ${NAMESPACE}"
-  kubectl create secret generic "${PHOTO_TAGGER_AUTH_SECRET}" \
-    --from-literal=token="${PHOTO_TAGGER_AUTH_TOKEN:-$(generate_secret_value)}" \
-    -n "${NAMESPACE}" \
-    --dry-run=client -o yaml | kubectl apply -f -
-  kubectl label secret "${PHOTO_TAGGER_AUTH_SECRET}" -n "${NAMESPACE}" "${APP_LABEL}" --overwrite > /dev/null
+  kubectl label secret "${WORKBENCH_AUTH_SECRET}" -n "${NAMESPACE}" "${APP_LABEL}" --overwrite > /dev/null
 }
 
 build_images() {
@@ -400,11 +382,11 @@ build_images() {
     docker build "${build_args[@]}" -t "${image}" -f "${dir}/Dockerfile" "${dir}"
   done
 
-  if photo_tagger_enabled; then
-    echo "==> Building ${PHOTO_TAGGER_IMAGE}"
-    docker build -t "${PHOTO_TAGGER_IMAGE}" \
-      -f photo-tagger/Dockerfile \
-      photo-tagger
+  if workbench_enabled; then
+    echo "==> Building ${WORKBENCH_IMAGE}"
+    docker build -t "${WORKBENCH_IMAGE}" \
+      -f routing-workbench/Dockerfile \
+      routing-workbench
   fi
 }
 
@@ -421,9 +403,9 @@ push_images() {
     docker push "${image}"
   done
 
-  if photo_tagger_enabled; then
-    echo "==> Pushing ${PHOTO_TAGGER_IMAGE}"
-    docker push "${PHOTO_TAGGER_IMAGE}"
+  if workbench_enabled; then
+    echo "==> Pushing ${WORKBENCH_IMAGE}"
+    docker push "${WORKBENCH_IMAGE}"
   fi
 }
 
@@ -1014,7 +996,7 @@ render_vllm_worker() {
     ${component}:
       componentType: worker
       envFromSecret: ${HF_TOKEN_SECRET}
-      replicas: 1
+      replicas: ${WORKER_REPLICAS}
       resources:
         limits:
           gpu: "2"
@@ -1187,7 +1169,7 @@ render_sglang_worker() {
     ${component}:
       componentType: worker
       envFromSecret: ${HF_TOKEN_SECRET}
-      replicas: 1
+      replicas: ${WORKER_REPLICAS}
       resources:
         limits:
           gpu: "2"
@@ -1560,175 +1542,48 @@ EOF
   done
 }
 
-render_photo_tagger() {
-  local selected_model image_delivery
+render_workbench() {
+  local selected_model openai_base_url
   selected_model="$(default_model)"
-  image_delivery="$(photo_tagger_image_delivery)"
+  openai_base_url="${OPENAI_BASE_URL:-http://${GATEWAY_NAME}:80/v1}"
 
   cat <<EOF
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: photo-tagger-config
+  name: routing-workbench-config
   labels:
-    app.kubernetes.io/name: photo-tagger
+    app.kubernetes.io/name: routing-workbench
     app.kubernetes.io/part-of: ${APP_LABEL_VALUE}
 data:
   LISTEN_ADDR: 0.0.0.0:3000
-  LLM_ENDPOINT: http://${GATEWAY_NAME}:80/v1/chat/completions
-  MODEL_NAME: ${selected_model}
-  IMAGE_DELIVERY: ${image_delivery}
-  IMAGE_BASE_URL: http://photo-tagger:3000
-  PHOTO_TAGGER_REQUIRE_AUTH: "${PHOTO_TAGGER_REQUIRE_AUTH:-true}"
-  PHOTO_TAGGER_AUTH_USER: ${PHOTO_TAGGER_AUTH_USER:-photo-tagger}
-  WRITE_SIDECAR: "${WRITE_SIDECAR:-true}"
-  SIDECAR_ROOTS: ${SIDECAR_ROOTS:-/volume2/daedalus}
-  ALLOWED_ROOTS: ${ALLOWED_ROOTS:-/volume1/homes,/volume2/daedalus}
-  MAX_CONCURRENT_LLM: "${MAX_CONCURRENT_LLM:-4}"
-  MAX_CONCURRENT_HASH: "${MAX_CONCURRENT_HASH:-8}"
-  MAX_FILE_BYTES: "${MAX_FILE_BYTES:-104857600}"
-  MAX_IMAGE_PIXELS: "${MAX_IMAGE_PIXELS:-80000000}"
-  MAX_EDGE_PIXELS: "${MAX_EDGE_PIXELS:-2048}"
-  DOWNSCALE_LARGE: "${DOWNSCALE_LARGE:-true}"
-  LLM_TIMEOUT_SECS: "${LLM_TIMEOUT_SECS:-180}"
-  LLM_MAX_RETRIES: "${LLM_MAX_RETRIES:-3}"
-  JPEG_QUALITY: "${JPEG_QUALITY:-85}"
-  RUST_LOG: ${RUST_LOG:-info,photo_tagger=info}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: photo-tagger-postgres
-  labels:
-    app.kubernetes.io/name: photo-tagger-postgres
-    app.kubernetes.io/part-of: ${APP_LABEL_VALUE}
-spec:
-  selector:
-    app.kubernetes.io/name: photo-tagger-postgres
-  ports:
-    - name: postgres
-      port: 5432
-      targetPort: 5432
----
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: photo-tagger-postgres
-  labels:
-    app.kubernetes.io/name: photo-tagger-postgres
-    app.kubernetes.io/part-of: ${APP_LABEL_VALUE}
-spec:
-  serviceName: photo-tagger-postgres
-  replicas: 1
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: photo-tagger-postgres
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: photo-tagger-postgres
-        app.kubernetes.io/part-of: ${APP_LABEL_VALUE}
-    spec:
-      securityContext:
-        fsGroup: 988
-        fsGroupChangePolicy: OnRootMismatch
-      containers:
-        - name: postgres
-          image: postgres:16-alpine
-          imagePullPolicy: IfNotPresent
-          securityContext:
-            runAsUser: 977
-            runAsGroup: 988
-            runAsNonRoot: true
-            allowPrivilegeEscalation: false
-          ports:
-            - name: postgres
-              containerPort: 5432
-          env:
-            - name: POSTGRES_DB
-              value: photo_tagger
-            - name: POSTGRES_USER
-              value: photo_tagger
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: ${POSTGRES_SECRET}
-                  key: password
-            - name: PGDATA
-              value: /var/lib/postgresql/data/pgdata
-          startupProbe:
-            exec:
-              command:
-                - sh
-                - -c
-                - pg_isready -U "\$POSTGRES_USER" -d "\$POSTGRES_DB"
-            periodSeconds: 5
-            timeoutSeconds: 5
-            failureThreshold: 60
-          readinessProbe:
-            exec:
-              command:
-                - sh
-                - -c
-                - pg_isready -U "\$POSTGRES_USER" -d "\$POSTGRES_DB"
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 6
-          livenessProbe:
-            exec:
-              command:
-                - sh
-                - -c
-                - pg_isready -U "\$POSTGRES_USER" -d "\$POSTGRES_DB"
-            initialDelaySeconds: 60
-            periodSeconds: 30
-            timeoutSeconds: 5
-            failureThreshold: 6
-          resources:
-            requests:
-              cpu: 500m
-              memory: 512Mi
-            limits:
-              cpu: "2"
-              memory: 2Gi
-          volumeMounts:
-            - name: postgres-data
-              mountPath: /var/lib/postgresql/data
-  volumeClaimTemplates:
-    - metadata:
-        name: postgres-data
-        labels:
-          app.kubernetes.io/name: photo-tagger-postgres
-          app.kubernetes.io/part-of: ${APP_LABEL_VALUE}
-      spec:
-        accessModes:
-          - ReadWriteOnce
-        resources:
-          requests:
-            storage: ${PHOTO_TAGGER_POSTGRES_STORAGE:-20Gi}
+  OPENAI_BASE_URL: ${openai_base_url}
+  WORKBENCH_DEFAULT_MODEL: ${selected_model}
+  WORKBENCH_REQUIRE_AUTH: "${WORKBENCH_REQUIRE_AUTH:-true}"
+  WORKBENCH_AUTH_USER: ${WORKBENCH_AUTH_USER:-routing-workbench}
+  WORKBENCH_REQUEST_TIMEOUT_SECS: "${WORKBENCH_REQUEST_TIMEOUT_SECS:-300}"
+  WORKBENCH_MAX_RUN_REQUESTS: "${WORKBENCH_MAX_RUN_REQUESTS:-128}"
+  WORKBENCH_MAX_CONCURRENCY: "${WORKBENCH_MAX_CONCURRENCY:-16}"
+  RUST_LOG: ${RUST_LOG:-info,routing_workbench=info}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: photo-tagger
+  name: routing-workbench
   labels:
-    app.kubernetes.io/name: photo-tagger
+    app.kubernetes.io/name: routing-workbench
     app.kubernetes.io/part-of: ${APP_LABEL_VALUE}
 spec:
   replicas: 1
-  strategy:
-    type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: photo-tagger
+      app.kubernetes.io/name: routing-workbench
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: photo-tagger
+        app.kubernetes.io/name: routing-workbench
         app.kubernetes.io/part-of: ${APP_LABEL_VALUE}
-      annotations:
-        photo-tagger/deployment-profile: daedalus
     spec:
       securityContext:
         runAsUser: 977
@@ -1738,20 +1593,9 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: kubernetes.io/hostname
-                    operator: In
-                    values:
-                      - daedalus-02
-                      - daedalus-03
-                      - daedalus-04
       containers:
-        - name: photo-tagger
-          image: ${PHOTO_TAGGER_IMAGE}
+        - name: routing-workbench
+          image: ${WORKBENCH_IMAGE}
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
@@ -1766,178 +1610,94 @@ spec:
             - name: LISTEN_ADDR
               valueFrom:
                 configMapKeyRef:
-                  name: photo-tagger-config
+                  name: routing-workbench-config
                   key: LISTEN_ADDR
-            - name: LLM_ENDPOINT
+            - name: OPENAI_BASE_URL
               valueFrom:
                 configMapKeyRef:
-                  name: photo-tagger-config
-                  key: LLM_ENDPOINT
-            - name: MODEL_NAME
+                  name: routing-workbench-config
+                  key: OPENAI_BASE_URL
+            - name: WORKBENCH_DEFAULT_MODEL
               valueFrom:
                 configMapKeyRef:
-                  name: photo-tagger-config
-                  key: MODEL_NAME
-            - name: IMAGE_DELIVERY
+                  name: routing-workbench-config
+                  key: WORKBENCH_DEFAULT_MODEL
+            - name: WORKBENCH_REQUIRE_AUTH
               valueFrom:
                 configMapKeyRef:
-                  name: photo-tagger-config
-                  key: IMAGE_DELIVERY
-            - name: IMAGE_BASE_URL
+                  name: routing-workbench-config
+                  key: WORKBENCH_REQUIRE_AUTH
+            - name: WORKBENCH_AUTH_USER
               valueFrom:
                 configMapKeyRef:
-                  name: photo-tagger-config
-                  key: IMAGE_BASE_URL
-            - name: PHOTO_TAGGER_REQUIRE_AUTH
-              valueFrom:
-                configMapKeyRef:
-                  name: photo-tagger-config
-                  key: PHOTO_TAGGER_REQUIRE_AUTH
-            - name: PHOTO_TAGGER_AUTH_USER
-              valueFrom:
-                configMapKeyRef:
-                  name: photo-tagger-config
-                  key: PHOTO_TAGGER_AUTH_USER
-            - name: PHOTO_TAGGER_AUTH_TOKEN
+                  name: routing-workbench-config
+                  key: WORKBENCH_AUTH_USER
+            - name: WORKBENCH_AUTH_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: ${PHOTO_TAGGER_AUTH_SECRET}
+                  name: ${WORKBENCH_AUTH_SECRET}
                   key: token
                   optional: true
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: ${POSTGRES_SECRET}
-                  key: password
-            - name: DATABASE_URL
-              value: postgres://photo_tagger:\$(POSTGRES_PASSWORD)@photo-tagger-postgres:5432/photo_tagger
-            - name: WRITE_SIDECAR
+            - name: WORKBENCH_REQUEST_TIMEOUT_SECS
               valueFrom:
                 configMapKeyRef:
-                  name: photo-tagger-config
-                  key: WRITE_SIDECAR
-            - name: SIDECAR_ROOTS
+                  name: routing-workbench-config
+                  key: WORKBENCH_REQUEST_TIMEOUT_SECS
+            - name: WORKBENCH_MAX_RUN_REQUESTS
               valueFrom:
                 configMapKeyRef:
-                  name: photo-tagger-config
-                  key: SIDECAR_ROOTS
-            - name: ALLOWED_ROOTS
+                  name: routing-workbench-config
+                  key: WORKBENCH_MAX_RUN_REQUESTS
+            - name: WORKBENCH_MAX_CONCURRENCY
               valueFrom:
                 configMapKeyRef:
-                  name: photo-tagger-config
-                  key: ALLOWED_ROOTS
-            - name: MAX_CONCURRENT_LLM
-              valueFrom:
-                configMapKeyRef:
-                  name: photo-tagger-config
-                  key: MAX_CONCURRENT_LLM
-            - name: MAX_CONCURRENT_HASH
-              valueFrom:
-                configMapKeyRef:
-                  name: photo-tagger-config
-                  key: MAX_CONCURRENT_HASH
-            - name: MAX_FILE_BYTES
-              valueFrom:
-                configMapKeyRef:
-                  name: photo-tagger-config
-                  key: MAX_FILE_BYTES
-            - name: MAX_IMAGE_PIXELS
-              valueFrom:
-                configMapKeyRef:
-                  name: photo-tagger-config
-                  key: MAX_IMAGE_PIXELS
-            - name: MAX_EDGE_PIXELS
-              valueFrom:
-                configMapKeyRef:
-                  name: photo-tagger-config
-                  key: MAX_EDGE_PIXELS
-            - name: DOWNSCALE_LARGE
-              valueFrom:
-                configMapKeyRef:
-                  name: photo-tagger-config
-                  key: DOWNSCALE_LARGE
-            - name: LLM_TIMEOUT_SECS
-              valueFrom:
-                configMapKeyRef:
-                  name: photo-tagger-config
-                  key: LLM_TIMEOUT_SECS
-            - name: LLM_MAX_RETRIES
-              valueFrom:
-                configMapKeyRef:
-                  name: photo-tagger-config
-                  key: LLM_MAX_RETRIES
-            - name: JPEG_QUALITY
-              valueFrom:
-                configMapKeyRef:
-                  name: photo-tagger-config
-                  key: JPEG_QUALITY
+                  name: routing-workbench-config
+                  key: WORKBENCH_MAX_CONCURRENCY
             - name: RUST_LOG
               valueFrom:
                 configMapKeyRef:
-                  name: photo-tagger-config
+                  name: routing-workbench-config
                   key: RUST_LOG
           resources:
             requests:
-              cpu: "4"
-              memory: 4Gi
+              cpu: 500m
+              memory: 512Mi
             limits:
-              cpu: "8"
-              memory: 8Gi
+              cpu: "2"
+              memory: 2Gi
           startupProbe:
-            exec:
-              command: ["wget", "-qO-", "--timeout=3", "http://127.0.0.1:3000/health"]
+            httpGet:
+              path: /health
+              port: http
             periodSeconds: 5
             timeoutSeconds: 5
-            failureThreshold: 60
+            failureThreshold: 30
           readinessProbe:
-            exec:
-              command: ["wget", "-qO-", "--timeout=3", "http://127.0.0.1:3000/ready"]
+            httpGet:
+              path: /health
+              port: http
             periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 6
+            failureThreshold: 3
           livenessProbe:
-            exec:
-              command: ["sh", "-c", "kill -0 1"]
+            httpGet:
+              path: /health
+              port: http
             periodSeconds: 30
             timeoutSeconds: 5
             failureThreshold: 3
-          volumeMounts:
-            - name: tmp
-              mountPath: /tmp
-            - name: data-photos
-              mountPath: /data/photos
-            - name: volume1-homes
-              mountPath: /volume1/homes
-              readOnly: true
-            - name: volume2-daedalus
-              mountPath: /volume2/daedalus
-              readOnly: false
-      volumes:
-        - name: tmp
-          emptyDir: {}
-        - name: data-photos
-          emptyDir: {}
-        - name: volume1-homes
-          nfs:
-            server: ${VOLUME1_NFS_SERVER:-192.168.1.232}
-            path: ${VOLUME1_NFS_PATH:-/volume1/homes}
-            readOnly: true
-        - name: volume2-daedalus
-          nfs:
-            server: ${VOLUME2_NFS_SERVER:-192.168.1.77}
-            path: ${VOLUME2_NFS_PATH:-/var/nfs/shared/daedalus}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: photo-tagger
+  name: routing-workbench
   labels:
-    app.kubernetes.io/name: photo-tagger
+    app.kubernetes.io/name: routing-workbench
     app.kubernetes.io/part-of: ${APP_LABEL_VALUE}
 spec:
   type: ClusterIP
   selector:
-    app.kubernetes.io/name: photo-tagger
+    app.kubernetes.io/name: routing-workbench
   ports:
     - name: http
       port: 3000
@@ -1946,50 +1706,66 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: photo-tagger-np
+  name: routing-workbench-np
   labels:
-    app.kubernetes.io/name: photo-tagger
+    app.kubernetes.io/name: routing-workbench
     app.kubernetes.io/part-of: ${APP_LABEL_VALUE}
 spec:
   type: NodePort
   selector:
-    app.kubernetes.io/name: photo-tagger
+    app.kubernetes.io/name: routing-workbench
   ports:
     - name: http
       port: 3000
       targetPort: 3000
-      nodePort: ${PHOTO_TAGGER_NODEPORT}
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: photo-tagger-postgres-ingress
-  labels:
-    app.kubernetes.io/name: photo-tagger-postgres
-    app.kubernetes.io/part-of: ${APP_LABEL_VALUE}
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: photo-tagger-postgres
-  policyTypes:
-    - Ingress
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: photo-tagger
-      ports:
-        - protocol: TCP
-          port: 5432
+      nodePort: ${WORKBENCH_NODEPORT}
 EOF
+}
+
+cleanup_legacy_photo_tagger_resources() {
+  kubectl delete deployment photo-tagger \
+    -n "${NAMESPACE}" \
+    --ignore-not-found \
+    --wait=false || true
+  kubectl delete statefulset photo-tagger-postgres \
+    -n "${NAMESPACE}" \
+    --ignore-not-found \
+    --wait=false || true
+  kubectl delete service photo-tagger photo-tagger-np photo-tagger-postgres \
+    -n "${NAMESPACE}" \
+    --ignore-not-found \
+    --wait=false || true
+  kubectl delete configmap photo-tagger-config \
+    -n "${NAMESPACE}" \
+    --ignore-not-found \
+    --wait=false || true
+  kubectl delete networkpolicy photo-tagger-postgres-ingress \
+    -n "${NAMESPACE}" \
+    --ignore-not-found \
+    --wait=false || true
+}
+
+cleanup_workbench_resources() {
+  kubectl delete deployment routing-workbench \
+    -n "${NAMESPACE}" \
+    --ignore-not-found \
+    --wait=false || true
+  kubectl delete service routing-workbench routing-workbench-np \
+    -n "${NAMESPACE}" \
+    --ignore-not-found \
+    --wait=false || true
+  kubectl delete configmap routing-workbench-config \
+    -n "${NAMESPACE}" \
+    --ignore-not-found \
+    --wait=false || true
 }
 
 render_manifest() {
   local backend
   render_gateway_resources
   render_model_catalog
-  if photo_tagger_enabled; then
-    render_photo_tagger
+  if workbench_enabled; then
+    render_workbench
   fi
   for backend in "${SELECTED_BACKENDS[@]}"; do
     render_backend "${backend}"
@@ -2010,9 +1786,8 @@ apply_deployment() {
 
   preflight_cluster
   ensure_hf_token_secret
-  if photo_tagger_enabled; then
-    ensure_photo_tagger_postgres_secret
-    ensure_photo_tagger_auth_secret
+  if workbench_enabled; then
+    ensure_workbench_auth_secret
   fi
 
   build_images
@@ -2020,6 +1795,10 @@ apply_deployment() {
 
   echo "==> Applying Daedalus Dynamo GAIE deployment to namespace ${NAMESPACE}"
   render_manifest | kubectl apply -n "${NAMESPACE}" -f -
+  cleanup_legacy_photo_tagger_resources
+  if ! workbench_enabled; then
+    cleanup_workbench_resources
+  fi
 
   echo
   echo "Done. Watch pods with:"
@@ -2028,9 +1807,9 @@ apply_deployment() {
   echo "Port-forward the shared inference gateway:"
   echo "  kubectl port-forward -n ${NAMESPACE} svc/${GATEWAY_NAME} 8000:80"
   echo
-  if photo_tagger_enabled; then
-    echo "Open the shared Photo Tagger UI:"
-    echo "  http://<any-node-ip>:${PHOTO_TAGGER_NODEPORT}/"
+  if workbench_enabled; then
+    echo "Open the Dynamo Routing Workbench:"
+    echo "  http://<any-node-ip>:${WORKBENCH_NODEPORT}/"
   else
     echo "Deploy your application separately and point it at:"
     echo "  http://${GATEWAY_NAME}.${NAMESPACE}.svc.cluster.local:80/v1"
@@ -2040,6 +1819,8 @@ apply_deployment() {
 delete_deployment() {
   echo "==> Deleting rendered Daedalus Dynamo GAIE resources from namespace ${NAMESPACE}"
   render_manifest | kubectl delete -n "${NAMESPACE}" -f - --ignore-not-found --wait=false || true
+  cleanup_workbench_resources
+  cleanup_legacy_photo_tagger_resources
 
   local backend dgd
   for backend in "${SELECTED_BACKENDS[@]}"; do
@@ -2069,12 +1850,12 @@ delete_deployment() {
       -n "${NAMESPACE}" \
       --ignore-not-found \
       --wait=false || true
-    kubectl delete secret "${POSTGRES_SECRET}" "${PHOTO_TAGGER_AUTH_SECRET}" "${HF_TOKEN_SECRET}" \
+    kubectl delete secret "${WORKBENCH_AUTH_SECRET}" photo-tagger-auth photo-tagger-postgres "${HF_TOKEN_SECRET}" \
       -n "${NAMESPACE}" \
       --ignore-not-found \
       --wait=false || true
   else
-    echo "==> Preserving PVCs and secrets. Set DELETE_DATA=1 to remove model caches, Redis data, Postgres data, and app secrets."
+    echo "==> Preserving PVCs and secrets. Set DELETE_DATA=1 to remove model caches, Redis data, legacy Postgres data, and app secrets."
   fi
 }
 

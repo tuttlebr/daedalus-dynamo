@@ -20,7 +20,7 @@ repos:
         entry: scripts/pre-commit/check-shell.sh
         language: system
         pass_filenames: false
-        files: '(^|/)(deploy|test-endpoint|validate)\.sh$|(^|/)scripts/.*\.sh$|(^|/)photo-tagger/deploy\.sh$'
+        files: '(^|/)(deploy|test-endpoint|validate)\.sh$|(^|/)scripts/.*\.sh$|(^|/)routing-workbench/deploy\.sh$'
 
       - id: python-benchmark-compile
         name: Python benchmark compile checks
@@ -36,9 +36,9 @@ repos:
         pass_filenames: false
         files: '(^|/)k8s/|(^|/)kustomization\.ya?ml$|\.ya?ml$'
 
-      - id: rust-photo-tagger
-        name: Rust Photo Tagger fmt and tests
+      - id: rust-routing-workbench
+        name: Rust Routing Workbench fmt and tests
         entry: scripts/pre-commit/check-rust.sh
         language: system
         pass_filenames: true
-        files: '(^|/)photo-tagger/(Cargo\.toml|Cargo\.lock|src/|static/)'
+        files: '(^|/)routing-workbench/(Cargo\.toml|Cargo\.lock|src/|static/)'

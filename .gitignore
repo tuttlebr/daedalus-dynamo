@@ -7,8 +7,8 @@ __pycache__/
 **/__pycache__/
 *.py[cod]
 
-photo-tagger/target/
-**/photo-tagger/target/
+routing-workbench/target/
+**/routing-workbench/target/
 
 /tmp/
 /rendered*.yaml

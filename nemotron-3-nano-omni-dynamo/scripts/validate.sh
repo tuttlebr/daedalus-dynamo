@@ -36,24 +36,8 @@ native_linker_available() {
   return 0
 }
 
-photo_tagger_native_deps_available() {
-  native_linker_available || return 1
-
-  if ! command -v pkg-config > /dev/null 2>&1; then
-    warn_or_fail "pkg-config not found; install pkg-config, libheif-dev, and zlib1g-dev on Ubuntu/Debian before running Photo Tagger Rust tests."
-    return 1
-  fi
-
-  if ! pkg-config --exists 'libheif >= 1.17'; then
-    warn_or_fail "Photo Tagger native dependency libheif >= 1.17 is missing or incomplete; install libheif-dev and zlib1g-dev on Ubuntu/Debian, then rerun make validate."
-    return 1
-  fi
-
-  return 0
-}
-
 echo "==> Checking shell syntax"
-for script in deploy.sh test-endpoint.sh scripts/validate.sh ../deploy.sh ../photo-tagger/deploy.sh; do
+for script in deploy.sh test-endpoint.sh scripts/validate.sh ../deploy.sh ../routing-workbench/deploy.sh; do
   bash -n "${script}"
 done
 
@@ -85,12 +69,12 @@ else
 fi
 
 if command -v cargo > /dev/null 2>&1; then
-  echo "==> Running shared Photo Tagger Rust tests"
-  if photo_tagger_native_deps_available; then
-    cargo test --manifest-path ../photo-tagger/Cargo.toml
+  echo "==> Running shared Routing Workbench Rust tests"
+  if native_linker_available; then
+    cargo test --manifest-path ../routing-workbench/Cargo.toml
   fi
 else
-  warn_or_fail "cargo not found; skipping Photo Tagger Rust tests"
+  warn_or_fail "cargo not found; skipping Routing Workbench Rust tests"
 fi
 
 echo "==> Validation complete"
