@@ -38,6 +38,17 @@ prompt/generation token, and prefill/decode histogram metrics. If TensorRT-LLM i
 running with the PyTorch backend, iteration statistics may require
 `enable_iter_perf_stats: true`.
 
+## Interconnect (optional)
+
+NIXL/NCCL/RDMA fabric panels are a future addition and are relevant only when
+the deployment runs under `TRANSPORT_PROFILE=rdma` or `SERVING_MODE=disagg`. The
+current dashboard does not include them. To validate the interconnect fabric
+today, use the cluster doctor:
+
+```bash
+./deploy.sh doctor
+```
+
 ## GPU Worker Correlation
 
 The GPU "by Dynamo Worker" panels and scoped overview power/util tiles rely on

@@ -9,7 +9,7 @@ declare -a REQUESTED_BACKENDS=()
 
 if [[ "$#" -gt 0 ]]; then
   case "$1" in
-    deploy|delete|render|install-gateway|-h|--help|help)
+    deploy|delete|render|install-gateway|doctor|-h|--help|help)
       ACTION="$1"
       shift
       ;;
@@ -52,6 +52,24 @@ EPP_STAGE_UCX_LIBS="${EPP_STAGE_UCX_LIBS:-1}"
 EPP_ENABLE_DYN_DECODE="${EPP_ENABLE_DYN_DECODE:-1}"
 EPP_NODE_HOSTNAMES="${EPP_NODE_HOSTNAMES:-}"
 
+# Worker transport profile and serving mode.
+#   TRANSPORT_PROFILE=tcp  (default) keeps the historical TCP-only NIXL/UCX
+#                          transport so deployments are unchanged.
+#   TRANSPORT_PROFILE=rdma enables RDMA/InfiniBand + GPUDirect RDMA for the
+#                          worker KV transport (UCX rc/ib) and NCCL IB. Validate
+#                          the fabric first with: ./deploy.sh doctor
+#   SERVING_MODE=agg       (default) one aggregated worker per backend.
+#   SERVING_MODE=disagg    split each backend into prefill + decode workers;
+#                          requires TRANSPORT_PROFILE=rdma (KV moves over NIXL).
+TRANSPORT_PROFILE="${TRANSPORT_PROFILE:-tcp}"
+RDMA_UCX_NET_DEVICES="${RDMA_UCX_NET_DEVICES:-mlx5_0:1}"
+RDMA_NCCL_IB_HCA="${RDMA_NCCL_IB_HCA:-mlx5_0,mlx5_1}"
+RDMA_NCCL_SOCKET_IFNAME="${RDMA_NCCL_SOCKET_IFNAME:-eth0}"
+RDMA_RESOURCE_NAME="${RDMA_RESOURCE_NAME:-}"
+SERVING_MODE="${SERVING_MODE:-agg}"
+RUN_DOCTOR="${RUN_DOCTOR:-0}"
+DOCTOR_STRICT="${DOCTOR_STRICT:-0}"
+
 NEMOTRON_IMAGE_REPOSITORY="${NEMOTRON_IMAGE_REPOSITORY:-${REGISTRY}/nemotron-3-nano-omni}"
 QWEN35B_IMAGE_REPOSITORY="${QWEN35B_IMAGE_REPOSITORY:-${REGISTRY}/qwen36-35b-dynamo}"
 QWEN27B_IMAGE_REPOSITORY="${QWEN27B_IMAGE_REPOSITORY:-${REGISTRY}/qwen36-27b-dynamo}"
@@ -64,7 +82,14 @@ WORKBENCH_IMAGE="${WORKBENCH_IMAGE_REPOSITORY}:${IMAGE_TAG}"
 
 usage() {
   cat <<EOF
-Usage: $0 [deploy|delete|render|install-gateway] [backend...]
+Usage: $0 [deploy|delete|render|install-gateway|doctor] [backend...]
+
+Subcommands:
+  deploy           build/push images and apply the GAIE deployment (default)
+  render           print the rendered manifests without applying
+  delete           delete rendered resources (keeps data unless DELETE_DATA=1)
+  install-gateway  install/upgrade Gateway API, GAIE, and agentgateway
+  doctor           run read-only cluster-readiness checks (incl. RDMA/InfiniBand)
 
 Backends:
   nemotron     nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8 on vLLM
@@ -73,10 +98,12 @@ Backends:
   all          Deploy all backends
 
 Examples:
+  ./deploy.sh doctor
   HF_TOKEN=... ./deploy.sh deploy
   HF_TOKEN=... ./deploy.sh deploy qwen35b qwen27b
   BACKENDS=nemotron,qwen35b ./deploy.sh render
   INSTALL_GATEWAY=1 HF_TOKEN=... ./deploy.sh deploy all
+  TRANSPORT_PROFILE=rdma SERVING_MODE=disagg HF_TOKEN=... ./deploy.sh deploy qwen35b
 
 Common environment:
   NAMESPACE                    default: daedalus-dynamo
@@ -99,6 +126,18 @@ Common environment:
   WORKBENCH_NODEPORT=30153     shared Workbench UI NodePort
   WORKER_REPLICAS=2            worker replicas for each selected backend
   KV_CACHE_BLOCK_SIZE=16       EPP and worker KV block/page size
+
+Performance and transport (validate the fabric first with: ./deploy.sh doctor):
+  TRANSPORT_PROFILE=tcp        worker KV transport: tcp (default) or rdma
+  TRANSPORT_PROFILE=rdma       enable InfiniBand/RoCE + GPUDirect RDMA + NCCL IB
+  RDMA_UCX_NET_DEVICES=mlx5_0:1   UCX HCA:port for the rdma profile
+  RDMA_NCCL_IB_HCA=mlx5_0,mlx5_1  NCCL IB HCAs for the rdma profile
+  RDMA_NCCL_SOCKET_IFNAME=eth0    NCCL bootstrap NIC for the rdma profile
+  RDMA_RESOURCE_NAME=          optional RDMA device-plugin resource to request
+  SERVING_MODE=agg             agg (default) or disagg (prefill/decode split)
+  SERVING_MODE=disagg          requires TRANSPORT_PROFILE=rdma
+  RUN_DOCTOR=1                 run the cluster doctor before deploy (advisory)
+  DOCTOR_STRICT=1              abort deploy if the doctor reports failures
 EOF
 }
 
@@ -110,6 +149,20 @@ die() {
 warn_mutable_image_tag() {
   if [[ "${IMAGE_TAG}" == "latest" && "${ALLOW_LATEST:-0}" != "1" ]]; then
     echo "WARN: IMAGE_TAG=latest is mutable. Set ALLOW_LATEST=1 to acknowledge, or omit IMAGE_TAG for timestamp tag." >&2
+  fi
+}
+
+validate_serving_config() {
+  case "${TRANSPORT_PROFILE}" in
+    tcp | rdma) ;;
+    *) die "TRANSPORT_PROFILE must be 'tcp' or 'rdma' (got '${TRANSPORT_PROFILE}')." ;;
+  esac
+  case "${SERVING_MODE}" in
+    agg | disagg) ;;
+    *) die "SERVING_MODE must be 'agg' or 'disagg' (got '${SERVING_MODE}')." ;;
+  esac
+  if [[ "${SERVING_MODE}" == "disagg" && "${TRANSPORT_PROFILE}" != "rdma" ]]; then
+    die "SERVING_MODE=disagg requires TRANSPORT_PROFILE=rdma and a validated RDMA fabric. Run './deploy.sh doctor' first, then re-run with TRANSPORT_PROFILE=rdma."
   fi
 }
 
@@ -260,13 +313,11 @@ models_json() {
   printf ']}'
 }
 
-api_resources() {
-  kubectl api-resources --verbs=list -o name 2> /dev/null || true
-}
-
 api_resource_exists() {
-  local resource="$1"
-  api_resources | grep -Fxq "${resource}"
+  # Every prerequisite we probe is a CRD; query it by name. This avoids the
+  # flaky `kubectl api-resources` scan, which can return a partial list when an
+  # aggregated API on the cluster is briefly unavailable and cause false misses.
+  kubectl get crd "$1" > /dev/null 2>&1
 }
 
 operator_rollout_available() {
@@ -632,12 +683,19 @@ EOF
 
 render_epp_ucx_staging() {
   local backend="$1"
-  local image dgd
-  [[ "${EPP_STAGE_UCX_LIBS,,}" != "0" && "${EPP_STAGE_UCX_LIBS,,}" != "false" ]] || return 0
+  local image dgd model_cache
   image="$(backend_image "${backend}")"
   dgd="$(backend_dgd "${backend}")"
+  model_cache="$(backend_storage_prefix "${backend}")-model-cache"
 
   cat <<EOF
+        securityContext:
+          fsGroup: 988
+          fsGroupChangePolicy: OnRootMismatch
+EOF
+
+  if [[ "${EPP_STAGE_UCX_LIBS,,}" != "0" && "${EPP_STAGE_UCX_LIBS,,}" != "false" ]]; then
+    cat <<EOF
         initContainers:
           - name: stage-ucx-libs
             image: ${image}
@@ -675,25 +733,41 @@ render_epp_ucx_staging() {
             volumeMounts:
               - name: epp-ucx-libs
                 mountPath: /staged-ucx
+EOF
+  fi
+
+  cat <<EOF
         volumes:
           - name: epp-config
             configMap:
               name: ${dgd}-epp-config
+          - name: ${model_cache}
+            persistentVolumeClaim:
+              claimName: ${model_cache}
+EOF
+
+  if [[ "${EPP_STAGE_UCX_LIBS,,}" != "0" && "${EPP_STAGE_UCX_LIBS,,}" != "false" ]]; then
+    cat <<EOF
           - name: epp-ucx-libs
             emptyDir: {}
 EOF
+  fi
 }
 
 render_epp_service() {
   local backend="$1"
-  local model image model_cache use_kv_events
+  local model image dgd model_cache modelexpress_service use_kv_events
   model="$(backend_model "${backend}")"
   image="${DYNAMO_EPP_IMAGE}"
+  dgd="$(backend_dgd "${backend}")"
   model_cache="$(backend_storage_prefix "${backend}")-model-cache"
+  modelexpress_service="${dgd}-modelexpress"
   use_kv_events="true"
   if [[ "${EPP_ENABLE_DYN_DECODE,,}" == "0" || "${EPP_ENABLE_DYN_DECODE,,}" == "false" ]]; then
     use_kv_events="false"
   fi
+  local enforce_disagg="false"
+  [[ "${SERVING_MODE}" == "disagg" ]] && enforce_disagg="true"
 
   cat <<EOF
     Epp:
@@ -740,7 +814,7 @@ EOF
             - name: DYN_DECODE_FALLBACK
               value: "true"
             - name: DYN_ENFORCE_DISAGG
-              value: "false"
+              value: "${enforce_disagg}"
             - name: DYN_KV_CACHE_BLOCK_SIZE
               value: "${KV_CACHE_BLOCK_SIZE}"
             - name: DYN_USE_KV_EVENTS
@@ -751,16 +825,29 @@ EOF
               value: zmq
             - name: DYN_TOKENIZER
               value: fastokens
+            - name: MODEL_CACHE_PATH
+              value: /model/.model-express/cache
+            - name: MODEL_EXPRESS_URL
+              value: http://${modelexpress_service}:8000
+            - name: MODEL_EXPRESS_HOST
+              value: ${modelexpress_service}
+            - name: MODEL_EXPRESS_PORT
+              value: "8000"
             - name: HF_HUB_CACHE
               value: /model/.model-express/cache
 EOF
 
-  if [[ "${EPP_STAGE_UCX_LIBS,,}" != "0" && "${EPP_STAGE_UCX_LIBS,,}" != "false" ]]; then
-    cat <<EOF
+  cat <<EOF
           volumeMounts:
+            - name: ${model_cache}
+              mountPath: /model
             - name: epp-config
               mountPath: /etc/epp
               readOnly: true
+EOF
+
+  if [[ "${EPP_STAGE_UCX_LIBS,,}" != "0" && "${EPP_STAGE_UCX_LIBS,,}" != "false" ]]; then
+    cat <<EOF
             - name: epp-ucx-libs
               mountPath: ${DYNAMO_EPP_STAGED_UCX_DIR}
 EOF
@@ -771,9 +858,11 @@ EOF
 
 render_modelexpress_service() {
   local backend="$1"
-  local model model_cache redis
+  local model dgd model_cache modelexpress_service redis
   model="$(backend_model "${backend}")"
+  dgd="$(backend_dgd "${backend}")"
   model_cache="$(backend_storage_prefix "${backend}")-model-cache"
+  modelexpress_service="${dgd}-modelexpress"
   redis="$(backend_storage_prefix "${backend}")-redis"
 
   cat <<EOF
@@ -858,7 +947,7 @@ render_modelexpress_service() {
               mkdir -p /model/.model-express
               cat > /model/.model-express/config.yaml <<CONFIG_EOF
               local_path: \$MODEL_CACHE_PATH
-              server_endpoint: http://localhost:8000
+              server_endpoint: http://${modelexpress_service}:8000
               timeout_secs: null
               CONFIG_EOF
 
@@ -967,10 +1056,72 @@ render_frontend_sidecar() {
 EOF
 }
 
+render_worker_transport_env() {
+  # Emit the worker NIXL/UCX/NCCL transport env entries at the 12-space indent of
+  # the surrounding env: list. The tcp profile is byte-for-byte the historical
+  # default; the rdma profile turns on InfiniBand/RoCE + GPUDirect RDMA and the
+  # NCCL IB controls that disaggregated KV transfer depends on.
+  if [[ "${TRANSPORT_PROFILE}" == "rdma" ]]; then
+    cat <<EOF
+            - name: UCX_NET_DEVICES
+              value: ${RDMA_UCX_NET_DEVICES}
+            - name: UCX_TLS
+              value: rc,ib,cuda_ipc,cuda_copy
+            - name: UCX_IB_GPU_DIRECT_RDMA
+              value: "1"
+            - name: NCCL_IB_HCA
+              value: ${RDMA_NCCL_IB_HCA}
+            - name: NCCL_SOCKET_IFNAME
+              value: ${RDMA_NCCL_SOCKET_IFNAME}
+            - name: NCCL_IB_DISABLE
+              value: "0"
+EOF
+  else
+    cat <<EOF
+            - name: UCX_NET_DEVICES
+              value: eth0
+            - name: UCX_TLS
+              value: tcp,cuda_copy,cuda_ipc
+EOF
+  fi
+}
+
+render_worker_resources() {
+  # Worker resources block. The tcp default emits exactly the historical 2-GPU
+  # request/limit; the rdma profile additionally requests an RDMA device-plugin
+  # resource when RDMA_RESOURCE_NAME is set (some fabrics expose RDMA via
+  # hostNetwork/shared HCA and need no resource, so this stays opt-in).
+  cat <<EOF
+      resources:
+        limits:
+          gpu: "2"
+EOF
+  if [[ "${TRANSPORT_PROFILE}" == "rdma" && -n "${RDMA_RESOURCE_NAME}" ]]; then
+    printf '          %s: "1"\n' "${RDMA_RESOURCE_NAME}"
+  fi
+  cat <<EOF
+        requests:
+          gpu: "2"
+EOF
+  if [[ "${TRANSPORT_PROFILE}" == "rdma" && -n "${RDMA_RESOURCE_NAME}" ]]; then
+    printf '          %s: "1"\n' "${RDMA_RESOURCE_NAME}"
+  fi
+}
+
 render_vllm_worker() {
   local backend="$1"
+  local role="${2:-agg}"
+  local disagg_flag="" emit_kv_events=1
+  case "${role}" in
+    prefill) disagg_flag="--disaggregation-mode prefill" ;;
+    decode) disagg_flag="--disaggregation-mode decode" ;;
+  esac
   local component model image dgd model_cache modelexpress_service tool_parser reasoning_parser max_tokens max_len max_seqs
   component="$(backend_worker_component "${backend}")"
+  case "${role}" in
+    prefill) component="${component/Worker/PrefillWorker}" ;;
+    decode) component="${component/Worker/DecodeWorker}" ;;
+  esac
   model="$(backend_model "${backend}")"
   image="$(backend_image "${backend}")"
   dgd="$(backend_dgd "${backend}")"
@@ -989,7 +1140,13 @@ render_vllm_worker() {
     max_tokens="8192"
     max_len="128000"
     max_seqs="8"
+    # Qwen3.6 needs the hybrid KV cache manager, which this vLLM build disables
+    # when worker-side KV events are configured. Keep KV events off for qwen35b
+    # (see qwen-36-35b-dynamo/README.md "Event plane transport").
+    emit_kv_events=0
   fi
+  # Decode workers in disaggregated serving do not publish KV events.
+  [[ "${role}" == "decode" ]] && emit_kv_events=0
 
   cat <<EOF
 
@@ -997,11 +1154,9 @@ render_vllm_worker() {
       componentType: worker
       envFromSecret: ${HF_TOKEN_SECRET}
       replicas: ${WORKER_REPLICAS}
-      resources:
-        limits:
-          gpu: "2"
-        requests:
-          gpu: "2"
+EOF
+  render_worker_resources
+  cat <<EOF
       livenessProbe:
         httpGet:
           path: /live
@@ -1084,10 +1239,9 @@ EOF
               value: "65536"
             - name: DYN_KV_CACHE_BLOCK_SIZE
               value: "${KV_CACHE_BLOCK_SIZE}"
-            - name: UCX_NET_DEVICES
-              value: eth0
-            - name: UCX_TLS
-              value: tcp,cuda_copy,cuda_ipc
+EOF
+  render_worker_transport_env
+  cat <<EOF
           command:
             - /bin/bash
             - -lc
@@ -1142,7 +1296,16 @@ EOF
                 --enable-prefix-caching
                 --prefix-caching-hash-algo sha256
                 --block-size "\${DYN_KV_CACHE_BLOCK_SIZE}"
+EOF
+  if [[ "${emit_kv_events}" == "1" ]]; then
+    cat <<EOF
                 --kv-events-config '{"enable_kv_cache_events":true,"publisher":"zmq","topic":"kv-events","endpoint":"${KV_EVENTS_ENDPOINT}"}'
+EOF
+  fi
+  if [[ -n "${disagg_flag}" ]]; then
+    printf '                %s\n' "${disagg_flag}"
+  fi
+  cat <<EOF
                 --no-enable-log-requests
               )
               exec "\${cmd[@]}"
@@ -1156,8 +1319,18 @@ EOF
 
 render_sglang_worker() {
   local backend="qwen27b"
+  local role="${1:-agg}"
+  local disagg_flag=""
+  case "${role}" in
+    prefill) disagg_flag="--disaggregation-mode prefill" ;;
+    decode) disagg_flag="--disaggregation-mode decode" ;;
+  esac
   local component model image dgd model_cache modelexpress_service
   component="$(backend_worker_component "${backend}")"
+  case "${role}" in
+    prefill) component="${component/Worker/PrefillWorker}" ;;
+    decode) component="${component/Worker/DecodeWorker}" ;;
+  esac
   model="$(backend_model "${backend}")"
   image="$(backend_image "${backend}")"
   dgd="$(backend_dgd "${backend}")"
@@ -1170,11 +1343,9 @@ render_sglang_worker() {
       componentType: worker
       envFromSecret: ${HF_TOKEN_SECRET}
       replicas: ${WORKER_REPLICAS}
-      resources:
-        limits:
-          gpu: "2"
-        requests:
-          gpu: "2"
+EOF
+  render_worker_resources
+  cat <<EOF
       livenessProbe:
         httpGet:
           path: /live
@@ -1249,10 +1420,9 @@ EOF
               value: "65536"
             - name: DYN_KV_CACHE_BLOCK_SIZE
               value: "${KV_CACHE_BLOCK_SIZE}"
-            - name: UCX_NET_DEVICES
-              value: eth0
-            - name: UCX_TLS
-              value: tcp,cuda_copy,cuda_ipc
+EOF
+  render_worker_transport_env
+  cat <<EOF
           command:
             - /bin/bash
             - -lc
@@ -1293,6 +1463,12 @@ EOF
                 --page-size "\${DYN_KV_CACHE_BLOCK_SIZE}"
                 --kv-events-config '{"publisher":"zmq","topic":"kv-events","endpoint":"${KV_EVENTS_ENDPOINT}"}'
                 --enable-metrics
+EOF
+  if [[ -n "${disagg_flag}" ]]; then
+    printf '                %s\n' "${disagg_flag}"
+    printf '                %s\n' "--disaggregation-transfer-backend nixl"
+  fi
+  cat <<EOF
               )
               exec "\${cmd[@]}"
           securityContext:
@@ -1310,9 +1486,19 @@ render_backend() {
   render_epp_service "${backend}"
   render_modelexpress_service "${backend}"
   if [[ "${backend}" == "qwen27b" ]]; then
-    render_sglang_worker
+    if [[ "${SERVING_MODE}" == "disagg" ]]; then
+      render_sglang_worker prefill
+      render_sglang_worker decode
+    else
+      render_sglang_worker
+    fi
   else
-    render_vllm_worker "${backend}"
+    if [[ "${SERVING_MODE}" == "disagg" ]]; then
+      render_vllm_worker "${backend}" prefill
+      render_vllm_worker "${backend}" decode
+    else
+      render_vllm_worker "${backend}"
+    fi
   fi
 }
 
@@ -1762,6 +1948,7 @@ cleanup_workbench_resources() {
 
 render_manifest() {
   local backend
+  validate_serving_config
   render_gateway_resources
   render_model_catalog
   if workbench_enabled; then
@@ -1782,6 +1969,16 @@ apply_deployment() {
 
   if [[ "${INSTALL_GATEWAY:-0}" == "1" ]]; then
     install_gateway
+  fi
+
+  if [[ "${RUN_DOCTOR}" == "1" ]]; then
+    echo "==> RUN_DOCTOR=1: running cluster doctor before deploy"
+    if ! "${REPO_ROOT}/scripts/cluster-doctor.sh"; then
+      if [[ "${DOCTOR_STRICT}" == "1" ]]; then
+        die "Cluster doctor reported failures and DOCTOR_STRICT=1. Aborting deploy."
+      fi
+      echo "WARN: cluster doctor reported failures; continuing (set DOCTOR_STRICT=1 to abort)." >&2
+    fi
   fi
 
   preflight_cluster
@@ -1875,6 +2072,9 @@ case "${ACTION}" in
     ;;
   install-gateway)
     install_gateway
+    ;;
+  doctor)
+    exec "${REPO_ROOT}/scripts/cluster-doctor.sh"
     ;;
   -h|--help|help)
     usage

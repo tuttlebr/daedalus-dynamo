@@ -26,6 +26,12 @@ no source build, no Rust toolchain.
 
 ## Step 1: Deploy Everything
 
+> Cluster check first: run `../deploy.sh doctor` (or `./deploy.sh doctor`)
+> before deploying to verify cluster readiness, including RDMA/InfiniBand.
+> Worker KV transport defaults to TCP and works everywhere; set
+> `TRANSPORT_PROFILE=rdma` or `SERVING_MODE=disagg` only after the doctor's
+> RDMA checks pass (see the root README).
+
 ```bash
 export NAMESPACE=<your-namespace>
 export HF_TOKEN=<your-hf-token>

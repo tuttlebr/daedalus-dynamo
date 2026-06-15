@@ -152,7 +152,7 @@ spec:
               mkdir -p /model/.model-express
               cat > /model/.model-express/config.yaml << EOF
               local_path: $MODEL_CACHE_PATH
-              server_endpoint: http://localhost:8000
+              server_endpoint: http://qwen36-dynamo-fd-ec-modelexpress:8000
               timeout_secs: null
               EOF
 

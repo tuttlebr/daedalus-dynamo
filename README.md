@@ -20,6 +20,48 @@ KV-aware routing, worker scaling, streaming TTFT, latency, and optional Dynamo
 Shared Grafana dashboard assets live in [`observability/`](./observability/).
 Example-level `deploy.sh` files are compatibility wrappers only.
 
+## Cluster prerequisites
+
+Each backend serves a TP=2 worker pool on high-memory GPU nodes behind the
+shared gateway. Before deploying, confirm the cluster provides:
+
+| Requirement | Provides | Notes |
+| --- | --- | --- |
+| `kubectl` + reachable cluster | API access | A current context must resolve and respond. |
+| Dynamo + Grove operators | DynamoGraphDeployment / Grove PodCliqueSet reconciliation | Required; the deployment renders a `DynamoGraphDeployment` per backend. |
+| Gateway API + GAIE + agentgateway CRDs | Gateway, HTTPRoute, InferencePool, EPP | Install or upgrade with `INSTALL_GATEWAY=1`. |
+| NVIDIA GPU Operator | `nvidia.com/gpu` scheduling, `nvidia.com/gpu.memory` labels | Per-node GPU memory labels gate worker placement. |
+| At least `WORKER_REPLICAS` high-memory GPU nodes | Worker capacity (TP=2 each) | Default `WORKER_REPLICAS=2` needs two eligible nodes per backend. |
+| A default StorageClass **and** an RWX StorageClass | Model-cache PVC | The model-cache PVC is `100Gi` `ReadWriteMany`. |
+| NVIDIA DCGM exporter | GPU telemetry | Optional; only for the shared Grafana dashboard. |
+| NATS service | Event plane | Optional; the frontend uses ZMQ and does not require NATS. |
+| RDMA/InfiniBand + NVIDIA Network Operator | GPUDirect RDMA fabric | Optional; only needed for `TRANSPORT_PROFILE=rdma` / `SERVING_MODE=disagg`. |
+
+## Step 0: check your cluster
+
+Run the read-only cluster doctor before deploying to verify the requirements
+above:
+
+```bash
+./deploy.sh doctor
+```
+
+The same checks are runnable directly as `scripts/cluster-doctor.sh`. The doctor
+prints `[OK]`/`[WARN]`/`[FAIL]` lines plus a final verdict. It exits non-zero
+only when something `FAIL`ed. A hard `FAIL` is reserved for missing CRDs,
+operators, GPUs, or a missing default StorageClass; missing RDMA/InfiniBand is
+always a `WARN`, never a `FAIL`, because aggregated serving still works without
+it. `DOCTOR_JSON=1 ./deploy.sh doctor` emits JSON instead of lines.
+
+To gate the deploy on the doctor, run it as part of `deploy`:
+
+```bash
+RUN_DOCTOR=1 HF_TOKEN=<hugging-face-token> ./deploy.sh deploy
+```
+
+`RUN_DOCTOR=1` runs the doctor first as advisory; add `DOCTOR_STRICT=1` to abort
+the deploy on any doctor `FAIL`.
+
 ## Deploy
 
 With no backend argument, the root script deploys the default `qwen35b` demo
@@ -132,10 +174,42 @@ Important root-level environment variables:
 | `EPP_STAGE_UCX_LIBS` | `1` | Stages UCX runtime libraries from the selected backend image into the EPP pod. |
 | `EPP_NODE_HOSTNAMES` | unset | Optional comma-separated hostname allow-list for EPP pods. |
 | `KV_CACHE_BLOCK_SIZE` | `16` | Worker block/page size env value; runtimes may adjust effective size. |
+| `TRANSPORT_PROFILE` | `tcp` | Worker KV transport: `tcp` (default) or `rdma`. |
+| `RDMA_UCX_NET_DEVICES` | `mlx5_0:1` | UCX `HCA:port` for the `rdma` profile. |
+| `RDMA_NCCL_IB_HCA` | `mlx5_0,mlx5_1` | NCCL IB HCAs for the `rdma` profile. |
+| `RDMA_NCCL_SOCKET_IFNAME` | `eth0` | NCCL bootstrap NIC for the `rdma` profile. |
+| `RDMA_RESOURCE_NAME` | unset | RDMA device-plugin resource to request when set under the `rdma` profile, e.g. `rdma/rdma_shared_device_a`. |
+| `SERVING_MODE` | `agg` | `agg` (default) or `disagg` (prefill/decode split); `disagg` requires `TRANSPORT_PROFILE=rdma`. |
+| `RUN_DOCTOR` | `0` | Run the cluster doctor before deploy (advisory). |
+| `DOCTOR_STRICT` | `0` | With `RUN_DOCTOR=1`, abort the deploy on any doctor `FAIL`. |
+| `DOCTOR_RUN_NODE_PROBE` | `auto` | Node-level RDMA probe mode: `auto` (exec a running worker pod, else print the opt-in command), `job` (schedule a short-lived probe pod and clean it up), or `off`. |
+| `DOCTOR_PROBE_IMAGE` | unset | Image used by the `DOCTOR_RUN_NODE_PROBE=job` probe pod. |
+| `DOCTOR_JSON` | unset | `DOCTOR_JSON=1` emits doctor results as JSON. |
 
 Qwen compatibility wrappers map old `QWEN_IMAGE_REPOSITORY` values to
 `QWEN35B_IMAGE_REPOSITORY` or `QWEN27B_IMAGE_REPOSITORY`. New automation should
 use backend-specific variables directly.
+
+### Transport profiles, RDMA/InfiniBand & disaggregated serving
+
+The default `TRANSPORT_PROFILE=tcp` keeps today's behavior exactly: worker
+NIXL/UCX transport over TCP, which works on any cluster. `TRANSPORT_PROFILE=rdma`
+enables InfiniBand/RoCE + GPUDirect RDMA on the workers (UCX `rc`/`ib` with
+`UCX_IB_GPU_DIRECT_RDMA=1`) and the NCCL IB env, tuned with the `RDMA_*`
+variables above.
+
+`SERVING_MODE=disagg` splits each backend into separate prefill and decode
+worker pools that move KV cache over NIXL. It **requires**
+`TRANSPORT_PROFILE=rdma` (`deploy.sh` errors otherwise) and roughly doubles the
+GPU requirement (a prefill pool plus a decode pool).
+
+Because both depend on a working fabric, validate the cluster with the doctor
+first and confirm its RDMA/InfiniBand checks pass before enabling them:
+
+```bash
+./deploy.sh doctor
+TRANSPORT_PROFILE=rdma SERVING_MODE=disagg HF_TOKEN=<hugging-face-token> ./deploy.sh deploy qwen35b
+```
 
 ## GAIE Topology
 

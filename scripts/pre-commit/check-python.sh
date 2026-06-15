@@ -5,7 +5,10 @@ cd "$(dirname "$0")/../.."
 source scripts/pre-commit/common.sh
 
 mapfile -t files < <(
-  find "${EXAMPLES[@]}" -path '*/k8s/benchmarks/*.py' -o -path '*/k8s/benchmarks/*/*.py' | sort
+  {
+    find "${EXAMPLES[@]}" -path '*/k8s/benchmarks/*.py' -o -path '*/k8s/benchmarks/*/*.py'
+    find scripts -maxdepth 1 -type f -name '*.py'
+  } | sort -u
 )
 
 if [[ "${#files[@]}" -eq 0 ]]; then

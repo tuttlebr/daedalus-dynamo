@@ -1,0 +1,47 @@
+# Short-lived, read-only RDMA/InfiniBand/NVLink probe pod for the cluster doctor.
+#
+# scripts/cluster-doctor.sh applies this on a GPU node, execs the read-only
+# interconnect probes into it (ibstat / ibv_devinfo / nvidia-smi topo /
+# nvidia_peermem / /dev/gdrdrv), then deletes it. It is intentionally
+# NON-privileged: it only adds IPC_LOCK/SYS_RESOURCE (needed by ibverbs) and
+# host-mounts /dev/infiniband. The doctor substitutes the __TOKENS__ below; to
+# run it by hand, replace them and `kubectl apply -f -`, then:
+#   kubectl exec -n <ns> dynamo-cluster-doctor-probe -- ibstat
+#   kubectl exec -n <ns> dynamo-cluster-doctor-probe -- nvidia-smi topo -m
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dynamo-cluster-doctor-probe
+  namespace: __NAMESPACE__
+  labels:
+    app.kubernetes.io/part-of: daedalus-dynamo-demo
+    app.kubernetes.io/component: cluster-doctor-probe
+spec:
+  restartPolicy: Never
+  hostNetwork: true
+  terminationGracePeriodSeconds: 1
+  nodeSelector:
+    __NODE_SELECTOR_KEY__: "__NODE_SELECTOR_VAL__"
+  tolerations:
+    - operator: Exists
+  containers:
+    - name: probe
+      image: __PROBE_IMAGE__
+      imagePullPolicy: IfNotPresent
+      command: ["sleep", "__SLEEP__"]
+      securityContext:
+        capabilities:
+          add:
+            - IPC_LOCK
+            - SYS_RESOURCE
+      resources:
+        limits:
+          nvidia.com/gpu: "__GPU__"
+      volumeMounts:
+        - name: dev-infiniband
+          mountPath: /dev/infiniband
+  volumes:
+    - name: dev-infiniband
+      hostPath:
+        path: /dev/infiniband
+        type: DirectoryOrCreate
