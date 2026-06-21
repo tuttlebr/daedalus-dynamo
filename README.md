@@ -5,15 +5,15 @@ Gateway API Inference Extension deployment path. The repository-root
 [`deploy.sh`](./deploy.sh) is the primary entrypoint for building, pushing,
 rendering, applying, and deleting the shared deployment.
 
-The default demo is the text-only
-[`routing-workbench/`](./routing-workbench/) app. It exercises OpenAI-compatible
-text requests through GAIE: `/v1/models`, model-header routing, EPP selection,
-KV-aware routing, worker scaling, streaming TTFT, latency, and optional Dynamo
-`nvext.extra_fields` such as `worker_id` and `timing`.
+An optional text-only [`routing-workbench/`](./routing-workbench/) app can be
+deployed for GAIE demos. It exercises OpenAI-compatible text requests through
+GAIE: `/v1/models`, model-header routing, EPP selection, KV-aware routing,
+worker scaling, streaming TTFT, latency, and optional Dynamo `nvext.extra_fields`
+such as `worker_id` and `timing`.
 
 | Backend name | Folder | Model | Runtime |
 | --- | --- | --- | --- |
-| `nemotron` | `nemotron-3-nano-omni-dynamo/` | `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8` | vLLM |
+| `nemotron` | `nemotron-3-nano-omni-dynamo/` | `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4` | vLLM |
 | `qwen35b` | `qwen-36-35b-dynamo/` | `Qwen/Qwen3.6-35B-A3B-FP8` | vLLM |
 | `qwen27b` | `qwen-36-27b-dynamo/` | `Qwen/Qwen3.6-27B-FP8` | SGLang |
 
@@ -22,8 +22,10 @@ Example-level `deploy.sh` files are compatibility wrappers only.
 
 ## Cluster prerequisites
 
-Each backend serves a TP=2 worker pool on high-memory GPU nodes behind the
-shared gateway. Before deploying, confirm the cluster provides:
+Each backend serves a GPU worker pool on high-memory GPU nodes behind the
+shared gateway. Nemotron NVFP4 defaults to TP=1 to avoid Marlin FP4 tile
+alignment failures on the current vLLM runtime; the Qwen backends default to
+TP=2. Before deploying, confirm the cluster provides:
 
 | Requirement | Provides | Notes |
 | --- | --- | --- |
@@ -31,7 +33,7 @@ shared gateway. Before deploying, confirm the cluster provides:
 | Dynamo + Grove operators | DynamoGraphDeployment / Grove PodCliqueSet reconciliation | Required; the deployment renders a `DynamoGraphDeployment` per backend. |
 | Gateway API + GAIE + agentgateway CRDs | Gateway, HTTPRoute, InferencePool, EPP | Install or upgrade with `INSTALL_GATEWAY=1`. |
 | NVIDIA GPU Operator | `nvidia.com/gpu` scheduling, `nvidia.com/gpu.memory` labels | Per-node GPU memory labels gate worker placement. |
-| At least `WORKER_REPLICAS` high-memory GPU nodes | Worker capacity (TP=2 each) | Default `WORKER_REPLICAS=2` needs two eligible nodes per backend. |
+| At least `WORKER_REPLICAS` high-memory GPU nodes | Worker capacity | Default `WORKER_REPLICAS=1` needs one eligible node per backend. Increase `WORKER_REPLICAS` only when intentionally scaling worker replicas. |
 | A default StorageClass **and** an RWX StorageClass | Model-cache PVC | The model-cache PVC is `100Gi` `ReadWriteMany`. |
 | NVIDIA DCGM exporter | GPU telemetry | Optional; only for the shared Grafana dashboard. |
 | NATS service | Event plane | Optional; the frontend uses ZMQ and does not require NATS. |
@@ -64,9 +66,8 @@ the deploy on any doctor `FAIL`.
 
 ## Deploy
 
-With no backend argument, the root script deploys the default `qwen35b` demo
-with `WORKER_REPLICAS=2`, `EPP_ENABLE_DYN_DECODE=1`, and the Routing Workbench
-enabled:
+With no backend argument, the root script deploys the default `qwen35b` backend
+with `WORKER_REPLICAS=1`, `EPP_ENABLE_DYN_DECODE=1`, and no Routing Workbench:
 
 ```bash
 HF_TOKEN=<hugging-face-token> ./deploy.sh deploy
@@ -94,13 +95,21 @@ INSTALL_GATEWAY=1 HF_TOKEN=<hugging-face-token> ./deploy.sh deploy
 ```bash
 ./deploy.sh render
 ./deploy.sh render nemotron qwen35b
-DEPLOY_WORKBENCH=0 ./deploy.sh render qwen35b
+DEPLOY_WORKBENCH=1 ./deploy.sh render qwen35b
+./deploy.sh delete
 ./deploy.sh delete qwen27b
 DELETE_DATA=1 ./deploy.sh delete all
 kubectl port-forward -n daedalus-dynamo svc/inference-gateway 8000:80
 ```
 
-The Routing Workbench is exposed through NodePort `30153` by default:
+`./deploy.sh delete` deletes shared gateway/workbench resources and all backend
+runtime resources, preserving PVCs and app secrets. A backend-specific delete,
+for example `./deploy.sh delete qwen27b`, removes only that backend and preserves
+the shared gateway/model catalog/workbench; redeploy the remaining backends to
+refresh shared routing entries if needed.
+
+When `DEPLOY_WORKBENCH=1`, the Routing Workbench is exposed through NodePort
+`30153` by default:
 
 ```text
 http://<any-node-ip>:30153/
@@ -108,9 +117,9 @@ http://<any-node-ip>:30153/
 
 ## Workbench Credentials
 
-The workbench uses HTTP Basic auth by default in Kubernetes. The username comes
-from the `routing-workbench-config` ConfigMap, and the password is the token in
-the `routing-workbench-auth` Secret.
+When deployed, the workbench uses HTTP Basic auth by default in Kubernetes. The
+username comes from the `routing-workbench-config` ConfigMap, and the password
+is the token in the `routing-workbench-auth` Secret.
 
 Retrieve the current browser login:
 
@@ -156,10 +165,10 @@ Important root-level environment variables:
 | --- | --- | --- |
 | `NAMESPACE` | `daedalus-dynamo` | Shared Kubernetes namespace. |
 | `REGISTRY` | `daedalus.ddns.me:5050/btuttle` | Image registry prefix. |
-| `IMAGE_TAG` | UTC timestamp | Immutable image tag for model and workbench images. |
+| `IMAGE_TAG` | UTC timestamp | Immutable image tag for model and optional workbench images. |
 | `SKIP_BUILD` / `SKIP_PUSH` / `SKIP_DEPLOY` | unset | Skip build, push, or apply phases. |
-| `DEPLOY_WORKBENCH` | `1` | Deploy the shared Routing Workbench; set `0` for gateway/backends only. |
-| `DEPLOY_PHOTO_TAGGER` | unset | Compatibility alias: `DEPLOY_PHOTO_TAGGER=0` disables the shared demo app. |
+| `DEPLOY_WORKBENCH` | `0` | Deploy gateway/backends only by default; set `1` to deploy the shared Routing Workbench. |
+| `DEPLOY_PHOTO_TAGGER` | unset | Compatibility alias for `DEPLOY_WORKBENCH`; `1` enables the demo app and `0` disables it. |
 | `WORKBENCH_IMAGE_REPOSITORY` | `${REGISTRY}/routing-workbench` | Workbench image repository. |
 | `WORKBENCH_NODEPORT` | `30153` | Workbench NodePort. |
 | `OPENAI_BASE_URL` | `http://inference-gateway:80/v1` | Workbench OpenAI-compatible base URL. |
@@ -168,7 +177,10 @@ Important root-level environment variables:
 | `WORKBENCH_REQUIRE_AUTH` | `true` in Kubernetes | Require auth for UI/API routes. |
 | `WORKBENCH_AUTH_USER` | `routing-workbench` | HTTP Basic username. |
 | `WORKBENCH_AUTH_TOKEN` | generated secret | HTTP Basic password or bearer token. |
-| `WORKER_REPLICAS` | `2` | Worker replicas for each selected backend. |
+| `WORKER_REPLICAS` | `1` | Worker replicas for each selected backend. |
+| `NEMOTRON_TENSOR_PARALLEL_SIZE` | `1` | Nemotron vLLM tensor parallel size; keep `1` for NVFP4 on the Marlin fallback path. |
+| `NEMOTRON_GPUS_PER_WORKER` | same as `NEMOTRON_TENSOR_PARALLEL_SIZE` | Nemotron worker GPU request/limit. |
+| `QWEN35B_TENSOR_PARALLEL_SIZE` / `QWEN27B_TENSOR_PARALLEL_SIZE` | `2` | Qwen worker tensor parallel size. |
 | `DYNAMO_EPP_IMAGE` | `nvcr.io/nvidia/ai-dynamo/dynamo-frontend:${DYNAMO_VERSION:-1.2.0}` | EPP container image. |
 | `EPP_ENABLE_DYN_DECODE` | `1` | Enables Dynamo KV-aware EPP scoring. |
 | `EPP_STAGE_UCX_LIBS` | `1` | Stages UCX runtime libraries from the selected backend image into the EPP pod. |
@@ -225,7 +237,7 @@ The root deployment creates:
 - `WORKER_REPLICAS` worker-side Dynamo frontend sidecars per backend, running
   `python3 -m dynamo.frontend --router-mode direct` so EPP routing decisions are
   honored.
-- One shared Routing Workbench deployment when `DEPLOY_WORKBENCH=1`.
+- One optional shared Routing Workbench deployment when `DEPLOY_WORKBENCH=1`.
 
 The EPP config uses the Dynamo GAIE plugin chain:
 
@@ -251,9 +263,9 @@ The workbench calls the shared gateway like any other OpenAI-compatible client:
 - Chat completions: `http://inference-gateway:80/v1/chat/completions`
 - Routing key: the OpenAI request body `model` field
 
-To integrate a different application, deploy the backends with
-`DEPLOY_WORKBENCH=0`, deploy your app in the same namespace, and configure its
-OpenAI base URL as `http://inference-gateway:80/v1`.
+To integrate an application, deploy it in the same namespace and configure its
+OpenAI base URL as `http://inference-gateway:80/v1`. Set `DEPLOY_WORKBENCH=1`
+only when you also want the demo workbench.
 
 Recommended checks:
 
@@ -278,4 +290,6 @@ curl -sS http://<workbench-address>/api/runs \
 
 Do not commit Hugging Face tokens, rendered Secrets, or local `.env` files.
 Keep NodePorts and any LoadBalancer address behind trusted networks. PVCs and
-app secrets are preserved on delete unless `DELETE_DATA=1` is set.
+app secrets are preserved on delete unless `DELETE_DATA=1` is set. For targeted
+backend deletes, `DELETE_DATA=1` removes only the selected backend PVCs; shared
+app secrets are removed only when all backends are selected.

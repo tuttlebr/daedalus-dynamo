@@ -695,7 +695,7 @@ def build_dgdr_spec(
         spec["overrides"] = overrides
 
     return {
-        "apiVersion": "nvidia.com/v1beta1",
+        "apiVersion": "nvidia.com/v1alpha1",
         "kind": "DynamoGraphDeploymentRequest",
         "metadata": metadata,
         "spec": spec,

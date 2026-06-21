@@ -23,7 +23,7 @@ no source build, no Rust toolchain.
 | --------------- | -------- | ------------ | ------------------------------------------------------- |
 | Dynamo frontend | 1        | 0            | Event-backed KV routing, ClusterIP only by default      |
 | ModelExpress    | 1        | 0            | Downloads and serves model cache metadata with Redis    |
-| SGLang worker   | 2        | 2            | TP=2 workers on separate eligible high-memory GPU nodes |
+| SGLang worker   | 1        | 2            | TP=2 worker on an eligible high-memory GPU node         |
 
 ## Step 1: Deploy Everything
 
@@ -41,9 +41,9 @@ export HF_TOKEN=<your-hf-token>
 ```
 
 `deploy.sh` forwards to the repository-root deployment entrypoint. It builds
-and pushes the selected backend image and the single shared Routing Workbench
-image unless `DEPLOY_WORKBENCH=0`, creates required secrets, and applies the
-shared Gateway API Inference Extension deployment.
+and pushes the selected backend image, creates required secrets, and applies the
+shared Gateway API Inference Extension deployment. Set `DEPLOY_WORKBENCH=1` to
+also build, push, and deploy the optional shared Routing Workbench image.
 
 Useful build args:
 
@@ -56,12 +56,12 @@ Useful deploy env overrides:
 - `ALLOW_LATEST=1` — suppress the warning when explicitly using `IMAGE_TAG=latest`.
 - `QWEN_IMAGE_REPOSITORY=...` — default `${REGISTRY}/qwen36-27b-dynamo`.
 - `WORKBENCH_IMAGE_REPOSITORY=...` — default `${REGISTRY}/routing-workbench`.
-- `DEPLOY_WORKBENCH=0` — deploy only the gateway and model backends for a custom OpenAI-compatible app.
-- `DEPLOY_PHOTO_TAGGER=0` — compatibility alias for disabling the shared demo app.
+- `DEPLOY_WORKBENCH=1` — deploy the optional shared Routing Workbench.
+- `DEPLOY_PHOTO_TAGGER=...` — compatibility alias for `DEPLOY_WORKBENCH`.
 - `NAMESPACE=...` — default `daedalus-dynamo`
 - `WORKBENCH_AUTH_TOKEN=...` — optional; used only when creating the Workbench auth secret for the first time.
 - `WORKBENCH_AUTH_USER=...` — default `routing-workbench`; HTTP Basic username for the Workbench UI/API.
-- `WORKER_REPLICAS=...` — default `2`; worker replicas for this backend.
+- `WORKER_REPLICAS=...` — default `1`; worker replicas for this backend.
 - `SKIP_BUILD=1`, `SKIP_PUSH=1`, or `SKIP_DEPLOY=1` for partial runs
 
 ### Local image build
@@ -100,14 +100,14 @@ linker prerequisites first:
 sudo apt-get install -y build-essential libc6-dev
 ```
 
-The default worker shape starts two TP=2 SGLang workers. On Daedalus this
-consumes two L40S GPUs on each of two eligible high-memory GPU nodes.
+The default worker shape starts one TP=2 SGLang worker. On Daedalus this
+consumes two L40S GPUs on one eligible high-memory GPU node.
 When changing an existing deployment from a smaller GPU shape, delete the old
 deployment before redeploying so the new 2-GPU pods are not blocked by old
 1-GPU pods during a rolling update:
 
 ```bash
-ACTION=delete NAMESPACE=${NAMESPACE} ./deploy.sh
+NAMESPACE=${NAMESPACE} ./deploy.sh delete
 NAMESPACE=${NAMESPACE} HF_TOKEN=${HF_TOKEN} ./deploy.sh
 ```
 
@@ -401,9 +401,9 @@ shared text-only demo app to the Gateway API Inference Extension endpoint:
 OPENAI_BASE_URL=http://inference-gateway:80/v1
 ```
 
-Set `DEPLOY_WORKBENCH=0` when deploying a custom OpenAI-compatible
-application instead. Custom apps should use `http://inference-gateway:80/v1` as
-their OpenAI base URL and choose a model returned by `/v1/models`.
+Set `DEPLOY_WORKBENCH=1` when you want this demo app. Custom apps should use
+`http://inference-gateway:80/v1` as their OpenAI base URL and choose a model
+returned by `/v1/models`.
 
 ## File Layout
 

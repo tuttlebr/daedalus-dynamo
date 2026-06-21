@@ -113,7 +113,7 @@ spec:
             - name: REDIS_URL
               value: redis://redis:6379
             - name: MODEL_NAME
-              value: nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8
+              value: nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4
             - name: MODEL_CACHE_PATH
               value: /model/.model-express/cache
             - name: HF_HUB_CACHE
@@ -188,9 +188,9 @@ spec:
       replicas: 1
       resources:
         limits:
-          gpu: "2"
+          gpu: "1"
         requests:
-          gpu: "2"
+          gpu: "1"
       livenessProbe:
         httpGet:
           path: /live
@@ -239,7 +239,7 @@ spec:
             failureThreshold: 360
           env:
             - name: MODEL_NAME
-              value: nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8
+              value: nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4
             - name: HF_HUB_CACHE
               value: /model/.model-express/cache
             - name: MODEL_CACHE_PATH
@@ -305,12 +305,12 @@ spec:
                 --trust-remote-code \
                 --dyn-tool-call-parser nemotron_nano \
                 --dyn-reasoning-parser nemotron_nano \
-                --tensor-parallel-size 2 \
+                --tensor-parallel-size 1 \
                 --pipeline-parallel-size 1 \
                 --data-parallel-size 1 \
                 --gpu-memory-utilization 0.90 \
                 --max-num-batched-tokens 2560 \
-                --max-model-len 65536 \
+                --max-model-len auto \
                 --max-num-seqs 8 \
                 --enable-chunked-prefill \
                 --scheduling-policy priority \

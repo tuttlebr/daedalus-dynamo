@@ -153,7 +153,7 @@ def build_extra_inputs(osl: int) -> dict[str, Any]:
 
 def run() -> int:
     endpoint_url = env("ENDPOINT_URL", "http://nemotron-omni-vllm-agg-frontend:8000")
-    model = env("MODEL_NAME", "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8")
+    model = env("MODEL_NAME", "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4")
     tokenizer = env("TOKENIZER_NAME", model) or model
     prefix_ratios = env_ratios("PREFIX_RATIOS", "0.1,0.5,0.9")
     isl = env_int("INPUT_SEQUENCE_LENGTH", 4096)

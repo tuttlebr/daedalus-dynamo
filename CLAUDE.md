@@ -6,11 +6,12 @@ code in this repository.
 ## What this repo is
 
 This repository contains three NVIDIA Dynamo model backends behind one shared
-Gateway API Inference Extension deployment and one shared text-only demo app:
+Gateway API Inference Extension deployment and one optional shared text-only
+demo app:
 
 | Backend | Folder | Model | Runtime |
 | --- | --- | --- | --- |
-| `nemotron` | `nemotron-3-nano-omni-dynamo/` | `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8` | vLLM |
+| `nemotron` | `nemotron-3-nano-omni-dynamo/` | `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4` | vLLM |
 | `qwen35b` | `qwen-36-35b-dynamo/` | `Qwen/Qwen3.6-35B-A3B-FP8` | vLLM |
 | `qwen27b` | `qwen-36-27b-dynamo/` | `Qwen/Qwen3.6-27B-FP8` | SGLang |
 
@@ -43,7 +44,7 @@ Run shared deployment from the repository root:
 NAMESPACE=<ns> HF_TOKEN=<token> ./deploy.sh deploy
 NAMESPACE=<ns> HF_TOKEN=<token> ./deploy.sh deploy all
 ./deploy.sh render qwen35b
-DEPLOY_WORKBENCH=0 ./deploy.sh deploy qwen35b
+DEPLOY_WORKBENCH=1 ./deploy.sh deploy qwen35b
 ./deploy.sh delete qwen27b
 ```
 
@@ -88,7 +89,7 @@ Root `deploy.sh`:
 
 1. Defaults to `qwen35b`; `all` is explicit for multi-model demos.
 2. Builds and pushes selected backend images.
-3. Builds and pushes the single Routing Workbench image when
+3. Builds and pushes the optional Routing Workbench image when
    `DEPLOY_WORKBENCH=1`.
 4. Ensures shared secrets exist.
 5. Renders one Gateway, model catalog, HTTPRoute, and one
@@ -103,9 +104,9 @@ matching backend `InferencePool`. Any OpenAI-compatible app can use:
 http://inference-gateway:80/v1
 ```
 
-Set `DEPLOY_WORKBENCH=0` when deploying a custom app separately.
-`DEPLOY_PHOTO_TAGGER=0` remains a compatibility alias for disabling the shared
-demo app.
+Set `DEPLOY_WORKBENCH=1` only when deploying the demo workbench.
+`DEPLOY_PHOTO_TAGGER` remains a compatibility alias for the shared demo app
+toggle.
 
 ## Routing Workbench
 

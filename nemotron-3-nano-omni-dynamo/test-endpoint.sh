@@ -4,7 +4,7 @@ set -euo pipefail
 BASE_URL="${BASE_URL:-${NEMOTRON_BASE_URL:-http://localhost:8000}}"
 ENDPOINT="${LLM_ENDPOINT:-${NEMOTRON_ENDPOINT:-${BASE_URL%/}/v1/chat/completions}}"
 MESSAGES_ENDPOINT="${MESSAGES_ENDPOINT:-${NEMOTRON_MESSAGES_ENDPOINT:-${BASE_URL%/}/v1/messages}}"
-MODEL_NAME="${MODEL_NAME:-nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8}"
+MODEL_NAME="${MODEL_NAME:-nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4}"
 NAMESPACE="${NAMESPACE:-nemotron-omni}"
 DYNAMO_SERVICE="${DYNAMO_SERVICE:-nemotron-omni-vllm-agg-frontend}"
 

@@ -5,7 +5,7 @@ SPDX-License-Identifier: Apache-2.0
 
 # Nemotron 3 Nano Omni NVFP4
 
-Serves [nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8](https://huggingface.co/nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8)
+Serves [nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4](https://huggingface.co/nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4)
 using vLLM with an aggregated Dynamo deployment.
 
 This recipe builds a custom container on top of the Dynamo vLLM runtime image —
@@ -22,7 +22,7 @@ no source build, no Rust toolchain.
 | --------------- | -------- | ------------ | ------------------------------------------------------- |
 | Dynamo frontend | 1        | 0            | Prediction-based KV routing, ClusterIP only by default  |
 | ModelExpress    | 1        | 0            | Downloads and serves model cache metadata with Redis    |
-| vLLM worker     | 2        | 2            | TP=2 workers on separate eligible high-memory GPU nodes |
+| vLLM worker     | 1        | 1            | TP=1 worker on an eligible high-memory GPU node         |
 
 ## Step 1: Deploy Everything
 
@@ -40,9 +40,9 @@ export HF_TOKEN=<your-hf-token>
 ```
 
 `deploy.sh` forwards to the repository-root deployment entrypoint. It builds
-and pushes the selected backend image and the single shared Routing Workbench
-image unless `DEPLOY_WORKBENCH=0`, creates required secrets, and applies the
-shared Gateway API Inference Extension deployment.
+and pushes the selected backend image, creates required secrets, and applies the
+shared Gateway API Inference Extension deployment. Set `DEPLOY_WORKBENCH=1` to
+also build, push, and deploy the optional shared Routing Workbench image.
 
 Useful build args:
 
@@ -55,12 +55,14 @@ Useful deploy env overrides:
 - `ALLOW_LATEST=1` — suppress the warning when explicitly using `IMAGE_TAG=latest`.
 - `NEMOTRON_IMAGE_REPOSITORY=...` — default `${REGISTRY}/nemotron-3-nano-omni`.
 - `WORKBENCH_IMAGE_REPOSITORY=...` — default `${REGISTRY}/routing-workbench`.
-- `DEPLOY_WORKBENCH=0` — deploy only the gateway and model backends for a custom OpenAI-compatible app.
-- `DEPLOY_PHOTO_TAGGER=0` — compatibility alias for disabling the shared demo app.
+- `DEPLOY_WORKBENCH=1` — deploy the optional shared Routing Workbench.
+- `DEPLOY_PHOTO_TAGGER=...` — compatibility alias for `DEPLOY_WORKBENCH`.
 - `NAMESPACE=...` — default `daedalus-dynamo`
 - `WORKBENCH_AUTH_TOKEN=...` — optional; used only when creating the Workbench auth secret for the first time.
 - `WORKBENCH_AUTH_USER=...` — default `routing-workbench`; HTTP Basic username for the Workbench UI/API.
-- `WORKER_REPLICAS=...` — default `2`; worker replicas for this backend.
+- `WORKER_REPLICAS=...` — default `1`; worker replicas for this backend.
+- `NEMOTRON_TENSOR_PARALLEL_SIZE=...` — default `1`; keep `1` for NVFP4 on the Marlin fallback path.
+- `NEMOTRON_GPUS_PER_WORKER=...` — default matches `NEMOTRON_TENSOR_PARALLEL_SIZE`.
 - `SKIP_BUILD=1`, `SKIP_PUSH=1`, or `SKIP_DEPLOY=1` for partial runs
 
 ### Local image build
@@ -99,14 +101,16 @@ linker prerequisites first:
 sudo apt-get install -y build-essential libc6-dev
 ```
 
-The default worker shape starts two TP=2 vLLM workers. On Daedalus this
-consumes two L40S GPUs on each of two eligible high-memory GPU nodes.
-When changing an existing deployment from a smaller GPU shape, delete the old
-deployment before redeploying so the new 2-GPU pods are not blocked by old
-1-GPU pods during a rolling update:
+The default worker shape starts one TP=1 vLLM worker. On Daedalus this consumes
+one L40S GPU on one eligible high-memory GPU node. This avoids
+the Marlin NVFP4 MoE repack failure where TP=2 splits the 1856-wide expert
+dimension into 928-wide shards, which are not divisible by the Marlin 64-wide
+tile. When changing an existing deployment from the older TP=2 shape, delete
+the old deployment before redeploying so the operator recreates the worker pods
+with the new resource shape:
 
 ```bash
-ACTION=delete NAMESPACE=${NAMESPACE} ./deploy.sh
+NAMESPACE=${NAMESPACE} ./deploy.sh delete
 NAMESPACE=${NAMESPACE} HF_TOKEN=${HF_TOKEN} ./deploy.sh
 ```
 
@@ -161,7 +165,7 @@ In another terminal, send a minimal text request:
 curl http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8",
+    "model": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4",
     "messages": [{"role": "user", "content": "Hello!"}],
     "max_tokens": 128
   }'
@@ -174,7 +178,7 @@ OpenAI-compatible fields:
 curl http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8",
+    "model": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4",
     "messages": [{"role": "user", "content": "Hello!"}],
     "max_tokens": 128,
     "nvext": {
@@ -196,7 +200,7 @@ For OpenAI Python clients, pass the same object through `extra_body`:
 
 ```python
 client.chat.completions.create(
-    model="nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8",
+    model="nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4",
     messages=[{"role": "user", "content": "Hello!"}],
     max_tokens=128,
     extra_body={
@@ -221,7 +225,7 @@ curl http://localhost:8000/v1/messages \
   -H "Content-Type: application/json" \
   -H "anthropic-version: 2023-06-01" \
   -d '{
-    "model": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8",
+    "model": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4",
     "messages": [{"role": "user", "content": "Hello!"}],
     "max_tokens": 128,
     "nvext": {
@@ -246,7 +250,7 @@ For streaming tool-call dispatch, stream a tool-capable request and watch for
 curl -N http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8",
+    "model": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4",
     "stream": true,
     "messages": [{"role": "user", "content": "Call the echo tool with hello."}],
     "tools": [{
@@ -272,7 +276,7 @@ To exercise the multimodal path, attach an image:
 curl http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8",
+    "model": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4",
     "messages": [{
       "role": "user",
       "content": [
@@ -290,7 +294,7 @@ curl http://localhost:8000/v1/chat/completions \
 curl http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8",
+    "model": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4",
     "messages": [{
       "role": "user",
       "content": [
@@ -418,9 +422,9 @@ shared text-only demo app to the Gateway API Inference Extension endpoint:
 OPENAI_BASE_URL=http://inference-gateway:80/v1
 ```
 
-Set `DEPLOY_WORKBENCH=0` when deploying a custom OpenAI-compatible
-application instead. Custom apps should use `http://inference-gateway:80/v1` as
-their OpenAI base URL and choose a model returned by `/v1/models`.
+Set `DEPLOY_WORKBENCH=1` when you want this demo app. Custom apps should use
+`http://inference-gateway:80/v1` as their OpenAI base URL and choose a model
+returned by `/v1/models`.
 
 ## File Layout
 

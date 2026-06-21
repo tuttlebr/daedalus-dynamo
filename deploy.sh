@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 REPO_ROOT="$(pwd)"
 
-ACTION="deploy"
+ACTION="${ACTION:-deploy}"
 declare -a REQUESTED_BACKENDS=()
 
 if [[ "$#" -gt 0 ]]; then
@@ -20,6 +20,8 @@ if [[ "$#" -gt 0 ]]; then
   REQUESTED_BACKENDS=("$@")
 elif [[ -n "${BACKENDS:-}" ]]; then
   IFS=',' read -r -a REQUESTED_BACKENDS <<< "${BACKENDS}"
+elif [[ "${ACTION}" == "delete" ]]; then
+  REQUESTED_BACKENDS=("all")
 else
   REQUESTED_BACKENDS=("qwen35b")
 fi
@@ -39,7 +41,13 @@ PREFLIGHT_TIMEOUT_SECONDS="${PREFLIGHT_TIMEOUT_SECONDS:-20}"
 WORKBENCH_NODEPORT="${WORKBENCH_NODEPORT:-30153}"
 GATEWAY_REQUEST_TIMEOUT="${GATEWAY_REQUEST_TIMEOUT:-300s}"
 KV_CACHE_BLOCK_SIZE="${KV_CACHE_BLOCK_SIZE:-16}"
-WORKER_REPLICAS="${WORKER_REPLICAS:-2}"
+WORKER_REPLICAS="${WORKER_REPLICAS:-1}"
+NEMOTRON_TENSOR_PARALLEL_SIZE="${NEMOTRON_TENSOR_PARALLEL_SIZE:-1}"
+QWEN35B_TENSOR_PARALLEL_SIZE="${QWEN35B_TENSOR_PARALLEL_SIZE:-1}"
+QWEN27B_TENSOR_PARALLEL_SIZE="${QWEN27B_TENSOR_PARALLEL_SIZE:-2}"
+NEMOTRON_GPUS_PER_WORKER="${NEMOTRON_GPUS_PER_WORKER:-${NEMOTRON_TENSOR_PARALLEL_SIZE}}"
+QWEN35B_GPUS_PER_WORKER="${QWEN35B_GPUS_PER_WORKER:-${QWEN35B_TENSOR_PARALLEL_SIZE}}"
+QWEN27B_GPUS_PER_WORKER="${QWEN27B_GPUS_PER_WORKER:-${QWEN27B_TENSOR_PARALLEL_SIZE}}"
 KV_EVENTS_ENDPOINT="${KV_EVENTS_ENDPOINT:-tcp://*:5557}"
 MODEL_CATALOG_IMAGE="${MODEL_CATALOG_IMAGE:-python:3.12-alpine}"
 DYNAMO_VERSION="${DYNAMO_VERSION:-1.2.0}"
@@ -69,6 +77,7 @@ RDMA_RESOURCE_NAME="${RDMA_RESOURCE_NAME:-}"
 SERVING_MODE="${SERVING_MODE:-agg}"
 RUN_DOCTOR="${RUN_DOCTOR:-0}"
 DOCTOR_STRICT="${DOCTOR_STRICT:-0}"
+DELETE_WAIT_SECONDS="${DELETE_WAIT_SECONDS:-120}"
 
 NEMOTRON_IMAGE_REPOSITORY="${NEMOTRON_IMAGE_REPOSITORY:-${REGISTRY}/nemotron-3-nano-omni}"
 QWEN35B_IMAGE_REPOSITORY="${QWEN35B_IMAGE_REPOSITORY:-${REGISTRY}/qwen36-35b-dynamo}"
@@ -92,16 +101,18 @@ Subcommands:
   doctor           run read-only cluster-readiness checks (incl. RDMA/InfiniBand)
 
 Backends:
-  nemotron     nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8 on vLLM
+  nemotron     nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4 on vLLM
   qwen35b      Qwen/Qwen3.6-35B-A3B-FP8 on vLLM
   qwen27b      Qwen/Qwen3.6-27B-FP8 on SGLang
-  all          Deploy all backends
+  all          Deploy or delete all backends
 
 Examples:
   ./deploy.sh doctor
   HF_TOKEN=... ./deploy.sh deploy
   HF_TOKEN=... ./deploy.sh deploy qwen35b qwen27b
   BACKENDS=nemotron,qwen35b ./deploy.sh render
+  ./deploy.sh delete
+  ./deploy.sh delete nemotron
   INSTALL_GATEWAY=1 HF_TOKEN=... ./deploy.sh deploy all
   TRANSPORT_PROFILE=rdma SERVING_MODE=disagg HF_TOKEN=... ./deploy.sh deploy qwen35b
 
@@ -119,12 +130,16 @@ Common environment:
   EPP_ENABLE_DYN_DECODE=1      enable Dynamo KV-aware EPP scorer
   EPP_ENABLE_DYN_DECODE=0      disable only the dyn-decode scorer if EPP cannot initialize NIXL
   EPP_NODE_HOSTNAMES=a,b,c     optional comma-separated node hostnames for EPP pods
-  DEPLOY_WORKBENCH=1           deploy the shared Dynamo Routing Workbench; set 0 for gateway/backends only
-  DEPLOY_PHOTO_TAGGER=0        compatibility alias for disabling the shared demo app
+  DEPLOY_WORKBENCH=0           gateway/backends only by default; set 1 to deploy the shared Dynamo Routing Workbench
+  DEPLOY_PHOTO_TAGGER=<0|1>    compatibility alias for DEPLOY_WORKBENCH
   DEFAULT_BACKEND=<backend>    Workbench model backend; defaults to first selected backend
   WORKBENCH_DEFAULT_MODEL=<id> Workbench model override; defaults from DEFAULT_BACKEND
   WORKBENCH_NODEPORT=30153     shared Workbench UI NodePort
-  WORKER_REPLICAS=2            worker replicas for each selected backend
+  WORKER_REPLICAS=1            worker replicas for each selected backend
+  NEMOTRON_TENSOR_PARALLEL_SIZE=1  Nemotron vLLM tensor parallel size
+  NEMOTRON_GPUS_PER_WORKER=1    Nemotron worker GPU request/limit
+  QWEN35B_TENSOR_PARALLEL_SIZE=2   Qwen 35B vLLM tensor parallel size
+  QWEN27B_TENSOR_PARALLEL_SIZE=2   Qwen 27B SGLang tensor parallel size
   KV_CACHE_BLOCK_SIZE=16       EPP and worker KV block/page size
 
 Performance and transport (validate the fabric first with: ./deploy.sh doctor):
@@ -138,12 +153,19 @@ Performance and transport (validate the fabric first with: ./deploy.sh doctor):
   SERVING_MODE=disagg          requires TRANSPORT_PROFILE=rdma
   RUN_DOCTOR=1                 run the cluster doctor before deploy (advisory)
   DOCTOR_STRICT=1              abort deploy if the doctor reports failures
+  DELETE_WAIT_SECONDS=120      wait for operator-owned backend resources during delete; set 0 to skip
 EOF
 }
 
 die() {
   echo "ERROR: $*" >&2
   exit 1
+}
+
+validate_positive_int() {
+  local name="$1"
+  local value="$2"
+  [[ "${value}" =~ ^[1-9][0-9]*$ ]] || die "${name} must be a positive integer (got '${value}')."
 }
 
 warn_mutable_image_tag() {
@@ -164,6 +186,20 @@ validate_serving_config() {
   if [[ "${SERVING_MODE}" == "disagg" && "${TRANSPORT_PROFILE}" != "rdma" ]]; then
     die "SERVING_MODE=disagg requires TRANSPORT_PROFILE=rdma and a validated RDMA fabric. Run './deploy.sh doctor' first, then re-run with TRANSPORT_PROFILE=rdma."
   fi
+  validate_positive_int WORKER_REPLICAS "${WORKER_REPLICAS}"
+  validate_positive_int NEMOTRON_TENSOR_PARALLEL_SIZE "${NEMOTRON_TENSOR_PARALLEL_SIZE}"
+  validate_positive_int QWEN35B_TENSOR_PARALLEL_SIZE "${QWEN35B_TENSOR_PARALLEL_SIZE}"
+  validate_positive_int QWEN27B_TENSOR_PARALLEL_SIZE "${QWEN27B_TENSOR_PARALLEL_SIZE}"
+  validate_positive_int NEMOTRON_GPUS_PER_WORKER "${NEMOTRON_GPUS_PER_WORKER}"
+  validate_positive_int QWEN35B_GPUS_PER_WORKER "${QWEN35B_GPUS_PER_WORKER}"
+  validate_positive_int QWEN27B_GPUS_PER_WORKER "${QWEN27B_GPUS_PER_WORKER}"
+
+  ((NEMOTRON_GPUS_PER_WORKER >= NEMOTRON_TENSOR_PARALLEL_SIZE)) ||
+    die "NEMOTRON_GPUS_PER_WORKER must be >= NEMOTRON_TENSOR_PARALLEL_SIZE."
+  ((QWEN35B_GPUS_PER_WORKER >= QWEN35B_TENSOR_PARALLEL_SIZE)) ||
+    die "QWEN35B_GPUS_PER_WORKER must be >= QWEN35B_TENSOR_PARALLEL_SIZE."
+  ((QWEN27B_GPUS_PER_WORKER >= QWEN27B_TENSOR_PARALLEL_SIZE)) ||
+    die "QWEN27B_GPUS_PER_WORKER must be >= QWEN27B_TENSOR_PARALLEL_SIZE."
 }
 
 normalize_backend() {
@@ -206,7 +242,7 @@ select_backends() {
 
 backend_model() {
   case "$1" in
-    nemotron) printf 'nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8\n' ;;
+    nemotron) printf 'nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4\n' ;;
     qwen35b) printf 'Qwen/Qwen3.6-35B-A3B-FP8\n' ;;
     qwen27b) printf 'Qwen/Qwen3.6-27B-FP8\n' ;;
   esac
@@ -231,6 +267,22 @@ backend_worker_component() {
   case "$1" in
     nemotron|qwen35b) printf 'VllmWorker\n' ;;
     qwen27b) printf 'SGLangWorker\n' ;;
+  esac
+}
+
+backend_tensor_parallel_size() {
+  case "$1" in
+    nemotron) printf '%s\n' "${NEMOTRON_TENSOR_PARALLEL_SIZE}" ;;
+    qwen35b) printf '%s\n' "${QWEN35B_TENSOR_PARALLEL_SIZE}" ;;
+    qwen27b) printf '%s\n' "${QWEN27B_TENSOR_PARALLEL_SIZE}" ;;
+  esac
+}
+
+backend_gpus_per_worker() {
+  case "$1" in
+    nemotron) printf '%s\n' "${NEMOTRON_GPUS_PER_WORKER}" ;;
+    qwen35b) printf '%s\n' "${QWEN35B_GPUS_PER_WORKER}" ;;
+    qwen27b) printf '%s\n' "${QWEN27B_GPUS_PER_WORKER}" ;;
   esac
 }
 
@@ -288,7 +340,7 @@ workbench_enabled() {
   if [[ -z "${value}" && -n "${DEPLOY_PHOTO_TAGGER:-}" ]]; then
     value="${DEPLOY_PHOTO_TAGGER}"
   fi
-  value="${value:-1}"
+  value="${value:-0}"
   [[ "${value,,}" != "0" && "${value,,}" != "false" && "${value,,}" != "no" ]]
 }
 
@@ -1087,21 +1139,24 @@ EOF
 }
 
 render_worker_resources() {
-  # Worker resources block. The tcp default emits exactly the historical 2-GPU
-  # request/limit; the rdma profile additionally requests an RDMA device-plugin
-  # resource when RDMA_RESOURCE_NAME is set (some fabrics expose RDMA via
-  # hostNetwork/shared HCA and need no resource, so this stays opt-in).
+  local backend="$1"
+  local gpus_per_worker
+  gpus_per_worker="$(backend_gpus_per_worker "${backend}")"
+  # Worker resources block. GPU count is backend-specific; the rdma profile
+  # additionally requests an RDMA device-plugin resource when RDMA_RESOURCE_NAME
+  # is set (some fabrics expose RDMA via hostNetwork/shared HCA and need no
+  # resource, so this stays opt-in).
   cat <<EOF
       resources:
         limits:
-          gpu: "2"
+          gpu: "${gpus_per_worker}"
 EOF
   if [[ "${TRANSPORT_PROFILE}" == "rdma" && -n "${RDMA_RESOURCE_NAME}" ]]; then
     printf '          %s: "1"\n' "${RDMA_RESOURCE_NAME}"
   fi
   cat <<EOF
         requests:
-          gpu: "2"
+          gpu: "${gpus_per_worker}"
 EOF
   if [[ "${TRANSPORT_PROFILE}" == "rdma" && -n "${RDMA_RESOURCE_NAME}" ]]; then
     printf '          %s: "1"\n' "${RDMA_RESOURCE_NAME}"
@@ -1116,7 +1171,7 @@ render_vllm_worker() {
     prefill) disagg_flag="--disaggregation-mode prefill" ;;
     decode) disagg_flag="--disaggregation-mode decode" ;;
   esac
-  local component model image dgd model_cache modelexpress_service tool_parser reasoning_parser max_tokens max_len max_seqs
+  local component model image dgd model_cache modelexpress_service tool_parser reasoning_parser max_tokens max_len max_seqs tensor_parallel_size
   component="$(backend_worker_component "${backend}")"
   case "${role}" in
     prefill) component="${component/Worker/PrefillWorker}" ;;
@@ -1127,6 +1182,7 @@ render_vllm_worker() {
   dgd="$(backend_dgd "${backend}")"
   model_cache="$(backend_storage_prefix "${backend}")-model-cache"
   modelexpress_service="${dgd}-modelexpress"
+  tensor_parallel_size="$(backend_tensor_parallel_size "${backend}")"
 
   if [[ "${backend}" == "nemotron" ]]; then
     tool_parser="nemotron_nano"
@@ -1155,7 +1211,7 @@ render_vllm_worker() {
       envFromSecret: ${HF_TOKEN_SECRET}
       replicas: ${WORKER_REPLICAS}
 EOF
-  render_worker_resources
+  render_worker_resources "${backend}"
   cat <<EOF
       livenessProbe:
         httpGet:
@@ -1284,7 +1340,7 @@ EOF
                 --trust-remote-code
                 --dyn-tool-call-parser ${tool_parser}
                 --dyn-reasoning-parser ${reasoning_parser}
-                --tensor-parallel-size 2
+                --tensor-parallel-size ${tensor_parallel_size}
                 --pipeline-parallel-size 1
                 --data-parallel-size 1
                 --gpu-memory-utilization 0.90
@@ -1325,7 +1381,7 @@ render_sglang_worker() {
     prefill) disagg_flag="--disaggregation-mode prefill" ;;
     decode) disagg_flag="--disaggregation-mode decode" ;;
   esac
-  local component model image dgd model_cache modelexpress_service
+  local component model image dgd model_cache modelexpress_service tensor_parallel_size
   component="$(backend_worker_component "${backend}")"
   case "${role}" in
     prefill) component="${component/Worker/PrefillWorker}" ;;
@@ -1336,6 +1392,7 @@ render_sglang_worker() {
   dgd="$(backend_dgd "${backend}")"
   model_cache="$(backend_storage_prefix "${backend}")-model-cache"
   modelexpress_service="${dgd}-modelexpress"
+  tensor_parallel_size="$(backend_tensor_parallel_size "${backend}")"
 
   cat <<EOF
 
@@ -1344,7 +1401,7 @@ render_sglang_worker() {
       envFromSecret: ${HF_TOKEN_SECRET}
       replicas: ${WORKER_REPLICAS}
 EOF
-  render_worker_resources
+  render_worker_resources "${backend}"
   cat <<EOF
       livenessProbe:
         httpGet:
@@ -1450,7 +1507,7 @@ EOF
                 python3 -m dynamo.sglang
                 --model-path "\${MODEL_NAME}"
                 --served-model-name "\${MODEL_NAME}"
-                --tp-size 2
+                --tp-size ${tensor_parallel_size}
                 --trust-remote-code
                 --dyn-tool-call-parser qwen3_coder
                 --dyn-reasoning-parser qwen3
@@ -1503,8 +1560,9 @@ render_backend() {
 }
 
 render_model_catalog() {
-  local catalog_json
+  local catalog_json catalog_hash
   catalog_json="$(models_json)"
+  catalog_hash="$(printf '%s' "${catalog_json}" | sha256sum | awk '{print $1}')"
 
   cat <<EOF
 ---
@@ -1536,6 +1594,8 @@ spec:
       labels:
         app.kubernetes.io/name: model-catalog
         app.kubernetes.io/part-of: ${APP_LABEL_VALUE}
+      annotations:
+        daedalus-dynamo/models-json-sha256: "${catalog_hash}"
     spec:
       containers:
         - name: model-catalog
@@ -1946,6 +2006,140 @@ cleanup_workbench_resources() {
     --wait=false || true
 }
 
+kubectl_delete_namespaced() {
+  kubectl delete "$@" \
+    -n "${NAMESPACE}" \
+    --ignore-not-found \
+    --wait=false || true
+}
+
+namespaced_resource_available() {
+  local resource="$1"
+  kubectl api-resources --namespaced -o name 2>/dev/null | grep -Fxq "${resource}"
+}
+
+kubectl_delete_optional_namespaced() {
+  local resource="$1"
+  shift
+  namespaced_resource_available "${resource}" || return 0
+  kubectl_delete_namespaced "${resource}" "$@"
+}
+
+kubectl_delete_matching_namespaced() {
+  local resource="$1"
+  local pattern="$2"
+  local -a names=()
+  namespaced_resource_available "${resource}" || return 0
+  mapfile -t names < <(kubectl get "${resource}" -n "${NAMESPACE}" -o name 2>/dev/null | grep -F "${pattern}" || true)
+  ((${#names[@]})) || return 0
+  kubectl_delete_namespaced "${names[@]}"
+}
+
+wait_for_delete() {
+  local resource="$1"
+  local name="$2"
+  [[ "${DELETE_WAIT_SECONDS}" != "0" ]] || return 0
+  kubectl wait --for=delete "${resource}/${name}" \
+    -n "${NAMESPACE}" \
+    --timeout="${DELETE_WAIT_SECONDS}s" \
+    > /dev/null 2>&1 || true
+}
+
+deleting_all_backends() {
+  local backend
+  local -A selected=()
+  [[ "${#SELECTED_BACKENDS[@]}" -eq 3 ]] || return 1
+  for backend in "${SELECTED_BACKENDS[@]}"; do
+    selected["${backend}"]=1
+  done
+  [[ -n "${selected[nemotron]:-}" && -n "${selected[qwen35b]:-}" && -n "${selected[qwen27b]:-}" ]]
+}
+
+delete_shared_resources() {
+  kubectl_delete_optional_namespaced agentgatewayparameters.agentgateway.dev "${GATEWAY_NAME}-params"
+  kubectl_delete_optional_namespaced gateways.gateway.networking.k8s.io "${GATEWAY_NAME}"
+  kubectl_delete_optional_namespaced agentgatewaypolicies.agentgateway.dev daedalus-dynamo-model-header
+  kubectl_delete_optional_namespaced httproutes.gateway.networking.k8s.io daedalus-dynamo
+  kubectl_delete_namespaced deployment model-catalog
+  kubectl_delete_namespaced service model-catalog
+  kubectl_delete_namespaced configmap model-catalog-config
+  cleanup_workbench_resources
+  cleanup_legacy_photo_tagger_resources
+}
+
+backend_component_service_names() {
+  local backend="$1"
+  local dgd="$2"
+  local worker_prefix
+  case "${backend}" in
+    nemotron|qwen35b) worker_prefix="vllm" ;;
+    qwen27b) worker_prefix="sglang" ;;
+  esac
+  printf '%s\n' \
+    "${dgd}-0" \
+    "${dgd}-epp" \
+    "${dgd}-modelexpress" \
+    "${dgd}-${worker_prefix}worker" \
+    "${dgd}-${worker_prefix}prefillworker" \
+    "${dgd}-${worker_prefix}decodeworker"
+}
+
+delete_backend_resources() {
+  local backend="$1"
+  local dgd prefix
+  local -a services=()
+  dgd="$(backend_dgd "${backend}")"
+  prefix="$(backend_storage_prefix "${backend}")"
+
+  echo "==> Deleting backend ${backend} (${dgd}) from namespace ${NAMESPACE}"
+  kubectl_delete_optional_namespaced dynamographdeployments.nvidia.com "${dgd}"
+  kubectl_delete_namespaced deployment "${prefix}-redis"
+  kubectl_delete_namespaced service "${prefix}-redis"
+
+  # The Dynamo and Grove operators create child resources with mixed labels.
+  # Delete the controller CRs first, then sweep both label families and the
+  # generated service/RBAC names so a stuck finalizer does not leave pods alive.
+  kubectl_delete_optional_namespaced inferencepools.inference.networking.k8s.io "${dgd}-pool"
+  kubectl_delete_optional_namespaced podcliquesets.grove.io "${dgd}"
+  kubectl_delete_optional_namespaced inferencepools.inference.networking.k8s.io \
+    -l "nvidia.com/dynamo-graph-deployment-name=${dgd}"
+  kubectl_delete_optional_namespaced podcliquesets.grove.io \
+    -l "nvidia.com/dynamo-graph-deployment-name=${dgd}"
+  kubectl_delete_optional_namespaced podcliques.grove.io \
+    -l "nvidia.com/dynamo-graph-deployment-name=${dgd}"
+  kubectl_delete_optional_namespaced podgangs.scheduler.grove.io \
+    -l "app.kubernetes.io/part-of=${dgd}"
+  kubectl_delete_optional_namespaced podgroups.scheduling.run.ai \
+    -l "app.kubernetes.io/part-of=${dgd}"
+  kubectl_delete_optional_namespaced dynamocomponentdeployments.nvidia.com \
+    -l "nvidia.com/dynamo-graph-deployment-name=${dgd}"
+  kubectl_delete_optional_namespaced dynamographdeploymentrequests.nvidia.com \
+    -l "nvidia.com/dynamo-graph-deployment-name=${dgd}"
+  kubectl_delete_optional_namespaced dynamomodels.nvidia.com \
+    -l "nvidia.com/dynamo-graph-deployment-name=${dgd}"
+  kubectl_delete_optional_namespaced dynamocheckpoints.nvidia.com \
+    -l "nvidia.com/dynamo-graph-deployment-name=${dgd}"
+  kubectl_delete_optional_namespaced dynamographdeploymentscalingadapters.nvidia.com \
+    -l "nvidia.com/dynamo-graph-deployment-name=${dgd}"
+  kubectl_delete_matching_namespaced dynamoworkermetadatas.nvidia.com "/${dgd}"
+
+  kubectl_delete_namespaced all,configmap,secret,serviceaccount,role,rolebinding \
+    -l "nvidia.com/dynamo-graph-deployment-name=${dgd}"
+  kubectl_delete_namespaced all,configmap,secret,serviceaccount,role,rolebinding,poddisruptionbudgets.policy \
+    -l "app.kubernetes.io/part-of=${dgd}"
+
+  mapfile -t services < <(backend_component_service_names "${backend}" "${dgd}")
+  kubectl_delete_namespaced service "${services[@]}"
+  kubectl_delete_namespaced serviceaccount "${dgd}" "${dgd}-k8s-service-discovery"
+  kubectl_delete_namespaced role "grove.io:pcs:${dgd}" "${dgd}-k8s-service-discovery-role"
+  kubectl_delete_namespaced rolebinding "grove.io:pcs:${dgd}" "${dgd}-k8s-service-discovery-binding"
+  kubectl_delete_namespaced secret "${dgd}-initc-sa-token-secret"
+
+  wait_for_delete dynamographdeployments.nvidia.com "${dgd}"
+  wait_for_delete podcliquesets.grove.io "${dgd}"
+  wait_for_delete inferencepools.inference.networking.k8s.io "${dgd}-pool"
+}
+
 render_manifest() {
   local backend
   validate_serving_config
@@ -2014,27 +2208,21 @@ apply_deployment() {
 }
 
 delete_deployment() {
-  echo "==> Deleting rendered Daedalus Dynamo GAIE resources from namespace ${NAMESPACE}"
-  render_manifest | kubectl delete -n "${NAMESPACE}" -f - --ignore-not-found --wait=false || true
-  cleanup_workbench_resources
-  cleanup_legacy_photo_tagger_resources
+  local backend
+  if deleting_all_backends; then
+    echo "==> Deleting shared Daedalus Dynamo GAIE resources from namespace ${NAMESPACE}"
+    delete_shared_resources
+  else
+    echo "==> Targeted delete selected; preserving shared gateway, model catalog, and workbench resources."
+    echo "    Redeploy remaining backends to refresh shared routing and model catalog entries."
+  fi
 
-  local backend dgd
   for backend in "${SELECTED_BACKENDS[@]}"; do
-    dgd="$(backend_dgd "${backend}")"
-    kubectl delete dynamographdeployment.nvidia.com "${dgd}" \
-      -n "${NAMESPACE}" \
-      --ignore-not-found \
-      --wait=false || true
-    kubectl delete all,configmap,serviceaccount,role,rolebinding \
-      -n "${NAMESPACE}" \
-      -l "nvidia.com/dynamo-graph-deployment-name=${dgd}" \
-      --ignore-not-found \
-      --wait=false || true
+    delete_backend_resources "${backend}"
   done
 
   if [[ "${DELETE_DATA:-0}" == "1" ]]; then
-    echo "==> DELETE_DATA=1 set; deleting selected PVCs and app secrets"
+    echo "==> DELETE_DATA=1 set; deleting selected backend PVCs"
     for backend in "${SELECTED_BACKENDS[@]}"; do
       kubectl delete pvc \
         "$(backend_storage_prefix "${backend}")-model-cache" \
@@ -2043,16 +2231,21 @@ delete_deployment() {
         --ignore-not-found \
         --wait=false || true
     done
-    kubectl delete pvc postgres-data-photo-tagger-postgres-0 \
-      -n "${NAMESPACE}" \
-      --ignore-not-found \
-      --wait=false || true
-    kubectl delete secret "${WORKBENCH_AUTH_SECRET}" photo-tagger-auth photo-tagger-postgres "${HF_TOKEN_SECRET}" \
-      -n "${NAMESPACE}" \
-      --ignore-not-found \
-      --wait=false || true
+    if deleting_all_backends; then
+      echo "==> All backends selected; deleting shared app secrets and legacy data"
+      kubectl delete pvc postgres-data-photo-tagger-postgres-0 \
+        -n "${NAMESPACE}" \
+        --ignore-not-found \
+        --wait=false || true
+      kubectl delete secret "${WORKBENCH_AUTH_SECRET}" photo-tagger-auth photo-tagger-postgres "${HF_TOKEN_SECRET}" \
+        -n "${NAMESPACE}" \
+        --ignore-not-found \
+        --wait=false || true
+    else
+      echo "==> Targeted delete selected; preserving shared app secrets."
+    fi
   else
-    echo "==> Preserving PVCs and secrets. Set DELETE_DATA=1 to remove model caches, Redis data, legacy Postgres data, and app secrets."
+    echo "==> Preserving PVCs and secrets. Set DELETE_DATA=1 to remove selected backend PVCs; with all backends selected it also removes shared app secrets and legacy data."
   fi
 }
 
