@@ -870,7 +870,7 @@ def run_aiperf(
     concurrency: int,
     num_prefix_prompts: int,
 ) -> list[dict[str, Any]]:
-    endpoint_url = env("ENDPOINT_URL", "http://qwen36-dynamo-fd-ec-frontend:8000")
+    endpoint_url = env("ENDPOINT_URL", "http://qwen36-35b-vllm-agg-frontend:8000")
     model = env("MODEL_NAME", "Qwen/Qwen3.6-35B-A3B-FP8")
     tokenizer = env("TOKENIZER_NAME", model) or model
     seed = env_int("RANDOM_SEED", 0)
@@ -971,7 +971,7 @@ def run() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     run_config = {
-        "endpoint_url": env("ENDPOINT_URL", "http://qwen36-dynamo-fd-ec-frontend:8000"),
+        "endpoint_url": env("ENDPOINT_URL", "http://qwen36-35b-vllm-agg-frontend:8000"),
         "model": env("MODEL_NAME", "Qwen/Qwen3.6-35B-A3B-FP8"),
         "prefix_ratios": prefix_ratios,
         "input_sequence_length": isl,

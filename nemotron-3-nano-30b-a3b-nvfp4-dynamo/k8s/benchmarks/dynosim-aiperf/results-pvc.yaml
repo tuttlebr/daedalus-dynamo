@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dynosim-aiperf-demo-results
+  labels:
+    app.kubernetes.io/name: dynosim-aiperf-demo
+    app.kubernetes.io/part-of: nemotron3nano-photo-demo
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi

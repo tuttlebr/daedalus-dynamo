@@ -5,7 +5,7 @@ code in this repository.
 
 ## What this repo is
 
-This repository contains three NVIDIA Dynamo model backends behind one shared
+This repository contains four NVIDIA Dynamo model backends behind one shared
 Gateway API Inference Extension deployment and one optional shared text-only
 demo app:
 
@@ -14,6 +14,7 @@ demo app:
 | `nemotron` | `nemotron-3-nano-omni-dynamo/` | `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4` | vLLM |
 | `qwen35b` | `qwen-36-35b-dynamo/` | `Qwen/Qwen3.6-35B-A3B-FP8` | vLLM |
 | `qwen27b` | `qwen-36-27b-dynamo/` | `Qwen/Qwen3.6-27B-FP8` | SGLang |
+| `gemma431b` | `gemma-4-31b-it-dynamo/` | `google/gemma-4-31B-it` | vLLM |
 
 Shared assets live at the repo root:
 
@@ -45,6 +46,7 @@ NAMESPACE=<ns> HF_TOKEN=<token> ./deploy.sh deploy
 NAMESPACE=<ns> HF_TOKEN=<token> ./deploy.sh deploy all
 ./deploy.sh render qwen35b
 DEPLOY_WORKBENCH=1 ./deploy.sh deploy qwen35b
+./deploy.sh deploy gemma431b
 ./deploy.sh delete qwen27b
 ```
 

@@ -2,12 +2,13 @@
 
 ## Project Structure & Module Organization
 
-This repository contains three NVIDIA Dynamo backend examples behind one shared
+This repository contains four NVIDIA Dynamo backend examples behind one shared
 Gateway API Inference Extension deployment:
 
 - `nemotron-3-nano-omni-dynamo/` for Nemotron Omni on vLLM.
 - `qwen-36-35b-dynamo/` for Qwen 35B on vLLM.
 - `qwen-36-27b-dynamo/` for Qwen 27B on SGLang.
+- `gemma-4-31b-it-dynamo/` for Gemma 4 31B IT on vLLM.
 
 Each example keeps its top-level `README.md`, `Dockerfile`,
 `docker-compose.yaml`, `test-endpoint.sh`, `Makefile`, `scripts/`, and `k8s/`.
@@ -40,11 +41,12 @@ Run validation/build commands from an example folder unless noted:
 
 ## Coding Style & Naming Conventions
 
-Keep the three backend examples structurally parallel. Keep application code in
+Keep the four backend examples structurally parallel. Keep application code in
 the single `routing-workbench/` tree, and prefer model-neutral app settings such
 as `OPENAI_BASE_URL`; keep model-specific names only where required, for example
-`NEMOTRON_IMAGE_REPOSITORY` or `QWEN_IMAGE_REPOSITORY`. Rust code uses standard
-`cargo fmt` style, snake_case modules/functions, and small focused modules.
+`NEMOTRON_IMAGE_REPOSITORY`, `QWEN_IMAGE_REPOSITORY`, or
+`GEMMA431B_IMAGE_REPOSITORY`. Rust code uses standard `cargo fmt` style,
+snake_case modules/functions, and small focused modules.
 Shell scripts should use `set -euo pipefail`.
 
 ## Testing Guidelines

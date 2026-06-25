@@ -28,7 +28,7 @@ fi
 
 REGISTRY="${REGISTRY:-daedalus.ddns.me:5050/btuttle}"
 if [[ -z "${IMAGE_TAG:-}" ]]; then
-  IMAGE_TAG="$(date -u +%Y%m%d%H%M%S)"
+  IMAGE_TAG="latest"
 fi
 
 NAMESPACE="${NAMESPACE:-daedalus-dynamo}"
@@ -40,41 +40,7 @@ APP_LABEL="app.kubernetes.io/part-of=${APP_LABEL_VALUE}"
 PREFLIGHT_TIMEOUT_SECONDS="${PREFLIGHT_TIMEOUT_SECONDS:-20}"
 WORKBENCH_NODEPORT="${WORKBENCH_NODEPORT:-30153}"
 GATEWAY_REQUEST_TIMEOUT="${GATEWAY_REQUEST_TIMEOUT:-300s}"
-KV_CACHE_BLOCK_SIZE="${KV_CACHE_BLOCK_SIZE:-16}"
-WORKER_REPLICAS="${WORKER_REPLICAS:-1}"
-NEMOTRON_TENSOR_PARALLEL_SIZE="${NEMOTRON_TENSOR_PARALLEL_SIZE:-1}"
-QWEN35B_TENSOR_PARALLEL_SIZE="${QWEN35B_TENSOR_PARALLEL_SIZE:-1}"
-QWEN27B_TENSOR_PARALLEL_SIZE="${QWEN27B_TENSOR_PARALLEL_SIZE:-2}"
-NEMOTRON_GPUS_PER_WORKER="${NEMOTRON_GPUS_PER_WORKER:-${NEMOTRON_TENSOR_PARALLEL_SIZE}}"
-QWEN35B_GPUS_PER_WORKER="${QWEN35B_GPUS_PER_WORKER:-${QWEN35B_TENSOR_PARALLEL_SIZE}}"
-QWEN27B_GPUS_PER_WORKER="${QWEN27B_GPUS_PER_WORKER:-${QWEN27B_TENSOR_PARALLEL_SIZE}}"
-KV_EVENTS_ENDPOINT="${KV_EVENTS_ENDPOINT:-tcp://*:5557}"
 MODEL_CATALOG_IMAGE="${MODEL_CATALOG_IMAGE:-python:3.12-alpine}"
-DYNAMO_VERSION="${DYNAMO_VERSION:-1.2.0}"
-DYNAMO_EPP_IMAGE="${DYNAMO_EPP_IMAGE:-nvcr.io/nvidia/ai-dynamo/dynamo-frontend:${DYNAMO_VERSION}}"
-DYNAMO_EPP_NIXL_DIR="${DYNAMO_EPP_NIXL_DIR:-/opt/dynamo/venv/lib/python3.12/site-packages/.nixl_cu12.mesonpy.libs}"
-DYNAMO_EPP_NIXL_PLUGIN_DIR="${DYNAMO_EPP_NIXL_PLUGIN_DIR:-${DYNAMO_EPP_NIXL_DIR}/plugins}"
-DYNAMO_EPP_STAGED_UCX_DIR="${DYNAMO_EPP_STAGED_UCX_DIR:-/opt/dynamo/epp-ucx}"
-DYNAMO_EPP_LD_LIBRARY_PATH="${DYNAMO_EPP_LD_LIBRARY_PATH:-${DYNAMO_EPP_NIXL_DIR}:${DYNAMO_EPP_NIXL_PLUGIN_DIR}:${DYNAMO_EPP_STAGED_UCX_DIR}:${DYNAMO_EPP_STAGED_UCX_DIR}/ucx}"
-EPP_STAGE_UCX_LIBS="${EPP_STAGE_UCX_LIBS:-1}"
-EPP_ENABLE_DYN_DECODE="${EPP_ENABLE_DYN_DECODE:-1}"
-EPP_NODE_HOSTNAMES="${EPP_NODE_HOSTNAMES:-}"
-
-# Worker transport profile and serving mode.
-#   TRANSPORT_PROFILE=tcp  (default) keeps the historical TCP-only NIXL/UCX
-#                          transport so deployments are unchanged.
-#   TRANSPORT_PROFILE=rdma enables RDMA/InfiniBand + GPUDirect RDMA for the
-#                          worker KV transport (UCX rc/ib) and NCCL IB. Validate
-#                          the fabric first with: ./deploy.sh doctor
-#   SERVING_MODE=agg       (default) one aggregated worker per backend.
-#   SERVING_MODE=disagg    split each backend into prefill + decode workers;
-#                          requires TRANSPORT_PROFILE=rdma (KV moves over NIXL).
-TRANSPORT_PROFILE="${TRANSPORT_PROFILE:-tcp}"
-RDMA_UCX_NET_DEVICES="${RDMA_UCX_NET_DEVICES:-mlx5_0:1}"
-RDMA_NCCL_IB_HCA="${RDMA_NCCL_IB_HCA:-mlx5_0,mlx5_1}"
-RDMA_NCCL_SOCKET_IFNAME="${RDMA_NCCL_SOCKET_IFNAME:-eth0}"
-RDMA_RESOURCE_NAME="${RDMA_RESOURCE_NAME:-}"
-SERVING_MODE="${SERVING_MODE:-agg}"
 RUN_DOCTOR="${RUN_DOCTOR:-0}"
 DOCTOR_STRICT="${DOCTOR_STRICT:-0}"
 DELETE_WAIT_SECONDS="${DELETE_WAIT_SECONDS:-120}"
@@ -82,11 +48,15 @@ DELETE_WAIT_SECONDS="${DELETE_WAIT_SECONDS:-120}"
 NEMOTRON_IMAGE_REPOSITORY="${NEMOTRON_IMAGE_REPOSITORY:-${REGISTRY}/nemotron-3-nano-omni}"
 QWEN35B_IMAGE_REPOSITORY="${QWEN35B_IMAGE_REPOSITORY:-${REGISTRY}/qwen36-35b-dynamo}"
 QWEN27B_IMAGE_REPOSITORY="${QWEN27B_IMAGE_REPOSITORY:-${REGISTRY}/qwen36-27b-dynamo}"
+GEMMA431B_IMAGE_REPOSITORY="${GEMMA431B_IMAGE_REPOSITORY:-${REGISTRY}/gemma-4-31b-it-dynamo}"
+NEMOTRONNANO_IMAGE_REPOSITORY="${NEMOTRONNANO_IMAGE_REPOSITORY:-${REGISTRY}/nemotron-3-nano-30b-a3b-nvfp4-dynamo}"
 WORKBENCH_IMAGE_REPOSITORY="${WORKBENCH_IMAGE_REPOSITORY:-${REGISTRY}/routing-workbench}"
 
 NEMOTRON_IMAGE="${NEMOTRON_IMAGE_REPOSITORY}:${IMAGE_TAG}"
 QWEN35B_IMAGE="${QWEN35B_IMAGE_REPOSITORY}:${IMAGE_TAG}"
 QWEN27B_IMAGE="${QWEN27B_IMAGE_REPOSITORY}:${IMAGE_TAG}"
+GEMMA431B_IMAGE="${GEMMA431B_IMAGE_REPOSITORY}:${IMAGE_TAG}"
+NEMOTRONNANO_IMAGE="${NEMOTRONNANO_IMAGE_REPOSITORY}:${IMAGE_TAG}"
 WORKBENCH_IMAGE="${WORKBENCH_IMAGE_REPOSITORY}:${IMAGE_TAG}"
 
 usage() {
@@ -104,17 +74,20 @@ Backends:
   nemotron     nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4 on vLLM
   qwen35b      Qwen/Qwen3.6-35B-A3B-FP8 on vLLM
   qwen27b      Qwen/Qwen3.6-27B-FP8 on SGLang
+  gemma431b    google/gemma-4-31B-it on vLLM
+  nemotronnano nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4 on vLLM
   all          Deploy or delete all backends
 
 Examples:
   ./deploy.sh doctor
   HF_TOKEN=... ./deploy.sh deploy
   HF_TOKEN=... ./deploy.sh deploy qwen35b qwen27b
-  BACKENDS=nemotron,qwen35b ./deploy.sh render
+  HF_TOKEN=... ./deploy.sh deploy gemma431b
+  HF_TOKEN=... ./deploy.sh deploy nemotronnano
+  BACKENDS=nemotron,gemma431b,nemotronnano ./deploy.sh render
   ./deploy.sh delete
   ./deploy.sh delete nemotron
   INSTALL_GATEWAY=1 HF_TOKEN=... ./deploy.sh deploy all
-  TRANSPORT_PROFILE=rdma SERVING_MODE=disagg HF_TOKEN=... ./deploy.sh deploy qwen35b
 
 Common environment:
   NAMESPACE                    default: daedalus-dynamo
@@ -124,36 +97,19 @@ Common environment:
   SKIP_PUSH=1                  skip docker pushes
   SKIP_DEPLOY=1                build/push only
   INSTALL_GATEWAY=1            install/upgrade Gateway API, GAIE, and agentgateway first
-  DYNAMO_VERSION=1.2.0         tag used for the default Dynamo EPP image
-  DYNAMO_EPP_IMAGE=<image>     override the EPP image
-  EPP_STAGE_UCX_LIBS=1         stage UCX runtime libs from the backend image for EPP
-  EPP_ENABLE_DYN_DECODE=1      enable Dynamo KV-aware EPP scorer
-  EPP_ENABLE_DYN_DECODE=0      disable only the dyn-decode scorer if EPP cannot initialize NIXL
-  EPP_NODE_HOSTNAMES=a,b,c     optional comma-separated node hostnames for EPP pods
   DEPLOY_WORKBENCH=0           gateway/backends only by default; set 1 to deploy the shared Dynamo Routing Workbench
   DEPLOY_PHOTO_TAGGER=<0|1>    compatibility alias for DEPLOY_WORKBENCH
   DEFAULT_BACKEND=<backend>    Workbench model backend; defaults to first selected backend
   WORKBENCH_DEFAULT_MODEL=<id> Workbench model override; defaults from DEFAULT_BACKEND
   WORKBENCH_NODEPORT=30153     shared Workbench UI NodePort
-  WORKER_REPLICAS=1            worker replicas for each selected backend
-  NEMOTRON_TENSOR_PARALLEL_SIZE=1  Nemotron vLLM tensor parallel size
-  NEMOTRON_GPUS_PER_WORKER=1    Nemotron worker GPU request/limit
-  QWEN35B_TENSOR_PARALLEL_SIZE=2   Qwen 35B vLLM tensor parallel size
-  QWEN27B_TENSOR_PARALLEL_SIZE=2   Qwen 27B SGLang tensor parallel size
-  KV_CACHE_BLOCK_SIZE=16       EPP and worker KV block/page size
-
-Performance and transport (validate the fabric first with: ./deploy.sh doctor):
-  TRANSPORT_PROFILE=tcp        worker KV transport: tcp (default) or rdma
-  TRANSPORT_PROFILE=rdma       enable InfiniBand/RoCE + GPUDirect RDMA + NCCL IB
-  RDMA_UCX_NET_DEVICES=mlx5_0:1   UCX HCA:port for the rdma profile
-  RDMA_NCCL_IB_HCA=mlx5_0,mlx5_1  NCCL IB HCAs for the rdma profile
-  RDMA_NCCL_SOCKET_IFNAME=eth0    NCCL bootstrap NIC for the rdma profile
-  RDMA_RESOURCE_NAME=          optional RDMA device-plugin resource to request
-  SERVING_MODE=agg             agg (default) or disagg (prefill/decode split)
-  SERVING_MODE=disagg          requires TRANSPORT_PROFILE=rdma
+  GEMMA431B_IMAGE_REPOSITORY=<image-repo> Gemma 4 31B backend image repository
+  NEMOTRONNANO_IMAGE_REPOSITORY=<image-repo> Nemotron Nano text backend image repository
   RUN_DOCTOR=1                 run the cluster doctor before deploy (advisory)
   DOCTOR_STRICT=1              abort deploy if the doctor reports failures
   DELETE_WAIT_SECONDS=120      wait for operator-owned backend resources during delete; set 0 to skip
+
+Backend worker replicas, GPU counts, runtime args, direct services, PVCs, and
+transport settings come from each selected folder's k8s/base YAML.
 EOF
 }
 
@@ -168,38 +124,18 @@ validate_positive_int() {
   [[ "${value}" =~ ^[1-9][0-9]*$ ]] || die "${name} must be a positive integer (got '${value}')."
 }
 
-warn_mutable_image_tag() {
-  if [[ "${IMAGE_TAG}" == "latest" && "${ALLOW_LATEST:-0}" != "1" ]]; then
-    echo "WARN: IMAGE_TAG=latest is mutable. Set ALLOW_LATEST=1 to acknowledge, or omit IMAGE_TAG for timestamp tag." >&2
-  fi
+validate_nodeport() {
+  local name="$1"
+  local value="$2"
+  [[ "${value}" =~ ^[0-9]+$ ]] || die "${name} must be a numeric NodePort (got '${value}')."
+  ((value >= 30000 && value <= 32767)) ||
+    die "${name} must be in the default Kubernetes NodePort range 30000-32767 (got '${value}')."
 }
 
 validate_serving_config() {
-  case "${TRANSPORT_PROFILE}" in
-    tcp | rdma) ;;
-    *) die "TRANSPORT_PROFILE must be 'tcp' or 'rdma' (got '${TRANSPORT_PROFILE}')." ;;
-  esac
-  case "${SERVING_MODE}" in
-    agg | disagg) ;;
-    *) die "SERVING_MODE must be 'agg' or 'disagg' (got '${SERVING_MODE}')." ;;
-  esac
-  if [[ "${SERVING_MODE}" == "disagg" && "${TRANSPORT_PROFILE}" != "rdma" ]]; then
-    die "SERVING_MODE=disagg requires TRANSPORT_PROFILE=rdma and a validated RDMA fabric. Run './deploy.sh doctor' first, then re-run with TRANSPORT_PROFILE=rdma."
+  if workbench_enabled; then
+    validate_nodeport WORKBENCH_NODEPORT "${WORKBENCH_NODEPORT}"
   fi
-  validate_positive_int WORKER_REPLICAS "${WORKER_REPLICAS}"
-  validate_positive_int NEMOTRON_TENSOR_PARALLEL_SIZE "${NEMOTRON_TENSOR_PARALLEL_SIZE}"
-  validate_positive_int QWEN35B_TENSOR_PARALLEL_SIZE "${QWEN35B_TENSOR_PARALLEL_SIZE}"
-  validate_positive_int QWEN27B_TENSOR_PARALLEL_SIZE "${QWEN27B_TENSOR_PARALLEL_SIZE}"
-  validate_positive_int NEMOTRON_GPUS_PER_WORKER "${NEMOTRON_GPUS_PER_WORKER}"
-  validate_positive_int QWEN35B_GPUS_PER_WORKER "${QWEN35B_GPUS_PER_WORKER}"
-  validate_positive_int QWEN27B_GPUS_PER_WORKER "${QWEN27B_GPUS_PER_WORKER}"
-
-  ((NEMOTRON_GPUS_PER_WORKER >= NEMOTRON_TENSOR_PARALLEL_SIZE)) ||
-    die "NEMOTRON_GPUS_PER_WORKER must be >= NEMOTRON_TENSOR_PARALLEL_SIZE."
-  ((QWEN35B_GPUS_PER_WORKER >= QWEN35B_TENSOR_PARALLEL_SIZE)) ||
-    die "QWEN35B_GPUS_PER_WORKER must be >= QWEN35B_TENSOR_PARALLEL_SIZE."
-  ((QWEN27B_GPUS_PER_WORKER >= QWEN27B_TENSOR_PARALLEL_SIZE)) ||
-    die "QWEN27B_GPUS_PER_WORKER must be >= QWEN27B_TENSOR_PARALLEL_SIZE."
 }
 
 normalize_backend() {
@@ -208,6 +144,8 @@ normalize_backend() {
     nemotron|nemotron-omni|omni) printf 'nemotron\n' ;;
     qwen35b|qwen-35b|qwen36-35b|35b) printf 'qwen35b\n' ;;
     qwen27b|qwen-27b|qwen36-27b|27b|sglang) printf 'qwen27b\n' ;;
+    gemma431b|gemma4-31b|gemma-4-31b-it|google-gemma-4-31b-it) printf 'gemma431b\n' ;;
+    nemotronnano|nemotron-nano|nemotron3nano|nvidia-nemotron-3-nano-30b-a3b-nvfp4) printf 'nemotronnano\n' ;;
     *) die "Unknown backend: $1" ;;
   esac
 }
@@ -221,7 +159,7 @@ select_backends() {
     [[ -n "${requested}" ]] || continue
     normalized="$(normalize_backend "${requested}")"
     if [[ "${normalized}" == "all" ]]; then
-      SELECTED_BACKENDS=(nemotron qwen35b qwen27b)
+      SELECTED_BACKENDS=(nemotron qwen35b qwen27b gemma431b nemotronnano)
       return
     fi
     if [[ -z "${seen[${normalized}]:-}" ]]; then
@@ -234,64 +172,18 @@ select_backends() {
 
   for backend in "${SELECTED_BACKENDS[@]}"; do
     case "${backend}" in
-      nemotron|qwen35b|qwen27b) ;;
+      nemotron|qwen35b|qwen27b|gemma431b|nemotronnano) ;;
       *) die "Internal backend normalization error: ${backend}" ;;
     esac
   done
 }
 
 backend_model() {
-  case "$1" in
-    nemotron) printf 'nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4\n' ;;
-    qwen35b) printf 'Qwen/Qwen3.6-35B-A3B-FP8\n' ;;
-    qwen27b) printf 'Qwen/Qwen3.6-27B-FP8\n' ;;
-  esac
+  backend_manifest_value "$1" model
 }
 
 backend_dgd() {
-  case "$1" in
-    nemotron) printf 'nemotron-omni-vllm-agg\n' ;;
-    qwen35b) printf 'qwen36-35b-vllm-agg\n' ;;
-    qwen27b) printf 'qwen36-27b-sglang-agg\n' ;;
-  esac
-}
-
-backend_framework() {
-  case "$1" in
-    nemotron|qwen35b) printf 'vllm\n' ;;
-    qwen27b) printf 'sglang\n' ;;
-  esac
-}
-
-backend_worker_component() {
-  case "$1" in
-    nemotron|qwen35b) printf 'VllmWorker\n' ;;
-    qwen27b) printf 'SGLangWorker\n' ;;
-  esac
-}
-
-backend_tensor_parallel_size() {
-  case "$1" in
-    nemotron) printf '%s\n' "${NEMOTRON_TENSOR_PARALLEL_SIZE}" ;;
-    qwen35b) printf '%s\n' "${QWEN35B_TENSOR_PARALLEL_SIZE}" ;;
-    qwen27b) printf '%s\n' "${QWEN27B_TENSOR_PARALLEL_SIZE}" ;;
-  esac
-}
-
-backend_gpus_per_worker() {
-  case "$1" in
-    nemotron) printf '%s\n' "${NEMOTRON_GPUS_PER_WORKER}" ;;
-    qwen35b) printf '%s\n' "${QWEN35B_GPUS_PER_WORKER}" ;;
-    qwen27b) printf '%s\n' "${QWEN27B_GPUS_PER_WORKER}" ;;
-  esac
-}
-
-backend_storage_prefix() {
-  case "$1" in
-    nemotron) printf 'nemotron\n' ;;
-    qwen35b) printf 'qwen35b\n' ;;
-    qwen27b) printf 'qwen27b\n' ;;
-  esac
+  backend_manifest_value "$1" dgd
 }
 
 backend_image() {
@@ -299,6 +191,8 @@ backend_image() {
     nemotron) printf '%s\n' "${NEMOTRON_IMAGE}" ;;
     qwen35b) printf '%s\n' "${QWEN35B_IMAGE}" ;;
     qwen27b) printf '%s\n' "${QWEN27B_IMAGE}" ;;
+    gemma431b) printf '%s\n' "${GEMMA431B_IMAGE}" ;;
+    nemotronnano) printf '%s\n' "${NEMOTRONNANO_IMAGE}" ;;
   esac
 }
 
@@ -307,6 +201,8 @@ backend_build_dir() {
     nemotron) printf '%s\n' "nemotron-3-nano-omni-dynamo" ;;
     qwen35b) printf '%s\n' "qwen-36-35b-dynamo" ;;
     qwen27b) printf '%s\n' "qwen-36-27b-dynamo" ;;
+    gemma431b) printf '%s\n' "gemma-4-31b-it-dynamo" ;;
+    nemotronnano) printf '%s\n' "nemotron-3-nano-30b-a3b-nvfp4-dynamo" ;;
   esac
 }
 
@@ -315,7 +211,68 @@ backend_build_arg() {
     nemotron) printf '%s\n' "${NEMOTRON_BASE_IMAGE:-${BASE_IMAGE:-}}" ;;
     qwen35b) printf '%s\n' "${QWEN35B_BASE_IMAGE:-${BASE_IMAGE:-}}" ;;
     qwen27b) printf '%s\n' "${QWEN27B_BASE_IMAGE:-${BASE_IMAGE:-}}" ;;
+    gemma431b) printf '%s\n' "${GEMMA431B_BASE_IMAGE:-${BASE_IMAGE:-}}" ;;
+    nemotronnano) printf '%s\n' "${NEMOTRONNANO_BASE_IMAGE:-${BASE_IMAGE:-}}" ;;
   esac
+}
+
+backend_kustomize_dir() {
+  printf '%s/k8s/base\n' "$(backend_build_dir "$1")"
+}
+
+kustomize_build() {
+  local dir="$1"
+  if command -v kubectl > /dev/null 2>&1; then
+    kubectl kustomize "${dir}"
+    return
+  fi
+  if command -v kustomize > /dev/null 2>&1; then
+    kustomize build "${dir}"
+    return
+  fi
+  die "kubectl or kustomize is required to render backend YAML from ${dir}."
+}
+
+render_backend() {
+  printf '%s\n' '---'
+  kustomize_build "$(backend_kustomize_dir "$1")"
+}
+
+backend_manifest_value() {
+  local backend="$1"
+  local field="$2"
+  local value
+
+  case "${field}" in
+    dgd)
+      value="$(
+        render_backend "${backend}" | awk '
+          /^---/ { in_dgd = 0; in_meta = 0 }
+          $1 == "kind:" && $2 == "DynamoGraphDeployment" { in_dgd = 1; next }
+          in_dgd && $1 == "metadata:" { in_meta = 1; next }
+          in_dgd && in_meta && $1 == "name:" { print $2; exit }
+        '
+      )"
+      ;;
+    model)
+      value="$(
+        render_backend "${backend}" | awk '
+          $1 == "-" && $2 == "name:" && $3 == "MODEL_NAME" { want = 1; next }
+          want && $1 == "value:" {
+            $1 = ""
+            sub(/^[[:space:]]*/, "")
+            gsub(/^"|"$/, "")
+            print
+            exit
+          }
+        '
+      )"
+      ;;
+    *) die "Internal manifest lookup error: ${field}" ;;
+  esac
+
+  [[ -n "${value}" ]] || die "Could not read ${field} for backend ${backend} from $(backend_kustomize_dir "${backend}")."
+  printf '%s\n' "${value}"
 }
 
 default_backend() {
@@ -509,1053 +466,6 @@ push_images() {
   if workbench_enabled; then
     echo "==> Pushing ${WORKBENCH_IMAGE}"
     docker push "${WORKBENCH_IMAGE}"
-  fi
-}
-
-render_backend_storage() {
-  local backend="$1"
-  local prefix model_cache redis redis_data
-  prefix="$(backend_storage_prefix "${backend}")"
-  model_cache="${prefix}-model-cache"
-  redis="${prefix}-redis"
-  redis_data="${prefix}-redis-data"
-
-  cat <<EOF
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: ${model_cache}
-  labels:
-    app.kubernetes.io/name: ${model_cache}
-    app.kubernetes.io/part-of: ${APP_LABEL_VALUE}
-    daedalus-dynamo/backend: ${backend}
-spec:
-  accessModes:
-    - ReadWriteMany
-  resources:
-    requests:
-      storage: ${MODEL_CACHE_STORAGE:-100Gi}
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: ${redis_data}
-  labels:
-    app.kubernetes.io/name: ${redis}
-    app.kubernetes.io/part-of: ${APP_LABEL_VALUE}
-    daedalus-dynamo/backend: ${backend}
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: ${redis}
-  labels:
-    app.kubernetes.io/name: ${redis}
-    app.kubernetes.io/part-of: ${APP_LABEL_VALUE}
-    daedalus-dynamo/backend: ${backend}
-spec:
-  type: ClusterIP
-  selector:
-    app.kubernetes.io/name: ${redis}
-  ports:
-    - name: redis
-      port: 6379
-      targetPort: 6379
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: ${redis}
-  labels:
-    app.kubernetes.io/name: ${redis}
-    app.kubernetes.io/part-of: ${APP_LABEL_VALUE}
-    daedalus-dynamo/backend: ${backend}
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: ${redis}
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: ${redis}
-        app.kubernetes.io/part-of: ${APP_LABEL_VALUE}
-        daedalus-dynamo/backend: ${backend}
-    spec:
-      securityContext:
-        fsGroup: 999
-        fsGroupChangePolicy: OnRootMismatch
-      containers:
-        - name: redis
-          image: redis:7-alpine
-          imagePullPolicy: IfNotPresent
-          securityContext:
-            runAsUser: 999
-            runAsGroup: 999
-            runAsNonRoot: true
-            allowPrivilegeEscalation: false
-          args: ["--appendonly", "yes", "--dir", "/data"]
-          ports:
-            - name: redis
-              containerPort: 6379
-          resources:
-            requests:
-              cpu: 500m
-              memory: 2Gi
-            limits:
-              cpu: "1"
-              memory: 4Gi
-          startupProbe:
-            tcpSocket:
-              port: 6379
-            periodSeconds: 5
-            failureThreshold: 30
-          readinessProbe:
-            tcpSocket:
-              port: 6379
-            initialDelaySeconds: 2
-            periodSeconds: 5
-          livenessProbe:
-            tcpSocket:
-              port: 6379
-            periodSeconds: 10
-          volumeMounts:
-            - name: redis-data
-              mountPath: /data
-      volumes:
-        - name: redis-data
-          persistentVolumeClaim:
-            claimName: ${redis_data}
-EOF
-}
-
-render_epp_config() {
-  cat <<'EOF'
-      eppConfig:
-        config:
-          plugins:
-            - type: disagg-profile-handler
-            - name: decode-filter
-              type: label-filter
-              parameters:
-                label: nvidia.com/dynamo-sub-component-type
-                validValues:
-                  - decode
-                allowsNoLabel: true
-            - name: picker
-              type: max-score-picker
-EOF
-
-  if [[ "${EPP_ENABLE_DYN_DECODE,,}" != "0" && "${EPP_ENABLE_DYN_DECODE,,}" != "false" ]]; then
-    cat <<'EOF'
-            - name: dyn-decode
-              type: dyn-decode-scorer
-EOF
-  fi
-
-  cat <<'EOF'
-          schedulingProfiles:
-            - name: decode
-              plugins:
-                - pluginRef: decode-filter
-                  weight: 1
-EOF
-
-  if [[ "${EPP_ENABLE_DYN_DECODE,,}" != "0" && "${EPP_ENABLE_DYN_DECODE,,}" != "false" ]]; then
-    cat <<'EOF'
-                - pluginRef: dyn-decode
-                  weight: 1
-EOF
-  fi
-
-  cat <<'EOF'
-                - pluginRef: picker
-                  weight: 1
-EOF
-}
-
-render_dgd_header() {
-  local backend="$1"
-  local dgd framework model_cache
-  dgd="$(backend_dgd "${backend}")"
-  framework="$(backend_framework "${backend}")"
-  model_cache="$(backend_storage_prefix "${backend}")-model-cache"
-
-  cat <<EOF
----
-apiVersion: nvidia.com/v1alpha1
-kind: DynamoGraphDeployment
-metadata:
-  name: ${dgd}
-  labels:
-    app.kubernetes.io/name: ${dgd}
-    app.kubernetes.io/part-of: ${APP_LABEL_VALUE}
-    daedalus-dynamo/backend: ${backend}
-spec:
-  backendFramework: ${framework}
-  pvcs:
-    - name: ${model_cache}
-      create: false
-  services:
-EOF
-}
-
-render_epp_node_affinity() {
-  local host
-  local -a hosts=()
-  [[ -n "${EPP_NODE_HOSTNAMES}" ]] || return 0
-
-  cat <<EOF
-        affinity:
-          nodeAffinity:
-            requiredDuringSchedulingIgnoredDuringExecution:
-              nodeSelectorTerms:
-                - matchExpressions:
-                    - key: kubernetes.io/hostname
-                      operator: In
-                      values:
-EOF
-
-  IFS=',' read -r -a hosts <<< "${EPP_NODE_HOSTNAMES}"
-  for host in "${hosts[@]}"; do
-    host="${host//[[:space:]]/}"
-    [[ -n "${host}" ]] || continue
-    cat <<EOF
-                        - ${host}
-EOF
-  done
-}
-
-render_epp_ucx_staging() {
-  local backend="$1"
-  local image dgd model_cache
-  image="$(backend_image "${backend}")"
-  dgd="$(backend_dgd "${backend}")"
-  model_cache="$(backend_storage_prefix "${backend}")-model-cache"
-
-  cat <<EOF
-        securityContext:
-          fsGroup: 988
-          fsGroupChangePolicy: OnRootMismatch
-EOF
-
-  if [[ "${EPP_STAGE_UCX_LIBS,,}" != "0" && "${EPP_STAGE_UCX_LIBS,,}" != "false" ]]; then
-    cat <<EOF
-        initContainers:
-          - name: stage-ucx-libs
-            image: ${image}
-            imagePullPolicy: IfNotPresent
-            command:
-              - /bin/bash
-              - -lc
-            args:
-              - |
-                set -euo pipefail
-                src=""
-                for candidate in \
-                  /usr/local/lib/python3.12/dist-packages/nixl_cu12.libs \
-                  /usr/local/lib/python3.12/dist-packages/nixl_cu13.libs \
-                  /opt/dynamo/venv/lib/python3.12/site-packages/nixl_cu12.libs \
-                  /opt/dynamo/venv/lib/python3.12/site-packages/nixl_cu13.libs; do
-                  if [ -d "\${candidate}" ]; then
-                    src="\${candidate}"
-                    break
-                  fi
-                done
-                if [ -z "\${src}" ]; then
-                  echo "ERROR: no nixl_cu*.libs directory found in backend image" >&2
-                  exit 1
-                fi
-                rm -rf /staged-ucx/*
-                cp -a "\${src}/." /staged-ucx/
-                for lib in libucp libucs libuct libucm; do
-                  target="\$(find /staged-ucx -maxdepth 1 -name "\${lib}-*.so*" | sort | head -1 || true)"
-                  if [ -n "\${target}" ]; then
-                    ln -sf "\$(basename "\${target}")" "/staged-ucx/\${lib}.so.0"
-                    ln -sf "\$(basename "\${target}")" "/staged-ucx/\${lib}.so"
-                  fi
-                done
-            volumeMounts:
-              - name: epp-ucx-libs
-                mountPath: /staged-ucx
-EOF
-  fi
-
-  cat <<EOF
-        volumes:
-          - name: epp-config
-            configMap:
-              name: ${dgd}-epp-config
-          - name: ${model_cache}
-            persistentVolumeClaim:
-              claimName: ${model_cache}
-EOF
-
-  if [[ "${EPP_STAGE_UCX_LIBS,,}" != "0" && "${EPP_STAGE_UCX_LIBS,,}" != "false" ]]; then
-    cat <<EOF
-          - name: epp-ucx-libs
-            emptyDir: {}
-EOF
-  fi
-}
-
-render_epp_service() {
-  local backend="$1"
-  local model image dgd model_cache modelexpress_service use_kv_events
-  model="$(backend_model "${backend}")"
-  image="${DYNAMO_EPP_IMAGE}"
-  dgd="$(backend_dgd "${backend}")"
-  model_cache="$(backend_storage_prefix "${backend}")-model-cache"
-  modelexpress_service="${dgd}-modelexpress"
-  use_kv_events="true"
-  if [[ "${EPP_ENABLE_DYN_DECODE,,}" == "0" || "${EPP_ENABLE_DYN_DECODE,,}" == "false" ]]; then
-    use_kv_events="false"
-  fi
-  local enforce_disagg="false"
-  [[ "${SERVING_MODE}" == "disagg" ]] && enforce_disagg="true"
-
-  cat <<EOF
-    Epp:
-      componentType: epp
-      envFromSecret: ${HF_TOKEN_SECRET}
-      replicas: 1
-      volumeMounts:
-        - name: ${model_cache}
-          mountPoint: /model
-      extraPodSpec:
-EOF
-  render_epp_node_affinity
-  render_epp_ucx_staging "${backend}"
-  cat <<EOF
-        mainContainer:
-          image: ${image}
-          imagePullPolicy: IfNotPresent
-          command:
-            - /bin/sh
-            - -lc
-            - |
-              fixed_args=""
-              for arg in "\$@"; do
-                case "\$arg" in
-                  -pool-name) arg=--pool-name ;;
-                  -pool-namespace) arg=--pool-namespace ;;
-                  -pool-group) arg=--pool-group ;;
-                  -grpc-port) arg=--grpc-port ;;
-                  -grpc-health-port) arg=--grpc-health-port ;;
-                  -config-file) arg=--config-file ;;
-                esac
-                fixed_args="\${fixed_args} '\${arg}'"
-              done
-              eval "set -- \${fixed_args}"
-              exec /epp "\$@"
-            - epp-wrapper
-          env:
-            - name: LD_LIBRARY_PATH
-              value: "${DYNAMO_EPP_LD_LIBRARY_PATH}"
-            - name: NIXL_PLUGIN_DIR
-              value: "${DYNAMO_EPP_NIXL_PLUGIN_DIR}"
-            - name: DYN_MODEL_NAME
-              value: ${model}
-            - name: DYN_DECODE_FALLBACK
-              value: "true"
-            - name: DYN_ENFORCE_DISAGG
-              value: "${enforce_disagg}"
-            - name: DYN_KV_CACHE_BLOCK_SIZE
-              value: "${KV_CACHE_BLOCK_SIZE}"
-            - name: DYN_USE_KV_EVENTS
-              value: "${use_kv_events}"
-            - name: DYN_REQUEST_PLANE
-              value: tcp
-            - name: DYN_EVENT_PLANE
-              value: zmq
-            - name: DYN_TOKENIZER
-              value: fastokens
-            - name: MODEL_CACHE_PATH
-              value: /model/.model-express/cache
-            - name: MODEL_EXPRESS_URL
-              value: http://${modelexpress_service}:8000
-            - name: MODEL_EXPRESS_HOST
-              value: ${modelexpress_service}
-            - name: MODEL_EXPRESS_PORT
-              value: "8000"
-            - name: HF_HUB_CACHE
-              value: /model/.model-express/cache
-EOF
-
-  cat <<EOF
-          volumeMounts:
-            - name: ${model_cache}
-              mountPath: /model
-            - name: epp-config
-              mountPath: /etc/epp
-              readOnly: true
-EOF
-
-  if [[ "${EPP_STAGE_UCX_LIBS,,}" != "0" && "${EPP_STAGE_UCX_LIBS,,}" != "false" ]]; then
-    cat <<EOF
-            - name: epp-ucx-libs
-              mountPath: ${DYNAMO_EPP_STAGED_UCX_DIR}
-EOF
-  fi
-
-  render_epp_config
-}
-
-render_modelexpress_service() {
-  local backend="$1"
-  local model dgd model_cache modelexpress_service redis
-  model="$(backend_model "${backend}")"
-  dgd="$(backend_dgd "${backend}")"
-  model_cache="$(backend_storage_prefix "${backend}")-model-cache"
-  modelexpress_service="${dgd}-modelexpress"
-  redis="$(backend_storage_prefix "${backend}")-redis"
-
-  cat <<EOF
-
-    ModelExpress:
-      componentType: frontend
-      envFromSecret: ${HF_TOKEN_SECRET}
-      replicas: 1
-      livenessProbe:
-        tcpSocket:
-          port: 8000
-        initialDelaySeconds: 30
-        periodSeconds: 10
-        timeoutSeconds: 5
-        failureThreshold: 3
-      readinessProbe:
-        tcpSocket:
-          port: 8000
-        initialDelaySeconds: 10
-        periodSeconds: 5
-        timeoutSeconds: 3
-        failureThreshold: 3
-      volumeMounts:
-        - name: ${model_cache}
-          mountPoint: /model
-      extraPodSpec:
-        mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/modelexpress-server:0.3.0
-          imagePullPolicy: IfNotPresent
-          env:
-            - name: MODEL_EXPRESS_SERVER_PORT
-              value: "8000"
-            - name: MODEL_EXPRESS_LOG_LEVEL
-              value: info
-            - name: MODEL_EXPRESS_CACHE_DIRECTORY
-              value: /model/.model-express/cache
-            - name: MX_METADATA_BACKEND
-              value: redis
-            - name: MX_REDIS_HOST
-              value: ${redis}
-            - name: MX_REDIS_PORT
-              value: "6379"
-            - name: REDIS_URL
-              value: redis://${redis}:6379
-            - name: MODEL_NAME
-              value: ${model}
-            - name: MODEL_CACHE_PATH
-              value: /model/.model-express/cache
-            - name: HF_HUB_CACHE
-              value: /model/.model-express/cache
-            - name: HF_XET_HIGH_PERFORMANCE
-              value: "1"
-          command:
-            - /bin/bash
-            - -lc
-          args:
-            - |
-              set -euo pipefail
-
-              echo "Waiting for Redis metadata backend..."
-              for i in \$(seq 1 60); do
-                if timeout 1 bash -c "</dev/tcp/\${MX_REDIS_HOST}/\${MX_REDIS_PORT}" 2> /dev/null; then
-                  echo "Redis is reachable."
-                  break
-                fi
-                if [ "\$i" -eq 60 ]; then
-                  echo "ERROR: Redis did not become reachable at \${MX_REDIS_HOST}:\${MX_REDIS_PORT}" >&2
-                  exit 1
-                fi
-                echo "Waiting for Redis... (\$i/60)"
-                sleep 2
-              done
-
-              echo "Starting Model Express Server..."
-              ./modelexpress-server &
-
-              SERVER_PID=\$!
-              echo "Server started with PID: \$SERVER_PID"
-
-              echo "Setting up Model Express configuration..."
-              mkdir -p "\$MODEL_CACHE_PATH"
-              mkdir -p /model/.model-express
-              cat > /model/.model-express/config.yaml <<CONFIG_EOF
-              local_path: \$MODEL_CACHE_PATH
-              server_endpoint: http://${modelexpress_service}:8000
-              timeout_secs: null
-              CONFIG_EOF
-
-              echo "Waiting for server to be ready..."
-              for i in \$(seq 1 60); do
-                if ./modelexpress-cli --endpoint http://localhost:8000 health > /dev/null 2>&1; then
-                  echo "Server is ready!"
-                  break
-                fi
-                echo "Waiting for server... (\$i/60)"
-                sleep 2
-              done
-
-              echo "Downloading \$MODEL_NAME model..."
-              ./modelexpress-cli --endpoint http://localhost:8000 \
-                --cache-path "\$MODEL_CACHE_PATH" \
-                model download "\$MODEL_NAME" --strategy server-only
-
-              SNAPSHOTS_PARENT="\$MODEL_CACHE_PATH/models--\${MODEL_NAME//\\//--}/snapshots"
-              SNAPSHOT_DIR="\$(ls -td "\$SNAPSHOTS_PARENT"/*/ 2>/dev/null | head -1 || true)"
-              if [ -n "\$SNAPSHOT_DIR" ]; then
-                SNAPSHOTS_PARENT=\$(dirname "\$SNAPSHOT_DIR")
-                ln -sfn "\$(basename "\$SNAPSHOT_DIR")" "\$SNAPSHOTS_PARENT/latest"
-                echo "Created symlink: latest -> \$(basename "\$SNAPSHOT_DIR")"
-              fi
-
-              echo "Server PID: \$SERVER_PID"
-              wait "\$SERVER_PID"
-EOF
-}
-
-render_frontend_sidecar() {
-  local image="$1"
-  local dgd="$2"
-  cat <<EOF
-        containers:
-          - name: sidecar-frontend
-            image: ${image}
-            imagePullPolicy: IfNotPresent
-            envFrom:
-              - secretRef:
-                  name: ${HF_TOKEN_SECRET}
-            env:
-              - name: DYN_HTTP_BODY_LIMIT_MB
-                value: "400"
-              - name: DYN_REQUEST_PLANE
-                value: tcp
-              - name: DYN_EVENT_PLANE
-                value: zmq
-              - name: DYN_TOKENIZER
-                value: fastokens
-              - name: DYN_COMPONENT
-                value: frontend
-              - name: DYN_DISCOVERY_BACKEND
-                value: kubernetes
-              - name: DYN_NAMESPACE
-                value: ${NAMESPACE}-${dgd}
-              - name: DYN_PARENT_DGD_K8S_NAME
-                value: ${dgd}
-              - name: DYN_PARENT_DGD_K8S_NAMESPACE
-                value: ${NAMESPACE}
-              - name: NATS_SERVER
-                value: nats://dynamo-platform-nats.dynamo-system.svc.cluster.local:4222
-              - name: POD_NAME
-                valueFrom:
-                  fieldRef:
-                    fieldPath: metadata.name
-              - name: POD_NAMESPACE
-                valueFrom:
-                  fieldRef:
-                    fieldPath: metadata.namespace
-              - name: POD_UID
-                valueFrom:
-                  fieldRef:
-                    fieldPath: metadata.uid
-            command:
-              - python3
-            args:
-              - -m
-              - dynamo.frontend
-              - --router-mode
-              - direct
-              - --enable-anthropic-api
-              - --strip-anthropic-preamble
-              - --enable-streaming-tool-dispatch
-              - --enable-streaming-reasoning-dispatch
-              - --http-port
-              - "8000"
-            ports:
-              - name: http
-                containerPort: 8000
-            startupProbe:
-              httpGet:
-                path: /health
-                port: 8000
-              periodSeconds: 10
-              timeoutSeconds: 10
-              failureThreshold: 180
-            readinessProbe:
-              httpGet:
-                path: /health
-                port: 8000
-              periodSeconds: 10
-              timeoutSeconds: 5
-              failureThreshold: 6
-EOF
-}
-
-render_worker_transport_env() {
-  # Emit the worker NIXL/UCX/NCCL transport env entries at the 12-space indent of
-  # the surrounding env: list. The tcp profile is byte-for-byte the historical
-  # default; the rdma profile turns on InfiniBand/RoCE + GPUDirect RDMA and the
-  # NCCL IB controls that disaggregated KV transfer depends on.
-  if [[ "${TRANSPORT_PROFILE}" == "rdma" ]]; then
-    cat <<EOF
-            - name: UCX_NET_DEVICES
-              value: ${RDMA_UCX_NET_DEVICES}
-            - name: UCX_TLS
-              value: rc,ib,cuda_ipc,cuda_copy
-            - name: UCX_IB_GPU_DIRECT_RDMA
-              value: "1"
-            - name: NCCL_IB_HCA
-              value: ${RDMA_NCCL_IB_HCA}
-            - name: NCCL_SOCKET_IFNAME
-              value: ${RDMA_NCCL_SOCKET_IFNAME}
-            - name: NCCL_IB_DISABLE
-              value: "0"
-EOF
-  else
-    cat <<EOF
-            - name: UCX_NET_DEVICES
-              value: eth0
-            - name: UCX_TLS
-              value: tcp,cuda_copy,cuda_ipc
-EOF
-  fi
-}
-
-render_worker_resources() {
-  local backend="$1"
-  local gpus_per_worker
-  gpus_per_worker="$(backend_gpus_per_worker "${backend}")"
-  # Worker resources block. GPU count is backend-specific; the rdma profile
-  # additionally requests an RDMA device-plugin resource when RDMA_RESOURCE_NAME
-  # is set (some fabrics expose RDMA via hostNetwork/shared HCA and need no
-  # resource, so this stays opt-in).
-  cat <<EOF
-      resources:
-        limits:
-          gpu: "${gpus_per_worker}"
-EOF
-  if [[ "${TRANSPORT_PROFILE}" == "rdma" && -n "${RDMA_RESOURCE_NAME}" ]]; then
-    printf '          %s: "1"\n' "${RDMA_RESOURCE_NAME}"
-  fi
-  cat <<EOF
-        requests:
-          gpu: "${gpus_per_worker}"
-EOF
-  if [[ "${TRANSPORT_PROFILE}" == "rdma" && -n "${RDMA_RESOURCE_NAME}" ]]; then
-    printf '          %s: "1"\n' "${RDMA_RESOURCE_NAME}"
-  fi
-}
-
-render_vllm_worker() {
-  local backend="$1"
-  local role="${2:-agg}"
-  local disagg_flag="" emit_kv_events=1
-  case "${role}" in
-    prefill) disagg_flag="--disaggregation-mode prefill" ;;
-    decode) disagg_flag="--disaggregation-mode decode" ;;
-  esac
-  local component model image dgd model_cache modelexpress_service tool_parser reasoning_parser max_tokens max_len max_seqs tensor_parallel_size
-  component="$(backend_worker_component "${backend}")"
-  case "${role}" in
-    prefill) component="${component/Worker/PrefillWorker}" ;;
-    decode) component="${component/Worker/DecodeWorker}" ;;
-  esac
-  model="$(backend_model "${backend}")"
-  image="$(backend_image "${backend}")"
-  dgd="$(backend_dgd "${backend}")"
-  model_cache="$(backend_storage_prefix "${backend}")-model-cache"
-  modelexpress_service="${dgd}-modelexpress"
-  tensor_parallel_size="$(backend_tensor_parallel_size "${backend}")"
-
-  if [[ "${backend}" == "nemotron" ]]; then
-    tool_parser="nemotron_nano"
-    reasoning_parser="nemotron_nano"
-    max_tokens="2560"
-    max_len="65536"
-    max_seqs="8"
-  else
-    tool_parser="qwen3_coder"
-    reasoning_parser="qwen3"
-    max_tokens="8192"
-    max_len="128000"
-    max_seqs="8"
-    # Qwen3.6 needs the hybrid KV cache manager, which this vLLM build disables
-    # when worker-side KV events are configured. Keep KV events off for qwen35b
-    # (see qwen-36-35b-dynamo/README.md "Event plane transport").
-    emit_kv_events=0
-  fi
-  # Decode workers in disaggregated serving do not publish KV events.
-  [[ "${role}" == "decode" ]] && emit_kv_events=0
-
-  cat <<EOF
-
-    ${component}:
-      componentType: worker
-      envFromSecret: ${HF_TOKEN_SECRET}
-      replicas: ${WORKER_REPLICAS}
-EOF
-  render_worker_resources "${backend}"
-  cat <<EOF
-      livenessProbe:
-        httpGet:
-          path: /live
-          port: system
-        periodSeconds: 10
-        timeoutSeconds: 5
-        failureThreshold: 6
-      readinessProbe:
-        httpGet:
-          path: /health
-          port: system
-        periodSeconds: 10
-        timeoutSeconds: 5
-        failureThreshold: 3
-      volumeMounts:
-        - name: ${model_cache}
-          mountPoint: /model
-      sharedMemory:
-        size: 64Gi
-EOF
-  cat <<EOF
-      extraPodSpec:
-EOF
-  render_frontend_sidecar "${image}" "${dgd}"
-  cat <<EOF
-        affinity:
-          nodeAffinity:
-            requiredDuringSchedulingIgnoredDuringExecution:
-              nodeSelectorTerms:
-                - matchExpressions:
-                    - key: nvidia.com/gpu.memory
-                      operator: Gt
-                      values:
-                        - "40959"
-          podAntiAffinity:
-            requiredDuringSchedulingIgnoredDuringExecution:
-              - labelSelector:
-                  matchLabels:
-                    nvidia.com/dynamo-graph-deployment-name: ${dgd}
-                    nvidia.com/dynamo-component: ${component}
-                topologyKey: kubernetes.io/hostname
-        mainContainer:
-          image: ${image}
-          imagePullPolicy: IfNotPresent
-          startupProbe:
-            httpGet:
-              path: /health
-              port: 9090
-            periodSeconds: 10
-            timeoutSeconds: 10
-            failureThreshold: 360
-          env:
-            - name: MODEL_NAME
-              value: ${model}
-            - name: HF_HUB_CACHE
-              value: /model/.model-express/cache
-            - name: MODEL_CACHE_PATH
-              value: /model/.model-express/cache
-            - name: MODEL_EXPRESS_URL
-              value: http://${modelexpress_service}:8000
-            - name: MODEL_EXPRESS_HOST
-              value: ${modelexpress_service}
-            - name: MODEL_EXPRESS_PORT
-              value: "8000"
-            - name: DYN_VLLM_EMBEDDING_TRANSFER_MODE
-              value: local
-            - name: DYN_MULTIMODAL_EMBEDDING_CACHE_GB
-              value: "4"
-            - name: DYN_MM_ALLOW_INTERNAL
-              value: "1"
-            - name: DYN_MM_VIDEO_NUM_FRAMES
-              value: "256"
-            - name: DYN_REQUEST_PLANE
-              value: tcp
-            - name: DYN_EVENT_PLANE
-              value: zmq
-            - name: DYN_HTTP_BODY_LIMIT_MB
-              value: "400"
-            - name: DYN_WORKER_NOFILE_LIMIT
-              value: "65536"
-            - name: DYN_KV_CACHE_BLOCK_SIZE
-              value: "${KV_CACHE_BLOCK_SIZE}"
-EOF
-  render_worker_transport_env
-  cat <<EOF
-          command:
-            - /bin/bash
-            - -lc
-          args:
-            - |
-              set -euo pipefail
-              ulimit -n "\${DYN_WORKER_NOFILE_LIMIT}"
-              ulimit -l unlimited
-
-              echo "Waiting for ModelExpress at \${MODEL_EXPRESS_HOST}:\${MODEL_EXPRESS_PORT}..."
-              for i in \$(seq 1 180); do
-                if timeout 1 bash -c "</dev/tcp/\${MODEL_EXPRESS_HOST}/\${MODEL_EXPRESS_PORT}" 2> /dev/null; then
-                  echo "ModelExpress is reachable."
-                  break
-                fi
-                if [ "\$i" -eq 180 ]; then
-                  echo "ERROR: ModelExpress did not become reachable at \${MODEL_EXPRESS_HOST}:\${MODEL_EXPRESS_PORT}" >&2
-                  exit 1
-                fi
-                echo "Waiting for ModelExpress... (\$i/180)"
-                sleep 2
-              done
-
-              cmd=(
-                python3 -m dynamo.vllm
-                --model "\${MODEL_NAME}"
-                --served-model-name "\${MODEL_NAME}"
-                --enable-multimodal
-                --frontend-decoding
-                --multimodal-embedding-cache-capacity-gb "\${DYN_MULTIMODAL_EMBEDDING_CACHE_GB}"
-                --mm-processor-cache-gb 8
-EOF
-  if [[ "${backend}" == "nemotron" ]]; then
-    cat <<'EOF'
-                --media-io-kwargs '{"video":{"num_frames":256,"fps":1}}'
-                --video-pruning-rate 0.5
-EOF
-  fi
-  cat <<EOF
-                --trust-remote-code
-                --dyn-tool-call-parser ${tool_parser}
-                --dyn-reasoning-parser ${reasoning_parser}
-                --tensor-parallel-size ${tensor_parallel_size}
-                --pipeline-parallel-size 1
-                --data-parallel-size 1
-                --gpu-memory-utilization 0.90
-                --max-num-batched-tokens ${max_tokens}
-                --max-model-len ${max_len}
-                --max-num-seqs ${max_seqs}
-                --enable-chunked-prefill
-                --scheduling-policy priority
-                --enable-prefix-caching
-                --prefix-caching-hash-algo sha256
-                --block-size "\${DYN_KV_CACHE_BLOCK_SIZE}"
-EOF
-  if [[ "${emit_kv_events}" == "1" ]]; then
-    cat <<EOF
-                --kv-events-config '{"enable_kv_cache_events":true,"publisher":"zmq","topic":"kv-events","endpoint":"${KV_EVENTS_ENDPOINT}"}'
-EOF
-  fi
-  if [[ -n "${disagg_flag}" ]]; then
-    printf '                %s\n' "${disagg_flag}"
-  fi
-  cat <<EOF
-                --no-enable-log-requests
-              )
-              exec "\${cmd[@]}"
-          securityContext:
-            capabilities:
-              add:
-                - IPC_LOCK
-                - SYS_RESOURCE
-EOF
-}
-
-render_sglang_worker() {
-  local backend="qwen27b"
-  local role="${1:-agg}"
-  local disagg_flag=""
-  case "${role}" in
-    prefill) disagg_flag="--disaggregation-mode prefill" ;;
-    decode) disagg_flag="--disaggregation-mode decode" ;;
-  esac
-  local component model image dgd model_cache modelexpress_service tensor_parallel_size
-  component="$(backend_worker_component "${backend}")"
-  case "${role}" in
-    prefill) component="${component/Worker/PrefillWorker}" ;;
-    decode) component="${component/Worker/DecodeWorker}" ;;
-  esac
-  model="$(backend_model "${backend}")"
-  image="$(backend_image "${backend}")"
-  dgd="$(backend_dgd "${backend}")"
-  model_cache="$(backend_storage_prefix "${backend}")-model-cache"
-  modelexpress_service="${dgd}-modelexpress"
-  tensor_parallel_size="$(backend_tensor_parallel_size "${backend}")"
-
-  cat <<EOF
-
-    ${component}:
-      componentType: worker
-      envFromSecret: ${HF_TOKEN_SECRET}
-      replicas: ${WORKER_REPLICAS}
-EOF
-  render_worker_resources "${backend}"
-  cat <<EOF
-      livenessProbe:
-        httpGet:
-          path: /live
-          port: system
-        periodSeconds: 10
-        timeoutSeconds: 5
-        failureThreshold: 6
-      readinessProbe:
-        httpGet:
-          path: /health
-          port: system
-        periodSeconds: 10
-        timeoutSeconds: 5
-        failureThreshold: 3
-      volumeMounts:
-        - name: ${model_cache}
-          mountPoint: /model
-      sharedMemory:
-        size: 64Gi
-EOF
-  cat <<EOF
-      extraPodSpec:
-EOF
-  render_frontend_sidecar "${image}" "${dgd}"
-  cat <<EOF
-        affinity:
-          nodeAffinity:
-            requiredDuringSchedulingIgnoredDuringExecution:
-              nodeSelectorTerms:
-                - matchExpressions:
-                    - key: nvidia.com/gpu.memory
-                      operator: Gt
-                      values:
-                        - "40959"
-          podAntiAffinity:
-            requiredDuringSchedulingIgnoredDuringExecution:
-              - labelSelector:
-                  matchLabels:
-                    nvidia.com/dynamo-graph-deployment-name: ${dgd}
-                    nvidia.com/dynamo-component: ${component}
-                topologyKey: kubernetes.io/hostname
-        mainContainer:
-          image: ${image}
-          imagePullPolicy: IfNotPresent
-          startupProbe:
-            httpGet:
-              path: /health
-              port: 9090
-            periodSeconds: 10
-            timeoutSeconds: 10
-            failureThreshold: 360
-          env:
-            - name: MODEL_NAME
-              value: ${model}
-            - name: HF_HUB_CACHE
-              value: /model/.model-express/cache
-            - name: MODEL_CACHE_PATH
-              value: /model/.model-express/cache
-            - name: MODEL_EXPRESS_URL
-              value: http://${modelexpress_service}:8000
-            - name: MODEL_EXPRESS_HOST
-              value: ${modelexpress_service}
-            - name: MODEL_EXPRESS_PORT
-              value: "8000"
-            - name: DYN_REQUEST_PLANE
-              value: tcp
-            - name: DYN_EVENT_PLANE
-              value: zmq
-            - name: DYN_HTTP_BODY_LIMIT_MB
-              value: "400"
-            - name: DYN_WORKER_NOFILE_LIMIT
-              value: "65536"
-            - name: DYN_KV_CACHE_BLOCK_SIZE
-              value: "${KV_CACHE_BLOCK_SIZE}"
-EOF
-  render_worker_transport_env
-  cat <<EOF
-          command:
-            - /bin/bash
-            - -lc
-          args:
-            - |
-              set -euo pipefail
-              ulimit -n "\${DYN_WORKER_NOFILE_LIMIT}"
-              ulimit -l unlimited
-
-              echo "Waiting for ModelExpress at \${MODEL_EXPRESS_HOST}:\${MODEL_EXPRESS_PORT}..."
-              for i in \$(seq 1 180); do
-                if timeout 1 bash -c "</dev/tcp/\${MODEL_EXPRESS_HOST}/\${MODEL_EXPRESS_PORT}" 2> /dev/null; then
-                  echo "ModelExpress is reachable."
-                  break
-                fi
-                if [ "\$i" -eq 180 ]; then
-                  echo "ERROR: ModelExpress did not become reachable at \${MODEL_EXPRESS_HOST}:\${MODEL_EXPRESS_PORT}" >&2
-                  exit 1
-                fi
-                echo "Waiting for ModelExpress... (\$i/180)"
-                sleep 2
-              done
-
-              cmd=(
-                python3 -m dynamo.sglang
-                --model-path "\${MODEL_NAME}"
-                --served-model-name "\${MODEL_NAME}"
-                --tp-size ${tensor_parallel_size}
-                --trust-remote-code
-                --dyn-tool-call-parser qwen3_coder
-                --dyn-reasoning-parser qwen3
-                --mem-fraction-static 0.85
-                --context-length 131072
-                --chunked-prefill-size 8192
-                --max-running-requests 8
-                --schedule-policy lof
-                --enable-priority-scheduling
-                --page-size "\${DYN_KV_CACHE_BLOCK_SIZE}"
-                --kv-events-config '{"publisher":"zmq","topic":"kv-events","endpoint":"${KV_EVENTS_ENDPOINT}"}'
-                --enable-metrics
-EOF
-  if [[ -n "${disagg_flag}" ]]; then
-    printf '                %s\n' "${disagg_flag}"
-    printf '                %s\n' "--disaggregation-transfer-backend nixl"
-  fi
-  cat <<EOF
-              )
-              exec "\${cmd[@]}"
-          securityContext:
-            capabilities:
-              add:
-                - IPC_LOCK
-                - SYS_RESOURCE
-EOF
-}
-
-render_backend() {
-  local backend="$1"
-  render_backend_storage "${backend}"
-  render_dgd_header "${backend}"
-  render_epp_service "${backend}"
-  render_modelexpress_service "${backend}"
-  if [[ "${backend}" == "qwen27b" ]]; then
-    if [[ "${SERVING_MODE}" == "disagg" ]]; then
-      render_sglang_worker prefill
-      render_sglang_worker decode
-    else
-      render_sglang_worker
-    fi
-  else
-    if [[ "${SERVING_MODE}" == "disagg" ]]; then
-      render_vllm_worker "${backend}" prefill
-      render_vllm_worker "${backend}" decode
-    else
-      render_vllm_worker "${backend}"
-    fi
   fi
 }
 
@@ -1778,9 +688,7 @@ EOF
               name: X-Gateway-Base-Model-Name
               value: ${model}
       backendRefs:
-        - group: inference.networking.k8s.io
-          kind: InferencePool
-          name: ${dgd}-pool
+        - name: ${dgd}-frontend
           port: 8000
       timeouts:
         request: ${GATEWAY_REQUEST_TIMEOUT}
@@ -2045,14 +953,70 @@ wait_for_delete() {
     > /dev/null 2>&1 || true
 }
 
+filter_backend_manifest_for_delete() {
+  local include_pvcs="$1"
+  awk -v include_pvcs="${include_pvcs}" '
+    function flush() {
+      if (doc != "" && (include_pvcs == "1" || kind != "PersistentVolumeClaim")) {
+        printf "%s", doc
+      }
+      doc = ""
+      kind = ""
+    }
+    /^---[[:space:]]*$/ {
+      flush()
+      doc = $0 ORS
+      next
+    }
+    {
+      doc = doc $0 ORS
+      if ($1 == "kind:") {
+        kind = $2
+      }
+    }
+    END { flush() }
+  '
+}
+
+filter_backend_pvc_manifest() {
+  awk '
+    function flush() {
+      if (doc != "" && kind == "PersistentVolumeClaim") {
+        printf "%s", doc
+      }
+      doc = ""
+      kind = ""
+    }
+    /^---[[:space:]]*$/ {
+      flush()
+      doc = $0 ORS
+      next
+    }
+    {
+      doc = doc $0 ORS
+      if ($1 == "kind:") {
+        kind = $2
+      }
+    }
+    END { flush() }
+  '
+}
+
+kubectl_delete_manifest() {
+  kubectl delete -n "${NAMESPACE}" \
+    --ignore-not-found \
+    --wait=false \
+    -f - || true
+}
+
 deleting_all_backends() {
   local backend
   local -A selected=()
-  [[ "${#SELECTED_BACKENDS[@]}" -eq 3 ]] || return 1
+  [[ "${#SELECTED_BACKENDS[@]}" -eq 5 ]] || return 1
   for backend in "${SELECTED_BACKENDS[@]}"; do
     selected["${backend}"]=1
   done
-  [[ -n "${selected[nemotron]:-}" && -n "${selected[qwen35b]:-}" && -n "${selected[qwen27b]:-}" ]]
+  [[ -n "${selected[nemotron]:-}" && -n "${selected[qwen35b]:-}" && -n "${selected[qwen27b]:-}" && -n "${selected[gemma431b]:-}" && -n "${selected[nemotronnano]:-}" ]]
 }
 
 delete_shared_resources() {
@@ -2067,34 +1031,13 @@ delete_shared_resources() {
   cleanup_legacy_photo_tagger_resources
 }
 
-backend_component_service_names() {
-  local backend="$1"
-  local dgd="$2"
-  local worker_prefix
-  case "${backend}" in
-    nemotron|qwen35b) worker_prefix="vllm" ;;
-    qwen27b) worker_prefix="sglang" ;;
-  esac
-  printf '%s\n' \
-    "${dgd}-0" \
-    "${dgd}-epp" \
-    "${dgd}-modelexpress" \
-    "${dgd}-${worker_prefix}worker" \
-    "${dgd}-${worker_prefix}prefillworker" \
-    "${dgd}-${worker_prefix}decodeworker"
-}
-
 delete_backend_resources() {
   local backend="$1"
-  local dgd prefix
-  local -a services=()
+  local dgd
   dgd="$(backend_dgd "${backend}")"
-  prefix="$(backend_storage_prefix "${backend}")"
 
   echo "==> Deleting backend ${backend} (${dgd}) from namespace ${NAMESPACE}"
-  kubectl_delete_optional_namespaced dynamographdeployments.nvidia.com "${dgd}"
-  kubectl_delete_namespaced deployment "${prefix}-redis"
-  kubectl_delete_namespaced service "${prefix}-redis"
+  render_backend "${backend}" | filter_backend_manifest_for_delete 0 | kubectl_delete_manifest
 
   # The Dynamo and Grove operators create child resources with mixed labels.
   # Delete the controller CRs first, then sweep both label families and the
@@ -2128,8 +1071,6 @@ delete_backend_resources() {
   kubectl_delete_namespaced all,configmap,secret,serviceaccount,role,rolebinding,poddisruptionbudgets.policy \
     -l "app.kubernetes.io/part-of=${dgd}"
 
-  mapfile -t services < <(backend_component_service_names "${backend}" "${dgd}")
-  kubectl_delete_namespaced service "${services[@]}"
   kubectl_delete_namespaced serviceaccount "${dgd}" "${dgd}-k8s-service-discovery"
   kubectl_delete_namespaced role "grove.io:pcs:${dgd}" "${dgd}-k8s-service-discovery-role"
   kubectl_delete_namespaced rolebinding "grove.io:pcs:${dgd}" "${dgd}-k8s-service-discovery-binding"
@@ -2224,12 +1165,7 @@ delete_deployment() {
   if [[ "${DELETE_DATA:-0}" == "1" ]]; then
     echo "==> DELETE_DATA=1 set; deleting selected backend PVCs"
     for backend in "${SELECTED_BACKENDS[@]}"; do
-      kubectl delete pvc \
-        "$(backend_storage_prefix "${backend}")-model-cache" \
-        "$(backend_storage_prefix "${backend}")-redis-data" \
-        -n "${NAMESPACE}" \
-        --ignore-not-found \
-        --wait=false || true
+      render_backend "${backend}" | filter_backend_pvc_manifest | kubectl_delete_manifest
     done
     if deleting_all_backends; then
       echo "==> All backends selected; deleting shared app secrets and legacy data"
@@ -2253,14 +1189,12 @@ select_backends
 
 case "${ACTION}" in
   deploy)
-    warn_mutable_image_tag
     apply_deployment
     ;;
   delete)
     delete_deployment
     ;;
   render)
-    warn_mutable_image_tag
     render_manifest
     ;;
   install-gateway)

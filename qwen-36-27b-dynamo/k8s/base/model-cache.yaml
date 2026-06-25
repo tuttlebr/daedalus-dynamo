@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: model-cache
+  name: qwen27b-model-cache
   labels:
-    app.kubernetes.io/name: model-cache
+    app.kubernetes.io/name: qwen27b-model-cache
     app.kubernetes.io/part-of: qwen36-photo-demo
 spec:
   accessModes:

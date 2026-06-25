@@ -29,9 +29,6 @@ no source build, no Rust toolchain.
 
 > Cluster check first: run `../deploy.sh doctor` (or `./deploy.sh doctor`)
 > before deploying to verify cluster readiness, including RDMA/InfiniBand.
-> Worker KV transport defaults to TCP and works everywhere; set
-> `TRANSPORT_PROFILE=rdma` or `SERVING_MODE=disagg` only after the doctor's
-> RDMA checks pass (see the root README).
 
 ```bash
 export NAMESPACE=<your-namespace>
@@ -61,7 +58,6 @@ Useful deploy env overrides:
 - `NAMESPACE=...` — default `daedalus-dynamo`
 - `WORKBENCH_AUTH_TOKEN=...` — optional; used only when creating the Workbench auth secret for the first time.
 - `WORKBENCH_AUTH_USER=...` — default `routing-workbench`; HTTP Basic username for the Workbench UI/API.
-- `WORKER_REPLICAS=...` — default `1`; worker replicas for this backend.
 - `SKIP_BUILD=1`, `SKIP_PUSH=1`, or `SKIP_DEPLOY=1` for partial runs
 
 ### Local image build
@@ -123,7 +119,7 @@ IMAGE_TAG=test ../deploy.sh render qwen27b | kubectl apply --dry-run=client -f -
 Monitor startup:
 
 ```bash
-kubectl get pods -n ${NAMESPACE} -l nvidia.com/dynamo-graph-deployment-name=qwen36-dynamo-fd-ec -w
+kubectl get pods -n ${NAMESPACE} -l nvidia.com/dynamo-graph-deployment-name=qwen36-27b-sglang-agg -w
 ```
 
 ## Step 3: Test
@@ -147,7 +143,7 @@ kubectl get secret routing-workbench-auth -n ${NAMESPACE} \
 For direct Qwen API testing, port-forward the internal Dynamo frontend:
 
 ```bash
-kubectl port-forward svc/qwen36-dynamo-fd-ec-frontend 8000:8000 -n ${NAMESPACE}
+kubectl port-forward svc/qwen36-27b-sglang-agg-frontend 8000:8000 -n ${NAMESPACE}
 ```
 
 Then run the bundled smoke test:
@@ -338,7 +334,7 @@ the final `DynamoGraphDeployment` under
 - `--dyn-tool-call-parser qwen3_coder` and `--dyn-reasoning-parser qwen3`
   enable Qwen tool-call and reasoning parsing. Dynamo's frontend does the
   parsing, and these `--dyn-*` flags override SGLang's native parsers.
-- `--context-length 131072` caps the served context at 128K (the model is
+- `--context-length 65536` caps the served context at 128K (the model is
   natively ~256K-capable); `--mem-fraction-static 0.85` sizes the static
   weight + KV-pool allocation and is the main OOM/throughput tuning knob at TP=2.
 - `--chunked-prefill-size 8192` and `--max-running-requests 8` bound the prefill

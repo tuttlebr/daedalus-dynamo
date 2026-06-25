@@ -6,7 +6,7 @@ ENDPOINT="${LLM_ENDPOINT:-${QWEN_ENDPOINT:-${BASE_URL%/}/v1/chat/completions}}"
 MESSAGES_ENDPOINT="${MESSAGES_ENDPOINT:-${QWEN_MESSAGES_ENDPOINT:-${BASE_URL%/}/v1/messages}}"
 MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3.6-27B-FP8}"
 NAMESPACE="${NAMESPACE:-qwen36-27b}"
-DYNAMO_SERVICE="${DYNAMO_SERVICE:-qwen36-dynamo-fd-ec-frontend}"
+DYNAMO_SERVICE="${DYNAMO_SERVICE:-qwen36-27b-sglang-agg-frontend}"
 
 pretty_json() {
   if command -v jq > /dev/null 2>&1; then

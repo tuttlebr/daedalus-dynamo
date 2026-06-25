@@ -28,9 +28,6 @@ no source build, no Rust toolchain.
 
 > Cluster check first: run `../deploy.sh doctor` (or `./deploy.sh doctor`)
 > before deploying to verify cluster readiness, including RDMA/InfiniBand.
-> Worker KV transport defaults to TCP and works everywhere; set
-> `TRANSPORT_PROFILE=rdma` or `SERVING_MODE=disagg` only after the doctor's
-> RDMA checks pass (see the root README).
 >
 > Worker-side KV events stay disabled for this backend regardless of transport;
 > see [Event plane transport](#event-plane-transport) for the rationale.
@@ -63,7 +60,6 @@ Useful deploy env overrides:
 - `NAMESPACE=...` — default `daedalus-dynamo`
 - `WORKBENCH_AUTH_TOKEN=...` — optional; used only when creating the Workbench auth secret for the first time.
 - `WORKBENCH_AUTH_USER=...` — default `routing-workbench`; HTTP Basic username for the Workbench UI/API.
-- `WORKER_REPLICAS=...` — default `1`; worker replicas for this backend.
 - `SKIP_BUILD=1`, `SKIP_PUSH=1`, or `SKIP_DEPLOY=1` for partial runs
 
 ### Local image build
@@ -125,7 +121,7 @@ IMAGE_TAG=test ../deploy.sh render qwen35b | kubectl apply --dry-run=client -f -
 Monitor startup:
 
 ```bash
-kubectl get pods -n ${NAMESPACE} -l nvidia.com/dynamo-graph-deployment-name=qwen36-dynamo-fd-ec -w
+kubectl get pods -n ${NAMESPACE} -l nvidia.com/dynamo-graph-deployment-name=qwen36-35b-vllm-agg -w
 ```
 
 ## Step 3: Test
@@ -149,7 +145,7 @@ kubectl get secret routing-workbench-auth -n ${NAMESPACE} \
 For direct Qwen API testing, port-forward the internal Dynamo frontend:
 
 ```bash
-kubectl port-forward svc/qwen36-dynamo-fd-ec-frontend 8000:8000 -n ${NAMESPACE}
+kubectl port-forward svc/qwen36-35b-vllm-agg-frontend 8000:8000 -n ${NAMESPACE}
 ```
 
 Then run the bundled smoke test:

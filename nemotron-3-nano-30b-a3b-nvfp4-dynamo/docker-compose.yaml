@@ -1,0 +1,6 @@
+services:
+  nemotron-3-nano-30b-a3b-nvfp4-dynamo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: daedalus.ddns.me:5050/btuttle/nemotron-3-nano-30b-a3b-nvfp4-dynamo:latest

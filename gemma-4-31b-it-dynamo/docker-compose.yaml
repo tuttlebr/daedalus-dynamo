@@ -1,0 +1,6 @@
+services:
+  gemma-4-31b-it-dynamo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: daedalus.ddns.me:5050/btuttle/gemma-4-31b-it-dynamo:latest

@@ -1,14 +1,14 @@
 apiVersion: nvidia.com/v1alpha1
 kind: DynamoGraphDeployment
 metadata:
-  name: qwen36-dynamo-fd-ec
+  name: qwen36-35b-vllm-agg
   labels:
-    app.kubernetes.io/name: qwen36-dynamo-fd-ec
+    app.kubernetes.io/name: qwen36-35b-vllm-agg
     app.kubernetes.io/part-of: qwen36-photo-demo
 spec:
   backendFramework: vllm
   pvcs:
-    - name: model-cache
+    - name: qwen35b-model-cache
       create: false
   services:
     Frontend:
@@ -16,7 +16,7 @@ spec:
       envFromSecret: hf-token-secret
       replicas: 1
       volumeMounts:
-        - name: model-cache
+        - name: qwen35b-model-cache
           mountPoint: /model
       extraPodSpec:
         mainContainer:
@@ -91,7 +91,7 @@ spec:
         timeoutSeconds: 3
         failureThreshold: 3
       volumeMounts:
-        - name: model-cache
+        - name: qwen35b-model-cache
           mountPoint: /model
       extraPodSpec:
         mainContainer:
@@ -107,11 +107,11 @@ spec:
             - name: MX_METADATA_BACKEND
               value: redis
             - name: MX_REDIS_HOST
-              value: redis
+              value: qwen35b-redis
             - name: MX_REDIS_PORT
               value: "6379"
             - name: REDIS_URL
-              value: redis://redis:6379
+              value: redis://qwen35b-redis:6379
             - name: MODEL_NAME
               value: Qwen/Qwen3.6-35B-A3B-FP8
             - name: MODEL_CACHE_PATH
@@ -152,7 +152,7 @@ spec:
               mkdir -p /model/.model-express
               cat > /model/.model-express/config.yaml << EOF
               local_path: $MODEL_CACHE_PATH
-              server_endpoint: http://qwen36-dynamo-fd-ec-modelexpress:8000
+              server_endpoint: http://qwen36-35b-vllm-agg-modelexpress:8000
               timeout_secs: null
               EOF
 
@@ -206,7 +206,7 @@ spec:
         timeoutSeconds: 5
         failureThreshold: 3
       volumeMounts:
-        - name: model-cache
+        - name: qwen35b-model-cache
           mountPoint: /model
       sharedMemory:
         size: 64Gi
@@ -220,13 +220,6 @@ spec:
                       operator: Gt
                       values:
                         - "40959"
-          podAntiAffinity:
-            requiredDuringSchedulingIgnoredDuringExecution:
-              - labelSelector:
-                  matchLabels:
-                    nvidia.com/dynamo-graph-deployment-name: qwen36-dynamo-fd-ec
-                    nvidia.com/dynamo-component: VllmWorker
-                topologyKey: kubernetes.io/hostname
         mainContainer:
           image: daedalus.ddns.me:5050/btuttle/qwen36-35b-dynamo:latest
           imagePullPolicy: IfNotPresent
@@ -245,9 +238,9 @@ spec:
             - name: MODEL_CACHE_PATH
               value: /model/.model-express/cache
             - name: MODEL_EXPRESS_URL
-              value: http://qwen36-dynamo-fd-ec-modelexpress:8000
+              value: http://qwen36-35b-vllm-agg-modelexpress:8000
             - name: MODEL_EXPRESS_HOST
-              value: qwen36-dynamo-fd-ec-modelexpress
+              value: qwen36-35b-vllm-agg-modelexpress
             - name: MODEL_EXPRESS_PORT
               value: "8000"
             - name: DYN_VLLM_EMBEDDING_TRANSFER_MODE

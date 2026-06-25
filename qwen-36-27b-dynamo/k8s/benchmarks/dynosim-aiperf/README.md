@@ -43,7 +43,7 @@ kubectl apply -n qwen36-27b -k k8s/benchmarks/dynosim-aiperf
 
 Default workload:
 
-- endpoint: `http://qwen36-dynamo-fd-ec-frontend:8000`
+- endpoint: `http://qwen36-27b-sglang-agg-frontend:8000`
 - prefix ratios: `0.1,0.5,0.9`
 - input/output tokens: `4096/128`
 - requests/concurrency: `200/4`

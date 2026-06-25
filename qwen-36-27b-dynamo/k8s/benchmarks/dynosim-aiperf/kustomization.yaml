@@ -18,7 +18,7 @@ configMapGenerator:
       - EXTRA_PIP_PACKAGES=
       - RUN_DYNOSIM=true
       - RUN_AIPERF=true
-      - ENDPOINT_URL=http://qwen36-dynamo-fd-ec-frontend:8000
+      - ENDPOINT_URL=http://qwen36-27b-sglang-agg-frontend:8000
       - MODEL_NAME=Qwen/Qwen3.6-27B-FP8
       - TOKENIZER_NAME=Qwen/Qwen3.6-27B-FP8
       - TOKENIZER_TRUST_REMOTE_CODE=true
