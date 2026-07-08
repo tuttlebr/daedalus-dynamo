@@ -148,17 +148,84 @@ This repository renders the Planner by default for each selected backend:
 HF_TOKEN=<hugging-face-token> ./deploy.sh deploy qwen35b
 ```
 
-Planner rendering adds a `Planner` service to each selected DGD, enables the
-scaling adapter on the worker service, and marks the aggregated worker as the
-Planner's decode-side component. Defaults are conservative for these aggregated
-backends: `DYNAMO_PLANNER_MODE=agg`,
-`DYNAMO_PLANNER_OPTIMIZATION_TARGET=throughput`, and
-`DYNAMO_PLANNER_MIN_ENDPOINT` defaults to the backend's current worker replica
-count. Override `DYNAMO_PLANNER_IMAGE` if your cluster is pinned to a different
-Dynamo release, and set `DYNAMO_PLANNER_PROMETHEUS_ENDPOINT` if Prometheus is
-not at the kube-prometheus-stack default service URL. Set `DEPLOY_PLANNER=0`
-only when rendering for a cluster that does not yet have the
-`DynamoGraphDeploymentScalingAdapter` CRD.
+When `DEPLOY_PLANNER=1`, `deploy.sh` injects three things into each rendered
+backend `DynamoGraphDeployment`:
+
+- A `Planner` service that runs `python3 -m dynamo.planner`.
+- `scalingAdapter.enabled: true` on the worker service.
+- `subComponentType: decode` on the worker service, so the Planner knows that
+  the aggregated vLLM worker pool is the decode-side scaling target.
+
+After apply, the Dynamo operator creates one
+`DynamoGraphDeploymentScalingAdapter` per worker component. In this repository
+the adapter name is the DGD name plus `-vllmworker`, for example
+`gemma-4-31b-it-vllm-agg-vllmworker`. The adapter owns the desired worker
+replica count. The Planner reads runtime metrics, chooses a target replica
+count, and updates the adapter when `DYNAMO_PLANNER_ADVISORY=false`. The
+Dynamo/Grove operators then reconcile the worker PodCliqueSet to that adapter
+replica count. The frontend discovers healthy workers through Dynamo discovery,
+and the shared Gateway keeps routing by the OpenAI request body `model` field;
+no gateway change is required when a worker pool scales up or down.
+
+The default Planner config is intentionally conservative for these aggregated
+single-worker-pool deployments:
+
+- `DYNAMO_PLANNER_MODE=agg`
+- `DYNAMO_PLANNER_OPTIMIZATION_TARGET=throughput`
+- `DYNAMO_PLANNER_ENABLE_THROUGHPUT_SCALING=true`
+- `DYNAMO_PLANNER_ENABLE_LOAD_SCALING=false`
+- `DYNAMO_PLANNER_THROUGHPUT_ADJUSTMENT_INTERVAL_SECONDS=180`
+- `DYNAMO_PLANNER_MAX_GPU_BUDGET=8`
+- `DYNAMO_PLANNER_MIN_ENDPOINT` defaults to the rendered worker replica count
+  from that backend's `k8s/base/dynamo.yaml`.
+
+That means each backend starts at its manifest replica count, never scales below
+that count unless `DYNAMO_PLANNER_MIN_ENDPOINT` is explicitly lower, and never
+scales past `DYNAMO_PLANNER_MAX_GPU_BUDGET`. Because each current worker uses
+one GPU, the default GPU budget is also the default maximum worker count. If a
+future backend uses multi-GPU workers, set the budget to the maximum GPUs, not
+the maximum pods.
+
+Planner metrics come from Prometheus. The default
+`DYNAMO_PLANNER_PROMETHEUS_ENDPOINT` points at the kube-prometheus-stack service
+in the `monitoring` namespace. Set it when Prometheus is installed under a
+different service name or namespace. `DYNAMO_PLANNER_TTFT_MS` and
+`DYNAMO_PLANNER_ITL_MS` are passed into the Planner config for latency/SLA
+targets even when the default optimization target is throughput.
+
+Use advisory mode to see Planner decisions without letting it patch worker
+replicas:
+
+```bash
+DYNAMO_PLANNER_ADVISORY=true HF_TOKEN=<hugging-face-token> ./deploy.sh deploy all
+```
+
+To inspect live autoscaling state:
+
+```bash
+NAMESPACE=${NAMESPACE:-daedalus-dynamo}
+
+kubectl -n "${NAMESPACE}" get dgd,dgdsa
+kubectl -n "${NAMESPACE}" get pods -l nvidia.com/dynamo-component=Planner
+kubectl -n "${NAMESPACE}" logs \
+  -l app.kubernetes.io/part-of=gemma-4-31b-it-vllm-agg,nvidia.com/dynamo-component=Planner \
+  --tail=200
+```
+
+Manual replica changes should target the scaling adapter, not the DGD worker
+`replicas` field:
+
+```bash
+kubectl -n "${NAMESPACE:-daedalus-dynamo}" patch dgdsa \
+  gemma-4-31b-it-vllm-agg-vllmworker \
+  --type=merge -p '{"spec":{"replicas":2}}'
+```
+
+Planner may overwrite manual adapter changes on its next adjustment loop unless
+it is disabled with `DEPLOY_PLANNER=0` on the next render/apply or run in
+advisory mode. Set `DEPLOY_PLANNER=0` only when rendering for a cluster that
+does not yet have the `DynamoGraphDeploymentScalingAdapter` CRD, or when you
+want to manage worker adapter replicas entirely outside Planner.
 
 For new fully profiled Planner deployments, NVIDIA recommends the
 `DynamoGraphDeploymentRequest` workflow, which generates Planner-enabled DGDs
@@ -246,9 +313,19 @@ Important root-level environment variables:
 | `DYNAMO_PLANNER_IMAGE` | `nvcr.io/nvidia/ai-dynamo/dynamo-planner:1.3.0-dev.1` | Dedicated Planner image. |
 | `DYNAMO_PLANNER_MODE` | `agg` | Planner mode for these aggregated manifests; `agg` and `decode` are supported. |
 | `DYNAMO_PLANNER_OPTIMIZATION_TARGET` | `throughput` | Planner target: `throughput`, `latency`, `sla`, or `load`. |
+| `DYNAMO_PLANNER_ENABLE_THROUGHPUT_SCALING` | `true` | Enable the throughput-based Planner adjustment loop. |
+| `DYNAMO_PLANNER_ENABLE_LOAD_SCALING` | `false` | Enable the load-based Planner adjustment loop; load mode requires explicit KV-rate thresholds. |
+| `DYNAMO_PLANNER_PRE_DEPLOYMENT_SWEEPING_MODE` | `none` | Optional Planner profiling sweep mode: `none`, `rapid`, or `thorough`. |
+| `DYNAMO_PLANNER_THROUGHPUT_ADJUSTMENT_INTERVAL_SECONDS` | `180` | Minimum interval between throughput-loop scale adjustments. |
+| `DYNAMO_PLANNER_LOAD_ADJUSTMENT_INTERVAL_SECONDS` | `5` | Minimum interval between load-loop scale adjustments. |
 | `DYNAMO_PLANNER_MIN_ENDPOINT` | worker replicas | Minimum worker endpoints; defaults to the rendered backend's worker replica count. |
 | `DYNAMO_PLANNER_MAX_GPU_BUDGET` | `8` | Per-DGD GPU budget cap for Planner scaling decisions. |
+| `DYNAMO_PLANNER_TTFT_MS` | `500.0` | TTFT target passed to Planner for latency/SLA-aware decisions. |
+| `DYNAMO_PLANNER_ITL_MS` | `50.0` | Inter-token latency target passed to Planner for latency/SLA-aware decisions. |
 | `DYNAMO_PLANNER_PROMETHEUS_ENDPOINT` | kube-prometheus-stack URL | Prometheus URL used by Planner throughput metrics. |
+| `DYNAMO_PLANNER_PROMETHEUS_PORT` | `0` | Optional Planner metrics port; `0` disables exposing a Planner metrics port. |
+| `DYNAMO_PLANNER_WORKER_SUBCOMPONENT_TYPE` | `decode` | Worker subcomponent marker injected with the scaling adapter; keep `decode` for current aggregated manifests. |
+| `DYNAMO_PLANNER_DECODE_SCALE_UP_KV_RATE` / `DYNAMO_PLANNER_DECODE_SCALE_DOWN_KV_RATE` | unset | Required only when `DYNAMO_PLANNER_OPTIMIZATION_TARGET=load`; KV-rate thresholds for load-based decode scaling. |
 | `DYNAMO_PLANNER_ADVISORY` | `false` | Run Planner in suggestion-only mode without applying scale changes. |
 | `RECOVER_DRY_RUN` | `0` | Print `recover` actions without deleting pods or patching DGDs. |
 | `RECOVER_WAIT_SECONDS` | `0` | Wait for recovered DGDs to become `Ready`; `0` prints a watch command. |

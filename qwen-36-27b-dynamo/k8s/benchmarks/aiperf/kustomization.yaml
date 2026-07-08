@@ -14,7 +14,7 @@ generatorOptions:
 configMapGenerator:
   - name: aiperf-router-demo-config
     literals:
-      - AIPERF_PIP_SPEC=aiperf==0.7.0
+      - AIPERF_PIP_SPEC=aiperf==0.11.0
       - EXTRA_PIP_PACKAGES=
       - ENDPOINT_URL=http://qwen36-27b-vllm-agg-frontend:8000
       - MODEL_NAME=nvidia/Qwen3.6-27B-NVFP4

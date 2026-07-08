@@ -97,7 +97,7 @@ Useful knobs:
   `router_queue_policy`.
 - `DYNOSIM_EXTRA_ARGS` and `AIPERF_EXTRA_ARGS` let you append CLI flags without
   changing the runner script.
-- `AIPERF_PIP_SPEC` defaults to `aiperf==0.7.0`; set it to a Git ref if you want
+- `AIPERF_PIP_SPEC` defaults to `aiperf==0.11.0`; set it to a Git ref if you want
   to test a newer AIPerf build.
 - `GENERATE_DGDR_SPEC=true` writes the Kubernetes profiler manifest.
 - `DGDR_*` knobs control that manifest, including `DGDR_NAME`, `DGDR_IMAGE`,

@@ -93,7 +93,7 @@ streaming events.
 above. Disable it only if AIPerf gains native per-request support for Dynamo
 agentic hints.
 
-The job installs `aiperf==0.7.0` from PyPI at startup. Override
+The job installs `aiperf==0.11.0` from PyPI at startup. Override
 `AIPERF_PIP_SPEC` if you want to test a different release or Git ref, for
 example:
 

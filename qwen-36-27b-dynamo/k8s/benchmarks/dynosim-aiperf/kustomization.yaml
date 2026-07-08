@@ -14,7 +14,7 @@ generatorOptions:
 configMapGenerator:
   - name: dynosim-aiperf-demo-config
     literals:
-      - AIPERF_PIP_SPEC=aiperf==0.7.0
+      - AIPERF_PIP_SPEC=aiperf==0.11.0
       - EXTRA_PIP_PACKAGES=
       - RUN_DYNOSIM=true
       - RUN_AIPERF=true
