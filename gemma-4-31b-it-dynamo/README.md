@@ -5,7 +5,7 @@ SPDX-License-Identifier: Apache-2.0
 
 # Gemma 4 31B IT
 
-Serves [google/gemma-4-31B-it](https://huggingface.co/google/gemma-4-31B-it)
+Serves [nvidia/Gemma-4-31B-IT-NVFP4](https://huggingface.co/nvidia/Gemma-4-31B-IT-NVFP4)
 using vLLM with the shared repository-root Dynamo Gateway API Inference
 Extension deployment.
 
@@ -19,22 +19,25 @@ Extension deployment.
 | --- | --- | --- | --- |
 | Gateway/EPP | 1 | 0 | Shared Gateway API Inference Extension routing |
 | ModelExpress | 1 | 0 | Downloads and serves model cache metadata with Redis |
-| vLLM worker | 1 | 2 | TP=2 worker on an eligible high-memory GPU node |
+| vLLM worker | 1 | 1 | TP=1 worker on an eligible high-memory GPU node |
 
 ## Runtime Notes
 
 The Hugging Face config identifies the model as `Gemma4ForConditionalGeneration`
-with BF16 weights, `model_type: gemma4`, and a text config max position limit of
-262144 tokens. The vLLM Gemma 4 recipe recommends TP=2 for the 31B dense model
-and uses `--max-model-len 65536` for the standard 2-GPU launch, so this example
-keeps the deployed context cap at 65536 by default.
+with `model_type: gemma4` and a text config max position limit of 262144 tokens.
+This deployment uses a single-GPU NVFP4 worker shape so Gemma can be compared
+against the other backends without measuring horizontal or tensor-parallel
+scale. The DGD intentionally does not set `--max-model-len` or
+`--max-num-batched-tokens`; vLLM derives those limits from the model/runtime
+configuration.
 
 The root render path enables the Gemma-specific vLLM parser settings:
 
 - `--dyn-tool-call-parser gemma4`
 - `--dyn-reasoning-parser gemma4`
 - `--limit-mm-per-prompt '{"image":4,"audio":1}'`
-- `--tensor-parallel-size ${GEMMA431B_TENSOR_PARALLEL_SIZE:-2}`
+- `--tensor-parallel-size 1`
+- `--kv-cache-dtype fp8`
 
 Worker-side KV events are disabled for this backend. Gemma 4 mixes sliding and
 full attention layers, so this deployment stays conservative until the selected
@@ -43,8 +46,8 @@ layout.
 
 Sources checked while adding this backend:
 
-- vLLM recipe: <https://recipes.vllm.ai/Google/gemma-4-31B-it>
-- Hugging Face config: <https://huggingface.co/google/gemma-4-31B-it/blob/main/config.json>
+- vLLM recipe: <https://recipes.vllm.ai/nvidia/Gemma-4-31B-IT-NVFP4>
+- Hugging Face config: <https://huggingface.co/nvidia/Gemma-4-31B-IT-NVFP4/blob/main/config.json>
 
 ## Deploy
 
@@ -63,9 +66,8 @@ Useful build and deploy overrides:
 
 - `GEMMA431B_IMAGE_REPOSITORY=...` defaults to `${REGISTRY}/gemma-4-31b-it-dynamo`
 - `GEMMA431B_BASE_IMAGE=...` overrides the Dynamo vLLM runtime base image
-- `GEMMA431B_TENSOR_PARALLEL_SIZE=2` controls vLLM tensor parallel size
-- `GEMMA431B_GPUS_PER_WORKER=2` controls GPU request/limit per worker
-- `WORKER_REPLICAS=1` controls worker replica count
+- Worker replicas, GPU requests, and runtime args are owned by
+  `k8s/base/dynamo.yaml`.
 - `DEPLOY_WORKBENCH=1` also deploys the shared Routing Workbench
 
 `GEMMA_IMAGE_REPOSITORY` is accepted by this folder's compatibility wrapper as
@@ -114,7 +116,7 @@ Minimal chat request:
 curl http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "google/gemma-4-31B-it",
+    "model": "nvidia/Gemma-4-31B-IT-NVFP4",
     "messages": [{"role": "user", "content": "Hello!"}],
     "max_tokens": 128
   }'
@@ -126,7 +128,7 @@ Image input smoke request:
 curl http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "google/gemma-4-31B-it",
+    "model": "nvidia/Gemma-4-31B-IT-NVFP4",
     "messages": [{
       "role": "user",
       "content": [

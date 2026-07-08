@@ -153,7 +153,7 @@ def build_extra_inputs(osl: int) -> dict[str, Any]:
 
 def run() -> int:
     endpoint_url = env("ENDPOINT_URL", "http://gemma-4-31b-it-vllm-agg-0:8000")
-    model = env("MODEL_NAME", "google/gemma-4-31B-it")
+    model = env("MODEL_NAME", "nvidia/Gemma-4-31B-IT-NVFP4")
     tokenizer = env("TOKENIZER_NAME", model) or model
     prefix_ratios = env_ratios("PREFIX_RATIOS", "0.1,0.5,0.9")
     isl = env_int("INPUT_SEQUENCE_LENGTH", 4096)

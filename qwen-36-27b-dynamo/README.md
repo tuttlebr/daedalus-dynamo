@@ -3,13 +3,13 @@ SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES.
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# Qwen3.6 27B FP8
+# Qwen3.6 27B NVFP4
 
-Serves [Qwen/Qwen3.6-27B-FP8](https://huggingface.co/Qwen/Qwen3.6-27B-FP8), a
-dense 27B vision-language model, using SGLang with an aggregated Dynamo
+Serves [nvidia/Qwen3.6-27B-NVFP4](https://huggingface.co/nvidia/Qwen3.6-27B-NVFP4), a
+dense 27B vision-language model, using vLLM with an aggregated Dynamo
 deployment.
 
-This recipe builds a custom container on top of the Dynamo SGLang runtime image —
+This recipe builds a custom container on top of the Dynamo vLLM runtime image —
 no source build, no Rust toolchain.
 
 > Deployment note: use the repository-root `deploy.sh` as the authoritative
@@ -23,7 +23,7 @@ no source build, no Rust toolchain.
 | --------------- | -------- | ------------ | ------------------------------------------------------- |
 | Dynamo frontend | 1        | 0            | Event-backed KV routing, ClusterIP only by default      |
 | ModelExpress    | 1        | 0            | Downloads and serves model cache metadata with Redis    |
-| SGLang worker   | 1        | 2            | TP=2 worker on an eligible high-memory GPU node         |
+| vLLM worker     | 1        | 1            | TP=1 worker on an eligible high-memory GPU node         |
 
 ## Step 1: Deploy Everything
 
@@ -44,7 +44,7 @@ also build, push, and deploy the optional shared Routing Workbench image.
 
 Useful build args:
 
-- `BASE_IMAGE=<image>` — pin to a different Dynamo SGLang runtime base (default `nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.3.0-dev.1-cuda13`).
+- `BASE_IMAGE=<image>` — pin to a different Dynamo vLLM runtime base (default `nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.3.0-dev.1-cuda13`).
 
 Useful deploy env overrides:
 
@@ -96,11 +96,11 @@ linker prerequisites first:
 sudo apt-get install -y build-essential libc6-dev
 ```
 
-The default worker shape starts one TP=2 SGLang worker. On Daedalus this
-consumes two L40S GPUs on one eligible high-memory GPU node.
-When changing an existing deployment from a smaller GPU shape, delete the old
-deployment before redeploying so the new 2-GPU pods are not blocked by old
-1-GPU pods during a rolling update:
+The default worker shape starts one TP=1 vLLM worker. On Daedalus this consumes
+one L40S GPU on one eligible high-memory GPU node.
+When changing an existing deployment from the older SGLang shape, delete the old
+deployment before redeploying so the operator recreates the worker pods with the
+new runtime and resource shape:
 
 ```bash
 NAMESPACE=${NAMESPACE} ./deploy.sh delete
@@ -119,7 +119,7 @@ IMAGE_TAG=test ../deploy.sh render qwen27b | kubectl apply --dry-run=client -f -
 Monitor startup:
 
 ```bash
-kubectl get pods -n ${NAMESPACE} -l nvidia.com/dynamo-graph-deployment-name=qwen36-27b-sglang-agg -w
+kubectl get pods -n ${NAMESPACE} -l nvidia.com/dynamo-graph-deployment-name=qwen36-27b-vllm-agg -w
 ```
 
 ## Step 3: Test
@@ -143,7 +143,7 @@ kubectl get secret routing-workbench-auth -n ${NAMESPACE} \
 For direct Qwen API testing, port-forward the internal Dynamo frontend:
 
 ```bash
-kubectl port-forward svc/qwen36-27b-sglang-agg-frontend 8000:8000 -n ${NAMESPACE}
+kubectl port-forward svc/qwen36-27b-vllm-agg-frontend 8000:8000 -n ${NAMESPACE}
 ```
 
 Then run the bundled smoke test:
@@ -158,7 +158,7 @@ In another terminal, send a minimal text request:
 curl http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "Qwen/Qwen3.6-27B-FP8",
+    "model": "nvidia/Qwen3.6-27B-NVFP4",
     "messages": [{"role": "user", "content": "Hello!"}],
     "max_tokens": 128
   }'
@@ -171,7 +171,7 @@ OpenAI-compatible fields:
 curl http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "Qwen/Qwen3.6-27B-FP8",
+    "model": "nvidia/Qwen3.6-27B-NVFP4",
     "messages": [{"role": "user", "content": "Hello!"}],
     "max_tokens": 128,
     "nvext": {
@@ -193,7 +193,7 @@ For OpenAI Python clients, pass the same object through `extra_body`:
 
 ```python
 client.chat.completions.create(
-    model="Qwen/Qwen3.6-27B-FP8",
+    model="nvidia/Qwen3.6-27B-NVFP4",
     messages=[{"role": "user", "content": "Hello!"}],
     max_tokens=128,
     extra_body={
@@ -218,7 +218,7 @@ curl http://localhost:8000/v1/messages \
   -H "Content-Type: application/json" \
   -H "anthropic-version: 2023-06-01" \
   -d '{
-    "model": "Qwen/Qwen3.6-27B-FP8",
+    "model": "nvidia/Qwen3.6-27B-NVFP4",
     "messages": [{"role": "user", "content": "Hello!"}],
     "max_tokens": 128,
     "nvext": {
@@ -243,7 +243,7 @@ For streaming tool-call dispatch, stream a tool-capable request and watch for
 curl -N http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "Qwen/Qwen3.6-27B-FP8",
+    "model": "nvidia/Qwen3.6-27B-NVFP4",
     "stream": true,
     "messages": [{"role": "user", "content": "Call the echo tool with hello."}],
     "tools": [{
@@ -269,7 +269,7 @@ To exercise the multimodal path, attach an image:
 curl http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "Qwen/Qwen3.6-27B-FP8",
+    "model": "nvidia/Qwen3.6-27B-NVFP4",
     "messages": [{
       "role": "user",
       "content": [
@@ -324,36 +324,28 @@ the final `DynamoGraphDeployment` under
 
 ## Key Configuration Notes
 
-- The worker runs `python3 -m dynamo.sglang`, which passes native SGLang engine
-  arguments straight through. `Qwen/Qwen3.6-27B-FP8` is a vision-language model,
-  so SGLang auto-detects and serves its image path with no special flag — there
-  is no `--enable-multimodal`/embedding-cache equivalent on this backend.
-- Images must be supplied as HTTP(S) URLs; the Dynamo SGLang multimodal path
-  does not accept base64 `data:` URLs. The default Routing Workbench is
-  text-only and does not exercise this multimodal path.
+- The worker runs `python3 -m dynamo.vllm` with `--enable-multimodal` and
+  `--frontend-decoding` for Qwen image inputs.
+- `--multimodal-embedding-cache-capacity-gb 4` and
+  `--mm-processor-cache-gb 8` match the Qwen vLLM embedding-cache shape used by
+  the 35B backend.
 - `--dyn-tool-call-parser qwen3_coder` and `--dyn-reasoning-parser qwen3`
-  enable Qwen tool-call and reasoning parsing. Dynamo's frontend does the
-  parsing, and these `--dyn-*` flags override SGLang's native parsers.
-- `--context-length 65536` caps the served context at 128K (the model is
-  natively ~256K-capable); `--mem-fraction-static 0.85` sizes the static
-  weight + KV-pool allocation and is the main OOM/throughput tuning knob at TP=2.
-- `--chunked-prefill-size 8192` and `--max-running-requests 8` bound the prefill
-  chunk size and the per-worker concurrent-request ceiling. RadixAttention
-  prefix caching is on by default (disable with `--disable-radix-cache`).
+  enable Qwen tool-call and reasoning parsing.
+- The DGD intentionally does not set `--max-model-len`,
+  `--max-num-batched-tokens`, or request-level `max-tokens`; vLLM derives those
+  limits from the model/runtime configuration.
 - The frontend uses `--router-mode kv --no-router-kv-events`, so the KV router
   predicts cache state from routing decisions and waits for one initial worker
   before serving.
-- `--schedule-policy priority --enable-priority-scheduling` make the SGLang
-  scheduler honor `nvext.agent_hints.priority` (higher value scheduled first).
-- `--enable-metrics` exposes `sglang:*` Prometheus metrics on the worker's
-  Dynamo system port (scraped on :9090) for the shared Grafana dashboard.
+- The vLLM worker uses `--scheduling-policy priority` so
+  `nvext.agent_hints.priority` is honored by the engine, plus explicit prefix
+  caching with SHA-256 hashes for deterministic prefix reuse.
 - `--enable-anthropic-api`, `--strip-anthropic-preamble`,
   `--enable-streaming-tool-dispatch`, and
   `--enable-streaming-reasoning-dispatch` enable the agent-harness frontend
   path for Anthropic-compatible clients and early tool/reasoning SSE events.
-- `SGLangWorker` requests two GPUs and keeps required pod anti-affinity in place
-  so the two default worker replicas land on different eligible high-memory GPU
-  nodes.
+- `VllmWorker` requests one GPU and keeps required node affinity for eligible
+  high-memory GPU nodes.
 
 ## Event plane transport
 
@@ -394,11 +386,11 @@ Routing Workbench lives once at
 shared text-only demo app to the Gateway API Inference Extension endpoint:
 
 ```text
-OPENAI_BASE_URL=http://inference-gateway:80/v1
+OPENAI_BASE_URL=http://inference-gateway:32359/v1
 ```
 
 Set `DEPLOY_WORKBENCH=1` when you want this demo app. Custom apps should use
-`http://inference-gateway:80/v1` as their OpenAI base URL and choose a model
+`http://inference-gateway:32359/v1` as their OpenAI base URL and choose a model
 returned by `/v1/models`.
 
 ## File Layout
@@ -406,7 +398,7 @@ returned by `/v1/models`.
 ```text
 qwen-36-27b-dynamo/
   README.md
-  Dockerfile                        # Qwen SGLang image
+  Dockerfile                        # Qwen vLLM image
   docker-compose.yaml               # local image build convenience
   deploy.sh                         # builds, pushes, applies the overlay
   test-endpoint.sh                  # smoke-test the frontend

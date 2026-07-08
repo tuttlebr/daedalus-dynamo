@@ -4,7 +4,7 @@ set -euo pipefail
 BASE_URL="${BASE_URL:-${QWEN_BASE_URL:-http://localhost:8000}}"
 ENDPOINT="${LLM_ENDPOINT:-${QWEN_ENDPOINT:-${BASE_URL%/}/v1/chat/completions}}"
 MESSAGES_ENDPOINT="${MESSAGES_ENDPOINT:-${QWEN_MESSAGES_ENDPOINT:-${BASE_URL%/}/v1/messages}}"
-MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3.6-35B-A3B-FP8}"
+MODEL_NAME="${MODEL_NAME:-nvidia/Qwen3.6-35B-A3B-NVFP4}"
 NAMESPACE="${NAMESPACE:-qwen36-35b}"
 DYNAMO_SERVICE="${DYNAMO_SERVICE:-qwen36-35b-vllm-agg-frontend}"
 

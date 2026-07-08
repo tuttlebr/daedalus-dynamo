@@ -571,7 +571,7 @@ def build_dgdr_spec(
     osl: int,
     concurrency: int,
 ) -> dict[str, Any]:
-    model = env("MODEL_NAME", "Qwen/Qwen3.6-35B-A3B-FP8")
+    model = env("MODEL_NAME", "nvidia/Qwen3.6-35B-A3B-NVFP4")
     default_name = sanitize_k8s_name(model.rsplit("/", 1)[-1], "dynosim-candidate")
     name = sanitize_k8s_name(env("DGDR_NAME", f"{default_name}-dgdr"), "dynosim-candidate")
     best_prefix = selected_prefix_ratio(rows, decision_summary)
@@ -871,7 +871,7 @@ def run_aiperf(
     num_prefix_prompts: int,
 ) -> list[dict[str, Any]]:
     endpoint_url = env("ENDPOINT_URL", "http://qwen36-35b-vllm-agg-frontend:8000")
-    model = env("MODEL_NAME", "Qwen/Qwen3.6-35B-A3B-FP8")
+    model = env("MODEL_NAME", "nvidia/Qwen3.6-35B-A3B-NVFP4")
     tokenizer = env("TOKENIZER_NAME", model) or model
     seed = env_int("RANDOM_SEED", 0)
     timeout = env_int("REQUEST_TIMEOUT_SECONDS", 900)
@@ -972,7 +972,7 @@ def run() -> int:
 
     run_config = {
         "endpoint_url": env("ENDPOINT_URL", "http://qwen36-35b-vllm-agg-frontend:8000"),
-        "model": env("MODEL_NAME", "Qwen/Qwen3.6-35B-A3B-FP8"),
+        "model": env("MODEL_NAME", "nvidia/Qwen3.6-35B-A3B-NVFP4"),
         "prefix_ratios": prefix_ratios,
         "input_sequence_length": isl,
         "output_sequence_length": osl,

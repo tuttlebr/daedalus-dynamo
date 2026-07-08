@@ -22,413 +22,172 @@
   "links": [],
   "panels": [
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "min": 0,
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "dark-green",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 63,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "(\n  sum by (namespace) (\n    rate(\n      dynamo_frontend_input_sequence_tokens_sum{\n        namespace=~\"${namespace:regex}\",\n        pod=~\"(${deployment:regex})-[0-9]+-frontend-.*\"\n      }[$__rate_interval]\n    )\n  )\n  +\n  sum by (namespace) (\n    rate(\n      dynamo_frontend_output_tokens_total{\n        namespace=~\"${namespace:regex}\",\n        pod=~\"(${deployment:regex})-[0-9]+-frontend-.*\"\n      }[$__rate_interval]\n    )\n  )\n)\n/\non (namespace)\nclamp_min(\n  sum by (namespace) (\n    label_replace(\n      avg_over_time(\n        DCGM_FI_DEV_POWER_USAGE{\n          exported_namespace=~\"${namespace:regex}\",\n          exported_pod=~\"(${deployment:regex})-[0-9]+-(vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|encoder|encode)-.*\"\n        }[$__rate_interval]\n      ),\n      \"namespace\", \"$1\",\n      \"exported_namespace\", \"(.+)\"\n    )\n  ),\n  1e-9\n)",
+          "instant": false,
+          "legendFormat": "Tokens/Watt",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Tokens/Watt",
+      "transparent": true,
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          },
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "id": 62,
+      "options": {
+        "calculate": false,
+        "cellGap": 1,
+        "cellValues": {
+          "decimals": 0,
+          "unit": "celsius"
+        },
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "max": 100,
+          "min": 40,
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "RdYlGn",
+          "steps": 6
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
+        "legend": {
+          "show": false
+        },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "tooltip": {
+          "mode": "single",
+          "showColorScale": false,
+          "yHistogram": false
+        },
+        "yAxis": {
+          "axisPlacement": "hidden",
+          "reverse": false
+        }
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "max by (Hostname, gpu) (DCGM_FI_DEV_GPU_TEMP{Hostname=~\"${gpu_host:regex}\",modelName=~\"${gpu_model:regex}\",gpu=~\"${gpu:regex}\"})",
+          "legendFormat": "gpu-{{gpu}}@{{Hostname}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "GPU Temperature Heatmap",
+      "transparent": true,
+      "type": "heatmap"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 0
+        "y": 16
       },
       "id": 2,
       "panels": [],
       "title": "Dynamo Demo Overview",
       "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Frontend request throughput (requests/s) served by the Dynamo frontend for the selected deployment.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 2,
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#76B900",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 4,
-        "x": 0,
-        "y": 1
-      },
-      "id": 3,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(max without (job, instance) (rate(dynamo_frontend_requests_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-frontend-.*\"}[$__rate_interval])))",
-          "legendFormat": "frontend",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Frontend RPS",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Fraction of frontend requests with status=error (errors/total). green=0, orange>=1%, red>=5%.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 2,
-          "mappings": [],
-          "max": 1,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#76B900",
-                "value": 0
-              },
-              {
-                "color": "#EF9100",
-                "value": 0.01
-              },
-              {
-                "color": "#E52020",
-                "value": 0.05
-              }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 4,
-        "x": 4,
-        "y": 1
-      },
-      "id": 4,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(max without (job, instance) (rate(dynamo_frontend_requests_total{status=\"error\",namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-frontend-.*\"}[$__rate_interval]))) / clamp_min(sum(max without (job, instance) (rate(dynamo_frontend_requests_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-frontend-.*\"}[$__rate_interval]))), 1e-9)",
-          "legendFormat": "error",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Error Rate",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "95th-percentile time-to-first-token at the Dynamo frontend. p95 (not mean) because tail latency drives perceived responsiveness.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0,
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#76B900",
-                "value": 0
-              },
-              {
-                "color": "#EF9100",
-                "value": 500
-              },
-              {
-                "color": "#E52020",
-                "value": 1500
-              }
-            ]
-          },
-          "unit": "ms"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 4,
-        "x": 8,
-        "y": 1
-      },
-      "id": 5,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "1000 * histogram_quantile(0.95, sum by (le) (max without (job, instance) (rate(dynamo_frontend_time_to_first_token_seconds_bucket{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-frontend-.*\"}[$__rate_interval]))))",
-          "legendFormat": "TTFT",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "TTFT p95",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "95th-percentile inter-token latency (time between streamed tokens) at the frontend.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 1,
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#76B900",
-                "value": 0
-              },
-              {
-                "color": "#EF9100",
-                "value": 50
-              },
-              {
-                "color": "#E52020",
-                "value": 100
-              }
-            ]
-          },
-          "unit": "ms"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 4,
-        "x": 12,
-        "y": 1
-      },
-      "id": 6,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "1000 * histogram_quantile(0.95, sum by (le) (max without (job, instance) (rate(dynamo_frontend_inter_token_latency_seconds_bucket{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-frontend-.*\"}[$__rate_interval]))))",
-          "legendFormat": "ITL",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "ITL p95",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "vLLM engine prefix-cache hit rate across the deployment's workers (hits/queries). Higher = more prompt reuse, less recompute.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 1,
-          "mappings": [],
-          "max": 1,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#E52020",
-                "value": 0
-              },
-              {
-                "color": "#EF9100",
-                "value": 0.5
-              },
-              {
-                "color": "#76B900",
-                "value": 0.8
-              }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 4,
-        "x": 16,
-        "y": 1
-      },
-      "id": 7,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(max without (job, instance) (rate(vllm:prefix_cache_hits_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}[$__rate_interval]))) / clamp_min(sum(max without (job, instance) (rate(vllm:prefix_cache_queries_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}[$__rate_interval]))), 1e-9)",
-          "legendFormat": "vLLM",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "avg(max without (job, instance) (sglang:cache_hit_rate{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
-          "legendFormat": "SGLang",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "avg(max without (job, instance) (trtllm_kv_cache_hit_rate{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(trtllmworker|tensorrtllmworker|worker|prefill|decode|backend)-.*\"}))",
-          "legendFormat": "TRT-LLM",
-          "range": true,
-          "refId": "C"
-        }
-      ],
-      "title": "KV Cache Reuse Rate",
-      "type": "stat"
     },
     {
       "datasource": {
@@ -465,8 +224,8 @@
       "gridPos": {
         "h": 5,
         "w": 4,
-        "x": 20,
-        "y": 1
+        "x": 0,
+        "y": 17
       },
       "id": 8,
       "options": {
@@ -508,6 +267,151 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "vLLM engine prefix-cache hit rate across the deployment's workers (hits/queries). Higher = more prompt reuse, less recompute.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "fieldMinMax": false,
+          "mappings": [],
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#E52020",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 4,
+        "y": 17
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "median"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "rate(dynamo_frontend_cached_tokens_sum[$__rate_interval])\n/\nclamp_min(\n  rate(dynamo_frontend_input_sequence_tokens_sum[$__rate_interval]),\n  1e-9\n)",
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "KV Cache Reuse Rate",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "95th-percentile time-to-first-token at the Dynamo frontend. p95 (not mean) because tail latency drives perceived responsiveness.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#76B900",
+                "value": 0
+              },
+              {
+                "color": "#EF9100",
+                "value": 500
+              },
+              {
+                "color": "#E52020",
+                "value": 1500
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 8,
+        "y": 17
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "1000 * histogram_quantile(0.95, sum by (le) (max without (job, instance) (rate(dynamo_frontend_time_to_first_token_seconds_bucket{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-frontend-.*\"}[$__rate_interval]))))",
+          "legendFormat": "TTFT",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "TTFT p95",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "description": "Requests currently running on the vLLM workers (sum of vllm:num_requests_running). Batch ceiling is max-num-seqs=4 per worker.",
       "fieldConfig": {
         "defaults": {
@@ -533,8 +437,8 @@
       "gridPos": {
         "h": 5,
         "w": 4,
-        "x": 0,
-        "y": 6
+        "x": 12,
+        "y": 17
       },
       "id": 9,
       "options": {
@@ -598,6 +502,363 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#76B900",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 16,
+        "y": 17
+      },
+      "id": 13,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(max without (job, instance) (rate(dynamo_frontend_output_sequence_tokens_sum{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-frontend-.*\"}[$__rate_interval])))",
+          "legendFormat": "output tokens/s",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Output Tokens/s",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Total power draw of the GPUs allocated to this Dynamo deployment's vLLM workers (DCGM, pod-mapped via exported_pod). Scoped to the selected namespace/deployment.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#76B900",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "watt"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 20,
+        "y": 17
+      },
+      "id": 14,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(DCGM_FI_DEV_POWER_USAGE{exported_namespace=~\"${namespace:regex}\",exported_pod=~\"(${deployment:regex})-[0-9]+-(vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|encoder|encode)-.*\"})",
+          "legendFormat": "active",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Dynamo GPU Power",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "95th-percentile inter-token latency (time between streamed tokens) at the frontend.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#76B900",
+                "value": 0
+              },
+              {
+                "color": "#EF9100",
+                "value": 50
+              },
+              {
+                "color": "#E52020",
+                "value": 100
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 0,
+        "y": 22
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "1000 * histogram_quantile(0.95, sum by (le) (max without (job, instance) (rate(dynamo_frontend_inter_token_latency_seconds_bucket{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-frontend-.*\"}[$__rate_interval]))))",
+          "legendFormat": "ITL",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "ITL p95",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Fraction of frontend requests with status=error (errors/total). green=0, orange>=1%, red>=5%.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 2,
+          "mappings": [],
+          "max": 1,
+          "min": 0,
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#76B900",
+                "value": 0
+              },
+              {
+                "color": "#EF9100",
+                "value": 0.01
+              },
+              {
+                "color": "#E52020",
+                "value": 0.05
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 4,
+        "y": 22
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(max without (job, instance) (rate(dynamo_frontend_requests_total{status=\"error\",namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-frontend-.*\"}[$__rate_interval]))) / clamp_min(sum(max without (job, instance) (rate(dynamo_frontend_requests_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-frontend-.*\"}[$__rate_interval]))), 1e-9)",
+          "legendFormat": "error",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Error Rate",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Frontend request throughput (requests/s) served by the Dynamo frontend for the selected deployment.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 2,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#76B900",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 8,
+        "y": 22
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(max without (job, instance) (rate(dynamo_frontend_requests_total{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-frontend-.*\"}[$__rate_interval])))",
+          "legendFormat": "frontend",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Frontend RPS",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "description": "Requests queued in the vLLM workers waiting for a batch slot (vllm:num_requests_waiting). >0 sustained = saturation.",
       "fieldConfig": {
         "defaults": {
@@ -631,8 +892,8 @@
       "gridPos": {
         "h": 5,
         "w": 4,
-        "x": 4,
-        "y": 6
+        "x": 12,
+        "y": 22
       },
       "id": 10,
       "options": {
@@ -705,6 +966,7 @@
           "decimals": 0,
           "mappings": [],
           "min": 0,
+          "noValue": "0",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -729,8 +991,8 @@
       "gridPos": {
         "h": 5,
         "w": 4,
-        "x": 8,
-        "y": 6
+        "x": 16,
+        "y": 22
       },
       "id": 11,
       "options": {
@@ -768,255 +1030,12 @@
       "type": "stat"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Highest GPU KV-cache occupancy across workers (vllm:kv_cache_usage_perc). Near 100% triggers preemptions.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 2,
-          "mappings": [],
-          "max": 1,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#76B900",
-                "value": 0
-              },
-              {
-                "color": "#EF9100",
-                "value": 0.85
-              },
-              {
-                "color": "#E52020",
-                "value": 0.95
-              }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 4,
-        "x": 12,
-        "y": 6
-      },
-      "id": 12,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "max(max without (job, instance) (vllm:kv_cache_usage_perc{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-vllmworker-.*\"}))",
-          "legendFormat": "vLLM",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "max(max without (job, instance) (sglang:token_usage{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-sglangworker-.*\"}))",
-          "legendFormat": "SGLang",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "max(max without (job, instance) (trtllm_kv_cache_utilization{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-(trtllmworker|tensorrtllmworker|worker|prefill|decode|backend)-.*\"}))",
-          "legendFormat": "TRT-LLM",
-          "range": true,
-          "refId": "C"
-        }
-      ],
-      "title": "Max KV-Cache Used",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Rate of vLLM request preemptions (vllm:num_preemptions_total). Non-zero = workers over capacity, recompute cost rising.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 2,
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#76B900",
-                "value": 0
-              },
-              {
-                "color": "#EF9100",
-                "value": 0.01
-              },
-              {
-                "color": "#E52020",
-                "value": 1
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 4,
-        "x": 16,
-        "y": 6
-      },
-      "id": 13,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(max without (job, instance) (rate(dynamo_frontend_output_sequence_tokens_sum{namespace=~\"${namespace:regex}\",pod=~\"(${deployment:regex})-[0-9]+-frontend-.*\"}[$__rate_interval])))",
-          "legendFormat": "output tokens/s",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Output Tokens/s",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Total power draw of the GPUs allocated to this Dynamo deployment's vLLM workers (DCGM, pod-mapped via exported_pod). Scoped to the selected namespace/deployment.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0,
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#76B900",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "watt"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 4,
-        "x": 20,
-        "y": 6
-      },
-      "id": 14,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(DCGM_FI_DEV_POWER_USAGE{exported_namespace=~\"${namespace:regex}\",exported_pod=~\"(${deployment:regex})-[0-9]+-(vllmworker|sglangworker|trtllmworker|tensorrtllmworker|worker|prefill|decode|backend|encoder|encode)-.*\"})",
-          "legendFormat": "active",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Dynamo GPU Power",
-      "type": "stat"
-    },
-    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 11
+        "y": 27
       },
       "id": 15,
       "panels": [],
@@ -1054,7 +1073,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 12
+        "y": 28
       },
       "id": 16,
       "options": {
@@ -1122,7 +1141,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 12
+        "y": 28
       },
       "id": 17,
       "options": {
@@ -1190,7 +1209,7 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 12
+        "y": 28
       },
       "id": 18,
       "options": {
@@ -1258,7 +1277,7 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 12
+        "y": 28
       },
       "id": 19,
       "options": {
@@ -1326,7 +1345,7 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 12
+        "y": 28
       },
       "id": 20,
       "options": {
@@ -1394,7 +1413,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 12
+        "y": 28
       },
       "id": 21,
       "options": {
@@ -1459,7 +1478,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 16
+        "y": 32
       },
       "id": 22,
       "panels": [],
@@ -1530,7 +1549,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 17
+        "y": 33
       },
       "id": 23,
       "options": {
@@ -1638,7 +1657,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 17
+        "y": 33
       },
       "id": 24,
       "options": {
@@ -1793,7 +1812,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 17
+        "y": 33
       },
       "id": 25,
       "options": {
@@ -1905,7 +1924,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 25
+        "y": 41
       },
       "id": 26,
       "options": {
@@ -2016,7 +2035,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 25
+        "y": 41
       },
       "id": 27,
       "options": {
@@ -2127,7 +2146,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 25
+        "y": 41
       },
       "id": 28,
       "options": {
@@ -2227,7 +2246,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 33
+        "y": 49
       },
       "id": 29,
       "options": {
@@ -2280,7 +2299,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 41
+        "y": 57
       },
       "id": 30,
       "panels": [],
@@ -2355,7 +2374,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 42
+        "y": 58
       },
       "id": 31,
       "options": {
@@ -2519,7 +2538,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 42
+        "y": 58
       },
       "id": 32,
       "options": {
@@ -2658,7 +2677,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 42
+        "y": 58
       },
       "id": 33,
       "options": {
@@ -2801,7 +2820,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 50
+        "y": 66
       },
       "id": 34,
       "options": {
@@ -2918,7 +2937,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 50
+        "y": 66
       },
       "id": 35,
       "options": {
@@ -3029,7 +3048,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 50
+        "y": 66
       },
       "id": 36,
       "options": {
@@ -3114,7 +3133,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Image-embedding cache hit rate (vllm:mm_cache_hits/queries). Empty for the default text-only Routing Workbench demo and useful only for optional multimodal traffic.",
+      "description": "Image-embedding cache hit rate (vllm:mm_cache_hits/queries). Relevant because the Photo Tagger sends images; hits avoid re-encoding repeated images. Empty when no image traffic.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3175,7 +3194,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 58
+        "y": 74
       },
       "id": 37,
       "options": {
@@ -3308,7 +3327,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 58
+        "y": 74
       },
       "id": 38,
       "options": {
@@ -3405,7 +3424,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 66
+        "y": 82
       },
       "id": 39,
       "panels": [],
@@ -3477,7 +3496,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 67
+        "y": 83
       },
       "id": 40,
       "options": {
@@ -3588,7 +3607,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 67
+        "y": 83
       },
       "id": 41,
       "options": {
@@ -3690,7 +3709,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 75
+        "y": 91
       },
       "id": 42,
       "options": {
@@ -3791,7 +3810,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 75
+        "y": 91
       },
       "id": 43,
       "options": {
@@ -3892,7 +3911,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 83
+        "y": 99
       },
       "id": 44,
       "options": {
@@ -4001,7 +4020,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 83
+        "y": 99
       },
       "id": 45,
       "options": {
@@ -4103,7 +4122,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 83
+        "y": 99
       },
       "id": 46,
       "options": {
@@ -4204,7 +4223,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 91
+        "y": 107
       },
       "id": 47,
       "options": {
@@ -4247,7 +4266,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 99
+        "y": 115
       },
       "id": 48,
       "panels": [],
@@ -4285,7 +4304,7 @@
         "h": 6,
         "w": 4,
         "x": 0,
-        "y": 100
+        "y": 116
       },
       "id": 49,
       "options": {
@@ -4357,7 +4376,7 @@
         "h": 6,
         "w": 4,
         "x": 4,
-        "y": 100
+        "y": 116
       },
       "id": 50,
       "options": {
@@ -4425,7 +4444,7 @@
         "h": 6,
         "w": 4,
         "x": 8,
-        "y": 100
+        "y": 116
       },
       "id": 51,
       "options": {
@@ -4501,7 +4520,7 @@
         "h": 6,
         "w": 4,
         "x": 12,
-        "y": 100
+        "y": 116
       },
       "id": 52,
       "options": {
@@ -4575,7 +4594,7 @@
         "h": 6,
         "w": 4,
         "x": 16,
-        "y": 100
+        "y": 116
       },
       "id": 53,
       "options": {
@@ -4647,7 +4666,7 @@
         "h": 6,
         "w": 4,
         "x": 20,
-        "y": 100
+        "y": 116
       },
       "id": 54,
       "options": {
@@ -4754,7 +4773,7 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 106
+        "y": 122
       },
       "id": 55,
       "options": {
@@ -4854,7 +4873,7 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 106
+        "y": 122
       },
       "id": 56,
       "options": {
@@ -4932,7 +4951,7 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 106
+        "y": 122
       },
       "id": 57,
       "options": {
@@ -5058,7 +5077,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 112
+        "y": 128
       },
       "id": 58,
       "maxDataPoints": 3,
@@ -5211,7 +5230,7 @@
         "h": 8,
         "w": 6,
         "x": 6,
-        "y": 112
+        "y": 128
       },
       "id": 59,
       "options": {
@@ -5320,7 +5339,7 @@
         "h": 8,
         "w": 6,
         "x": 12,
-        "y": 112
+        "y": 128
       },
       "id": 60,
       "options": {
@@ -5432,7 +5451,7 @@
         "h": 8,
         "w": 6,
         "x": 18,
-        "y": 112
+        "y": 128
       },
       "id": 61,
       "options": {
@@ -5627,13 +5646,13 @@
     ]
   },
   "time": {
-    "from": "now-24h",
+    "from": "now-1h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
   "title": "NVIDIA Dynamo Unified GPU Dashboard",
   "uid": "dynamo-gpu-unified",
-  "version": 5,
+  "version": 69,
   "weekStart": ""
 }

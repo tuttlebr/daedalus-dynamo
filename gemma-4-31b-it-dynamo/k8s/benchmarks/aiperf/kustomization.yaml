@@ -17,8 +17,8 @@ configMapGenerator:
       - AIPERF_PIP_SPEC=aiperf==0.7.0
       - EXTRA_PIP_PACKAGES=
       - ENDPOINT_URL=http://gemma-4-31b-it-vllm-agg-0:8000
-      - MODEL_NAME=google/gemma-4-31B-it
-      - TOKENIZER_NAME=google/gemma-4-31B-it
+      - MODEL_NAME=nvidia/Gemma-4-31B-IT-NVFP4
+      - TOKENIZER_NAME=nvidia/Gemma-4-31B-IT-NVFP4
       - TOKENIZER_TRUST_REMOTE_CODE=true
       - PREFIX_RATIOS=0.1,0.5,0.9
       - INPUT_SEQUENCE_LENGTH=4096

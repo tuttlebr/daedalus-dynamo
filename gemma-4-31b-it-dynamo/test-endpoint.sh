@@ -4,7 +4,7 @@ set -euo pipefail
 BASE_URL="${BASE_URL:-${GEMMA_BASE_URL:-http://localhost:8000}}"
 ENDPOINT="${LLM_ENDPOINT:-${GEMMA_ENDPOINT:-${BASE_URL%/}/v1/chat/completions}}"
 MESSAGES_ENDPOINT="${MESSAGES_ENDPOINT:-${GEMMA_MESSAGES_ENDPOINT:-${BASE_URL%/}/v1/messages}}"
-MODEL_NAME="${MODEL_NAME:-google/gemma-4-31B-it}"
+MODEL_NAME="${MODEL_NAME:-nvidia/Gemma-4-31B-IT-NVFP4}"
 NAMESPACE="${NAMESPACE:-daedalus-dynamo}"
 DYNAMO_SERVICE="${DYNAMO_SERVICE:-gemma-4-31b-it-vllm-agg-0}"
 

@@ -14,9 +14,9 @@ such as `worker_id` and `timing`.
 | Backend name | Folder | Model | Runtime |
 | --- | --- | --- | --- |
 | `nemotron` | `nemotron-3-nano-omni-dynamo/` | `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4` | vLLM |
-| `qwen35b` | `qwen-36-35b-dynamo/` | `Qwen/Qwen3.6-35B-A3B-FP8` | vLLM |
-| `qwen27b` | `qwen-36-27b-dynamo/` | `Qwen/Qwen3.6-27B-FP8` | SGLang |
-| `gemma431b` | `gemma-4-31b-it-dynamo/` | `google/gemma-4-31B-it` | vLLM |
+| `qwen35b` | `qwen-36-35b-dynamo/` | `nvidia/Qwen3.6-35B-A3B-NVFP4` | vLLM |
+| `qwen27b` | `qwen-36-27b-dynamo/` | `nvidia/Qwen3.6-27B-NVFP4` | vLLM |
+| `gemma431b` | `gemma-4-31b-it-dynamo/` | `nvidia/Gemma-4-31B-IT-NVFP4` | vLLM |
 | `nemotronnano` | `nemotron-3-nano-30b-a3b-nvfp4-dynamo/` | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4` | vLLM |
 
 Shared Grafana dashboard assets live in [`observability/`](./observability/).
@@ -32,7 +32,7 @@ deploying, confirm the cluster provides:
 | Requirement | Provides | Notes |
 | --- | --- | --- |
 | `kubectl` + reachable cluster | API access | A current context must resolve and respond. |
-| Dynamo + Grove operators | DynamoGraphDeployment / Grove PodCliqueSet reconciliation | Required; the deployment renders a `DynamoGraphDeployment` per backend. |
+| Dynamo + Grove operators | DynamoGraphDeployment / ScalingAdapter / Grove PodCliqueSet reconciliation | Required; the deployment renders a Planner-enabled `DynamoGraphDeployment` per backend. |
 | Gateway API + GAIE + agentgateway CRDs | Gateway, HTTPRoute, InferencePool, EPP | Install or upgrade with `INSTALL_GATEWAY=1`. |
 | NVIDIA GPU Operator | `nvidia.com/gpu` scheduling, `nvidia.com/gpu.memory` labels | Per-node GPU memory labels gate worker placement. |
 | Enough high-memory GPU nodes for the selected backend YAML | Worker capacity | Worker replicas and GPU requests are read from each backend's `DynamoGraphDeployment`. |
@@ -100,10 +100,14 @@ INSTALL_GATEWAY=1 HF_TOKEN=<hugging-face-token> ./deploy.sh deploy
 ./deploy.sh render
 ./deploy.sh render nemotron qwen35b gemma431b nemotronnano
 DEPLOY_WORKBENCH=1 ./deploy.sh render qwen35b
+./deploy.sh render qwen35b
 ./deploy.sh delete
 ./deploy.sh delete qwen27b
+RECOVER_DRY_RUN=1 ./deploy.sh recover nemotronnano
+./deploy.sh recover nemotronnano
+DEPLOY_RECOVERY_JANITOR=1 ./deploy.sh deploy nemotronnano
 DELETE_DATA=1 ./deploy.sh delete all
-kubectl port-forward -n daedalus-dynamo svc/inference-gateway 8000:80
+kubectl port-forward -n daedalus-dynamo svc/inference-gateway 8000:32359
 ```
 
 `./deploy.sh delete` deletes shared gateway/workbench resources and all backend
@@ -111,6 +115,55 @@ runtime resources, preserving PVCs and app secrets. A backend-specific delete,
 for example `./deploy.sh delete qwen27b`, removes only that backend and preserves
 the shared gateway/model catalog/workbench; redeploy the remaining backends to
 refresh shared routing entries if needed.
+
+`./deploy.sh recover <backend>` is the day-2 recovery path for node/power
+interruptions that leave Dynamo/Grove runtime pods in `Failed` states such as
+`UnexpectedAdmissionError` or `ContainerStatusUnknown`. It deletes only failed
+Grove-owned backend pods and bumps the selected `DynamoGraphDeployment`
+`spec.restart.id`; PVCs, secrets, Redis data, gateway resources, running pods,
+and pending pods are left alone. With no backend argument, `recover` checks all
+known backends and skips DGDs that are not live in the namespace.
+
+For unattended cleanup, deploy the opt-in recovery janitor:
+
+```bash
+DEPLOY_RECOVERY_JANITOR=1 ./deploy.sh deploy <backend...>
+```
+
+The janitor is a namespace-scoped CronJob that deletes only failed
+Dynamo/Grove pods every five minutes by default. A later normal deploy without
+`DEPLOY_RECOVERY_JANITOR=1` removes the janitor resources.
+
+## NVIDIA Planner Autoscaling
+
+NVIDIA's current Dynamo autoscaling guidance is to scale
+`DynamoGraphDeployment` services through `DynamoGraphDeploymentScalingAdapter`
+resources. KEDA is the general recommendation, while the NVIDIA Dynamo Planner
+is the LLM-aware option for production and SLA-oriented workloads. The older
+`spec.services[*].autoscaling` field is deprecated and ignored.
+
+This repository renders the Planner by default for each selected backend:
+
+```bash
+HF_TOKEN=<hugging-face-token> ./deploy.sh deploy qwen35b
+```
+
+Planner rendering adds a `Planner` service to each selected DGD, enables the
+scaling adapter on the worker service, and marks the aggregated worker as the
+Planner's decode-side component. Defaults are conservative for these aggregated
+backends: `DYNAMO_PLANNER_MODE=agg`,
+`DYNAMO_PLANNER_OPTIMIZATION_TARGET=throughput`, and
+`DYNAMO_PLANNER_MIN_ENDPOINT` defaults to the backend's current worker replica
+count. Override `DYNAMO_PLANNER_IMAGE` if your cluster is pinned to a different
+Dynamo release, and set `DYNAMO_PLANNER_PROMETHEUS_ENDPOINT` if Prometheus is
+not at the kube-prometheus-stack default service URL. Set `DEPLOY_PLANNER=0`
+only when rendering for a cluster that does not yet have the
+`DynamoGraphDeploymentScalingAdapter` CRD.
+
+For new fully profiled Planner deployments, NVIDIA recommends the
+`DynamoGraphDeploymentRequest` workflow, which generates Planner-enabled DGDs
+from model, backend, hardware, workload, and SLA inputs:
+<https://docs.nvidia.com/dynamo/components/planner>.
 
 When `DEPLOY_WORKBENCH=1`, the Routing Workbench is exposed through NodePort
 `30153` by default:
@@ -175,7 +228,8 @@ Important root-level environment variables:
 | `DEPLOY_PHOTO_TAGGER` | unset | Compatibility alias for `DEPLOY_WORKBENCH`; `1` enables the demo app and `0` disables it. |
 | `WORKBENCH_IMAGE_REPOSITORY` | `${REGISTRY}/routing-workbench` | Workbench image repository. |
 | `WORKBENCH_NODEPORT` | `30153` | Workbench NodePort. |
-| `OPENAI_BASE_URL` | `http://inference-gateway:80/v1` | Workbench OpenAI-compatible base URL. |
+| `GATEWAY_PORT` | `32359` | Shared inference Gateway listener and generated LoadBalancer Service port. |
+| `OPENAI_BASE_URL` | `http://inference-gateway:32359/v1` | Workbench OpenAI-compatible base URL. |
 | `DEFAULT_BACKEND` | first selected backend | Backend used to derive the default workbench model. |
 | `WORKBENCH_DEFAULT_MODEL` | backend model id | Workbench model override. |
 | `WORKBENCH_REQUIRE_AUTH` | `true` in Kubernetes | Require auth for UI/API routes. |
@@ -188,6 +242,19 @@ Important root-level environment variables:
 | `DOCTOR_RUN_NODE_PROBE` | `auto` | Node-level RDMA probe mode: `auto` (exec a running worker pod, else print the opt-in command), `job` (schedule a short-lived probe pod and clean it up), or `off`. |
 | `DOCTOR_PROBE_IMAGE` | unset | Image used by the `DOCTOR_RUN_NODE_PROBE=job` probe pod. |
 | `DOCTOR_JSON` | unset | `DOCTOR_JSON=1` emits doctor results as JSON. |
+| `DEPLOY_PLANNER` | `1` | Render/apply NVIDIA Dynamo Planner autoscaling for selected backend DGDs; set `0` to disable. |
+| `DYNAMO_PLANNER_IMAGE` | `nvcr.io/nvidia/ai-dynamo/dynamo-planner:1.3.0-dev.1` | Dedicated Planner image. |
+| `DYNAMO_PLANNER_MODE` | `agg` | Planner mode for these aggregated manifests; `agg` and `decode` are supported. |
+| `DYNAMO_PLANNER_OPTIMIZATION_TARGET` | `throughput` | Planner target: `throughput`, `latency`, `sla`, or `load`. |
+| `DYNAMO_PLANNER_MIN_ENDPOINT` | worker replicas | Minimum worker endpoints; defaults to the rendered backend's worker replica count. |
+| `DYNAMO_PLANNER_MAX_GPU_BUDGET` | `8` | Per-DGD GPU budget cap for Planner scaling decisions. |
+| `DYNAMO_PLANNER_PROMETHEUS_ENDPOINT` | kube-prometheus-stack URL | Prometheus URL used by Planner throughput metrics. |
+| `DYNAMO_PLANNER_ADVISORY` | `false` | Run Planner in suggestion-only mode without applying scale changes. |
+| `RECOVER_DRY_RUN` | `0` | Print `recover` actions without deleting pods or patching DGDs. |
+| `RECOVER_WAIT_SECONDS` | `0` | Wait for recovered DGDs to become `Ready`; `0` prints a watch command. |
+| `DEPLOY_RECOVERY_JANITOR` | `0` | Render/apply the opt-in failed-pod cleanup CronJob. |
+| `RECOVERY_JANITOR_SCHEDULE` | `*/5 * * * *` | Cron schedule for the recovery janitor. |
+| `RECOVERY_JANITOR_IMAGE` | local kubectl version | Kubectl image used by the janitor CronJob. |
 
 Qwen compatibility wrappers map old `QWEN_IMAGE_REPOSITORY` values to
 `QWEN35B_IMAGE_REPOSITORY` or `QWEN27B_IMAGE_REPOSITORY`. New automation should
@@ -228,12 +295,12 @@ Do not add model-specific Kubernetes apply logic back into example-level
 
 The workbench calls the shared gateway like any other OpenAI-compatible client:
 
-- Model catalog: `http://inference-gateway:80/v1/models`
-- Chat completions: `http://inference-gateway:80/v1/chat/completions`
+- Model catalog: `http://inference-gateway:32359/v1/models`
+- Chat completions: `http://inference-gateway:32359/v1/chat/completions`
 - Routing key: the OpenAI request body `model` field
 
 To integrate an application, deploy it in the same namespace and configure its
-OpenAI base URL as `http://inference-gateway:80/v1`. Set `DEPLOY_WORKBENCH=1`
+OpenAI base URL as `http://inference-gateway:32359/v1`. Set `DEPLOY_WORKBENCH=1`
 only when you also want the demo workbench.
 
 Recommended checks:

@@ -113,7 +113,7 @@ spec:
             - name: REDIS_URL
               value: redis://qwen35b-redis:6379
             - name: MODEL_NAME
-              value: Qwen/Qwen3.6-35B-A3B-FP8
+              value: nvidia/Qwen3.6-35B-A3B-NVFP4
             - name: MODEL_CACHE_PATH
               value: /model/.model-express/cache
             - name: HF_HUB_CACHE
@@ -188,9 +188,9 @@ spec:
       replicas: 1
       resources:
         limits:
-          gpu: "2"
+          gpu: "1"
         requests:
-          gpu: "2"
+          gpu: "1"
       livenessProbe:
         httpGet:
           path: /live
@@ -232,7 +232,7 @@ spec:
             failureThreshold: 360
           env:
             - name: MODEL_NAME
-              value: Qwen/Qwen3.6-35B-A3B-FP8
+              value: nvidia/Qwen3.6-35B-A3B-NVFP4
             - name: HF_HUB_CACHE
               value: /model/.model-express/cache
             - name: MODEL_CACHE_PATH
@@ -284,26 +284,42 @@ spec:
                 sleep 2
               done
 
-              exec python3 -m dynamo.vllm \
-                --model "${MODEL_NAME}" \
-                --served-model-name "${MODEL_NAME}" \
-                --enable-multimodal \
+              python3 - <<'PY'
+              from pathlib import Path
+
+              path = Path("/usr/local/lib/python3.12/dist-packages/vllm/model_executor/models/qwen3_5.py")
+              old = 'AutoWeightsLoader(\n            self,\n            skip_prefixes=["mtp."],\n        )'
+              new = 'AutoWeightsLoader(\n            self,\n            skip_prefixes=["mtp."],\n            ignore_unexpected_suffixes=[".input_scale"],\n        )'
+              text = path.read_text()
+              if old in text:
+                path.write_text(text.replace(old, new))
+              elif 'ignore_unexpected_suffixes=[".input_scale"]' not in text:
+                raise SystemExit("Unable to patch vLLM Qwen3.5 loader for NVFP4 input_scale tensors")
+              PY
+
+                exec python3 -m dynamo.vllm \
+                  --model "${MODEL_NAME}" \
+                  --load-format mx \
+                  --quantization modelopt \
+                  --served-model-name "${MODEL_NAME}" \
+                  --enable-multimodal \
                 --frontend-decoding \
                 --multimodal-embedding-cache-capacity-gb "${DYN_MULTIMODAL_EMBEDDING_CACHE_GB}" \
                 --mm-processor-cache-gb 8 \
                 --dyn-tool-call-parser qwen3_coder \
                 --dyn-reasoning-parser qwen3 \
-                --tensor-parallel-size 2 \
+                --tensor-parallel-size 1 \
                 --pipeline-parallel-size 1 \
                 --data-parallel-size 1 \
-                --gpu-memory-utilization 0.9 \
-                --max-num-batched-tokens 8192 \
-                --max-model-len 128000 \
+                --gpu-memory-utilization 0.90 \
+                --max-model-len 65536 \
                 --max-num-seqs 8 \
+                --max-num-batched-tokens 8192 \
                 --enable-chunked-prefill \
                 --scheduling-policy priority \
                 --enable-prefix-caching \
                 --prefix-caching-hash-algo sha256 \
+                --kv-cache-dtype fp8 \
                 --no-enable-log-requests
           securityContext:
             capabilities:

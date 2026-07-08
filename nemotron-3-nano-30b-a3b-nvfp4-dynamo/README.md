@@ -32,10 +32,10 @@ Useful settings:
 
 The model requires Hugging Face access through `HF_TOKEN` or an existing
 `hf-token-secret`. The vLLM launch keeps `--trust-remote-code`, uses the
-Nemotron Nano Dynamo tool/reasoning parser, and defaults `--max-model-len` to
-`262144`, matching the Hugging Face default context noted on the model card.
-Worker replicas, tensor parallel size, GPU requests, and runtime args are owned
-by `k8s/base/dynamo.yaml`.
+Nemotron Nano Dynamo tool/reasoning parser, and intentionally does not set
+`--max-model-len` or `--max-num-batched-tokens` so vLLM derives those limits
+from the model/runtime configuration. Worker replicas, tensor parallel size,
+GPU requests, and runtime args are owned by `k8s/base/dynamo.yaml`.
 
 Sources checked while adding this backend:
 

@@ -7,6 +7,12 @@ GATEWAY_API_VERSION="${GATEWAY_API_VERSION:-v1.5.1}"
 GAIE_VERSION="${GAIE_VERSION:-v1.5.0}"
 AGENTGATEWAY_VERSION="${AGENTGATEWAY_VERSION:-v1.2.1}"
 GATEWAY_NAME="${GATEWAY_NAME:-inference-gateway}"
+GATEWAY_PORT="${GATEWAY_PORT:-32359}"
+
+if ! [[ "${GATEWAY_PORT}" =~ ^[0-9]+$ ]] || ((GATEWAY_PORT < 1 || GATEWAY_PORT > 65535)); then
+  echo "GATEWAY_PORT must be a numeric TCP port between 1 and 65535 (got '${GATEWAY_PORT}')." >&2
+  exit 1
+fi
 
 echo "==> Installing Gateway API ${GATEWAY_API_VERSION}"
 kubectl apply --server-side --force-conflicts \
@@ -67,7 +73,7 @@ spec:
       name: ${GATEWAY_NAME}-params
   listeners:
     - name: http
-      port: 80
+      port: ${GATEWAY_PORT}
       protocol: HTTP
 EOF
 

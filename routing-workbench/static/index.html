@@ -378,7 +378,8 @@
       defaultModel: "",
       models: [],
       currentRunId: null,
-      events: null
+      events: null,
+      resultRows: new Map()
     };
 
     const el = id => document.getElementById(id);
@@ -435,39 +436,59 @@
       }
     }
 
-    function renderRun(run) {
-      const summary = run.summary;
+    function renderSummary(summary) {
       const metrics = summary.metrics || {};
       el("run-status").textContent = summary.status;
       el("completed").textContent = `${summary.completed_requests}/${summary.config.total_requests}`;
       el("latency").textContent = fmtMs(metrics.latency_ms_avg);
       el("ttft").textContent = fmtMs(metrics.ttft_ms_avg);
       el("errors").textContent = String(summary.errors);
+    }
+
+    function renderRun(run) {
+      renderSummary(run.summary);
       el("request-json").textContent = JSON.stringify(run.request_body, null, 2);
 
       const rows = el("results");
       rows.innerHTML = "";
+      state.resultRows = new Map();
+      const fragment = document.createDocumentFragment();
       for (const result of run.results || []) {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${result.index}</td>
-          <td>${escapeHtml(result.prompt_group || "")}</td>
-          <td class="${result.status === "ok" ? "ok-text" : "err-text"}">${escapeHtml(result.status)}</td>
-          <td>${fmtMs(result.latency_ms)}</td>
-          <td>${fmtMs(result.ttft_ms)}</td>
-          <td>${escapeHtml(result.worker_id || "-")}</td>
-          <td>${escapeHtml(result.error || "")}</td>
-        `;
-        rows.appendChild(tr);
+        fragment.appendChild(resultRow(result));
       }
+      rows.appendChild(fragment);
     }
 
-    function escapeHtml(value) {
-      return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;");
+    function resultCell(value, className) {
+      const td = document.createElement("td");
+      td.textContent = value;
+      if (className) td.className = className;
+      return td;
+    }
+
+    function resultRow(result) {
+      const tr = document.createElement("tr");
+      tr.replaceChildren(
+        resultCell(result.index),
+        resultCell(result.prompt_group || ""),
+        resultCell(result.status, result.status === "ok" ? "ok-text" : "err-text"),
+        resultCell(fmtMs(result.latency_ms)),
+        resultCell(fmtMs(result.ttft_ms)),
+        resultCell(result.worker_id || "-"),
+        resultCell(result.error || "")
+      );
+      state.resultRows.set(result.index, tr);
+      return tr;
+    }
+
+    function renderResult(result) {
+      const rows = el("results");
+      state.resultRows.get(result.index)?.remove();
+      const tr = resultRow(result);
+      const nextIndex = [...state.resultRows.keys()]
+        .filter(index => index > result.index)
+        .sort((a, b) => a - b)[0];
+      rows.insertBefore(tr, nextIndex === undefined ? null : state.resultRows.get(nextIndex));
     }
 
     async function refreshCurrentRun() {
@@ -485,7 +506,8 @@
           if (name === "snapshot") {
             renderRun(payload);
           } else {
-            refreshCurrentRun();
+            if (payload.summary) renderSummary(payload.summary);
+            if (payload.result) renderResult(payload.result);
           }
         });
       }

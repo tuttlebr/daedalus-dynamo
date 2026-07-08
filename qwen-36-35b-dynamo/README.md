@@ -3,9 +3,9 @@ SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES.
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# Qwen3.6 35B A3B FP8
+# Qwen3.6 35B A3B NVFP4
 
-Serves [Qwen/Qwen3.6-35B-A3B-FP8](https://huggingface.co/Qwen/Qwen3.6-35B-A3B-FP8)
+Serves [nvidia/Qwen3.6-35B-A3B-NVFP4](https://huggingface.co/nvidia/Qwen3.6-35B-A3B-NVFP4)
 using vLLM with an aggregated Dynamo deployment.
 
 This recipe builds a custom container on top of the Dynamo vLLM runtime image —
@@ -22,7 +22,7 @@ no source build, no Rust toolchain.
 | --------------- | -------- | ------------ | ------------------------------------------------------- |
 | Dynamo frontend | 1        | 0            | Event-backed KV routing, ClusterIP only by default      |
 | ModelExpress    | 1        | 0            | Downloads and serves model cache metadata with Redis    |
-| vLLM worker     | 1        | 2            | TP=2 worker on an eligible high-memory GPU node         |
+| vLLM worker     | 1        | 1            | TP=1 worker on an eligible high-memory GPU node         |
 
 ## Step 1: Deploy Everything
 
@@ -98,11 +98,11 @@ linker prerequisites first:
 sudo apt-get install -y build-essential libc6-dev
 ```
 
-The default worker shape starts one TP=2 vLLM worker. On Daedalus this consumes
-two L40S GPUs on one eligible high-memory GPU node.
-When changing an existing deployment from a smaller GPU shape, delete the old
-deployment before redeploying so the new 2-GPU pods are not blocked by old
-1-GPU pods during a rolling update:
+The default worker shape starts one TP=1 vLLM worker. On Daedalus this consumes
+one L40S GPU on one eligible high-memory GPU node.
+When changing an existing deployment from the older TP=2/two-GPU shape, delete
+the old deployment before redeploying so the operator recreates the worker pods
+with the new resource shape:
 
 ```bash
 NAMESPACE=${NAMESPACE} ./deploy.sh delete
@@ -160,7 +160,7 @@ In another terminal, send a minimal text request:
 curl http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "Qwen/Qwen3.6-35B-A3B-FP8",
+    "model": "nvidia/Qwen3.6-35B-A3B-NVFP4",
     "messages": [{"role": "user", "content": "Hello!"}],
     "max_tokens": 128
   }'
@@ -173,7 +173,7 @@ OpenAI-compatible fields:
 curl http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "Qwen/Qwen3.6-35B-A3B-FP8",
+    "model": "nvidia/Qwen3.6-35B-A3B-NVFP4",
     "messages": [{"role": "user", "content": "Hello!"}],
     "max_tokens": 128,
     "nvext": {
@@ -195,7 +195,7 @@ For OpenAI Python clients, pass the same object through `extra_body`:
 
 ```python
 client.chat.completions.create(
-    model="Qwen/Qwen3.6-35B-A3B-FP8",
+    model="nvidia/Qwen3.6-35B-A3B-NVFP4",
     messages=[{"role": "user", "content": "Hello!"}],
     max_tokens=128,
     extra_body={
@@ -220,7 +220,7 @@ curl http://localhost:8000/v1/messages \
   -H "Content-Type: application/json" \
   -H "anthropic-version: 2023-06-01" \
   -d '{
-    "model": "Qwen/Qwen3.6-35B-A3B-FP8",
+    "model": "nvidia/Qwen3.6-35B-A3B-NVFP4",
     "messages": [{"role": "user", "content": "Hello!"}],
     "max_tokens": 128,
     "nvext": {
@@ -245,7 +245,7 @@ For streaming tool-call dispatch, stream a tool-capable request and watch for
 curl -N http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "Qwen/Qwen3.6-35B-A3B-FP8",
+    "model": "nvidia/Qwen3.6-35B-A3B-NVFP4",
     "stream": true,
     "messages": [{"role": "user", "content": "Call the echo tool with hello."}],
     "tools": [{
@@ -271,7 +271,7 @@ To exercise the multimodal path, attach an image:
 curl http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "Qwen/Qwen3.6-35B-A3B-FP8",
+    "model": "nvidia/Qwen3.6-35B-A3B-NVFP4",
     "messages": [{
       "role": "user",
       "content": [
@@ -347,9 +347,8 @@ the final `DynamoGraphDeployment` under
   `--enable-streaming-tool-dispatch`, and
   `--enable-streaming-reasoning-dispatch` enable the agent-harness frontend
   path for Anthropic-compatible clients and early tool/reasoning SSE events.
-- `VllmWorker` requests two GPUs and keeps required pod anti-affinity in place
-  so the two default worker replicas land on different eligible high-memory GPU
-  nodes.
+- `VllmWorker` requests one GPU and keeps required node affinity for eligible
+  high-memory GPU nodes.
 
 ## Event plane transport
 
@@ -390,11 +389,11 @@ Routing Workbench lives once at
 shared text-only demo app to the Gateway API Inference Extension endpoint:
 
 ```text
-OPENAI_BASE_URL=http://inference-gateway:80/v1
+OPENAI_BASE_URL=http://inference-gateway:32359/v1
 ```
 
 Set `DEPLOY_WORKBENCH=1` when you want this demo app. Custom apps should use
-`http://inference-gateway:80/v1` as their OpenAI base URL and choose a model
+`http://inference-gateway:32359/v1` as their OpenAI base URL and choose a model
 returned by `/v1/models`.
 
 ## File Layout

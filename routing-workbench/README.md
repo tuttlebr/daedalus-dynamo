@@ -30,7 +30,7 @@ Start a run:
 curl -sS http://localhost:3000/api/runs \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "Qwen/Qwen3.6-35B-A3B-FP8",
+    "model": "nvidia/Qwen3.6-35B-A3B-NVFP4",
     "preset": "repeated-shared-prefix",
     "total_requests": 8,
     "concurrency": 2,
@@ -49,7 +49,7 @@ Supported presets are `cold-prompt`, `repeated-shared-prefix`,
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `LISTEN_ADDR` | `0.0.0.0:3000` | HTTP listen address. |
-| `OPENAI_BASE_URL` | `http://inference-gateway:80/v1` | OpenAI-compatible base URL. |
+| `OPENAI_BASE_URL` | `http://inference-gateway:32359/v1` | OpenAI-compatible base URL. |
 | `WORKBENCH_DEFAULT_MODEL` | required | Default model id sent in run requests. |
 | `WORKBENCH_REQUIRE_AUTH` | `false` | Require auth for UI/API routes. |
 | `WORKBENCH_AUTH_USER` | `routing-workbench` | HTTP Basic username. |
@@ -62,7 +62,7 @@ Supported presets are `cold-prompt`, `repeated-shared-prefix`,
 ## Local Development
 
 ```bash
-WORKBENCH_DEFAULT_MODEL=Qwen/Qwen3.6-35B-A3B-FP8 \
+WORKBENCH_DEFAULT_MODEL=nvidia/Qwen3.6-35B-A3B-NVFP4 \
 OPENAI_BASE_URL=http://localhost:8000/v1 \
 cargo run --manifest-path routing-workbench/Cargo.toml
 ```

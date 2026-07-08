@@ -230,14 +230,13 @@ def run_checked(cmd: list[str]) -> None:
 
 
 def default_dynosim_engine_args(concurrency: int) -> dict[str, Any]:
-    # Mirror this repo's SGLang worker shape at the level DynoSim's SGLang path
-    # accepts: radix-cache-aware admission (prefix caching on by default),
-    # chunked-prefill budget, and a running-request cap.
     return {
-        "engine_type": "sglang",
-        "page_size": 16,
-        "chunked_prefill_size": 2048,
-        "max_running_requests": concurrency,
+        "engine_type": "vllm",
+        "block_size": 64,
+        "enable_prefix_caching": True,
+        "enable_chunked_prefill": True,
+        "max_num_seqs": concurrency,
+        "max_num_batched_tokens": 2048,
     }
 
 
@@ -572,7 +571,7 @@ def build_dgdr_spec(
     osl: int,
     concurrency: int,
 ) -> dict[str, Any]:
-    model = env("MODEL_NAME", "Qwen/Qwen3.6-27B-FP8")
+    model = env("MODEL_NAME", "nvidia/Qwen3.6-27B-NVFP4")
     default_name = sanitize_k8s_name(model.rsplit("/", 1)[-1], "dynosim-candidate")
     name = sanitize_k8s_name(env("DGDR_NAME", f"{default_name}-dgdr"), "dynosim-candidate")
     best_prefix = selected_prefix_ratio(rows, decision_summary)
@@ -614,7 +613,7 @@ def build_dgdr_spec(
 
     spec: dict[str, Any] = {
         "model": model,
-        "backend": env("DGDR_BACKEND", "sglang"),
+        "backend": env("DGDR_BACKEND", "vllm"),
         "searchStrategy": env("DGDR_SEARCH_STRATEGY", "rapid"),
         "autoApply": env_bool("DGDR_AUTO_APPLY", False),
     }
@@ -871,8 +870,8 @@ def run_aiperf(
     concurrency: int,
     num_prefix_prompts: int,
 ) -> list[dict[str, Any]]:
-    endpoint_url = env("ENDPOINT_URL", "http://qwen36-27b-sglang-agg-frontend:8000")
-    model = env("MODEL_NAME", "Qwen/Qwen3.6-27B-FP8")
+    endpoint_url = env("ENDPOINT_URL", "http://qwen36-27b-vllm-agg-frontend:8000")
+    model = env("MODEL_NAME", "nvidia/Qwen3.6-27B-NVFP4")
     tokenizer = env("TOKENIZER_NAME", model) or model
     seed = env_int("RANDOM_SEED", 0)
     timeout = env_int("REQUEST_TIMEOUT_SECONDS", 900)
@@ -972,8 +971,8 @@ def run() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     run_config = {
-        "endpoint_url": env("ENDPOINT_URL", "http://qwen36-27b-sglang-agg-frontend:8000"),
-        "model": env("MODEL_NAME", "Qwen/Qwen3.6-27B-FP8"),
+        "endpoint_url": env("ENDPOINT_URL", "http://qwen36-27b-vllm-agg-frontend:8000"),
+        "model": env("MODEL_NAME", "nvidia/Qwen3.6-27B-NVFP4"),
         "prefix_ratios": prefix_ratios,
         "input_sequence_length": isl,
         "output_sequence_length": osl,

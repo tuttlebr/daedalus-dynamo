@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use futures::stream::FuturesUnordered;
@@ -15,6 +15,8 @@ use crate::models::{
     RequestResult, RunConfig, RunCreateRequest, RunDetail, RunEvent, RunMetrics, RunSummary,
 };
 use crate::openai::{ChatResult, OpenAiClient};
+
+const MAX_RETAINED_RUNS: usize = 50;
 
 #[derive(Clone, Default)]
 pub struct RunRegistry {
@@ -58,6 +60,7 @@ impl RunRegistry {
             events,
         });
         self.runs.write().await.insert(id.clone(), Arc::clone(&run));
+        self.prune_completed_runs().await;
 
         let detail = run.detail().await;
         tokio::spawn(execute_run(id, Arc::clone(&run), cfg, openai));
@@ -85,6 +88,40 @@ impl RunRegistry {
 
     pub async fn get_detail(&self, id: &str) -> AppResult<RunDetail> {
         Ok(self.get(id).await?.detail().await)
+    }
+
+    async fn prune_completed_runs(&self) {
+        let runs: Vec<(String, Arc<Run>)> = self
+            .runs
+            .read()
+            .await
+            .iter()
+            .map(|(id, run)| (id.clone(), Arc::clone(run)))
+            .collect();
+        let total = runs.len();
+        if total <= MAX_RETAINED_RUNS {
+            return;
+        }
+
+        let mut completed = Vec::new();
+        for (id, run) in runs {
+            let summary = run.summary.read().await;
+            if !matches!(summary.status.as_str(), "queued" | "running") {
+                completed.push((summary.created_at.clone(), id));
+            }
+        }
+        completed.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let remove_count = completed.len().min(total - MAX_RETAINED_RUNS);
+        if remove_count == 0 {
+            return;
+        }
+        let remove: HashSet<String> = completed
+            .into_iter()
+            .take(remove_count)
+            .map(|(_, id)| id)
+            .collect();
+        self.runs.write().await.retain(|id, _| !remove.contains(id));
     }
 }
 
@@ -433,9 +470,16 @@ fn now_rfc3339() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_request_body, normalize_request};
+    use std::sync::Arc;
+
+    use serde_json::json;
+    use tokio::sync::{broadcast, RwLock};
+
+    use super::{
+        build_request_body, empty_metrics, normalize_request, Run, RunRegistry, MAX_RETAINED_RUNS,
+    };
     use crate::config::Config;
-    use crate::models::RunCreateRequest;
+    use crate::models::{RunConfig, RunCreateRequest, RunSummary};
 
     fn cfg() -> Config {
         Config {
@@ -449,6 +493,36 @@ mod tests {
             max_run_requests: 128,
             max_concurrency: 16,
         }
+    }
+
+    fn run(id: &str, status: &str, created_at: String) -> Arc<Run> {
+        let (events, _) = broadcast::channel(1);
+        Arc::new(Run {
+            summary: RwLock::new(RunSummary {
+                id: id.to_string(),
+                status: status.to_string(),
+                created_at,
+                started_at: None,
+                finished_at: None,
+                config: RunConfig {
+                    model: "model-a".to_string(),
+                    preset: "cold-prompt".to_string(),
+                    total_requests: 1,
+                    concurrency: 1,
+                    shared_prefix_tokens: 0,
+                    max_tokens: 1,
+                    temperature: 0.0,
+                    include_nvext: false,
+                },
+                successes: 1,
+                errors: 0,
+                completed_requests: 1,
+                metrics: empty_metrics(),
+            }),
+            request_body: json!({}),
+            results: RwLock::new(Vec::new()),
+            events,
+        })
     }
 
     #[test]
@@ -494,5 +568,29 @@ mod tests {
         let (body, _) = build_request_body(&run, 0);
         assert!(body.get("nvext").is_some());
         assert!(body["nvext"].get("agent_hints").is_some());
+    }
+
+    #[tokio::test]
+    async fn prunes_old_completed_runs() {
+        let registry = RunRegistry::default();
+        {
+            let mut runs = registry.runs.write().await;
+            for i in 0..(MAX_RETAINED_RUNS + 5) {
+                let id = format!("run-{i:03}");
+                let status = if i == 0 { "running" } else { "completed" };
+                runs.insert(
+                    id.clone(),
+                    run(&id, status, format!("2026-01-01T00:00:{i:02}Z")),
+                );
+            }
+        }
+
+        registry.prune_completed_runs().await;
+
+        let runs = registry.runs.read().await;
+        assert_eq!(runs.len(), MAX_RETAINED_RUNS);
+        assert!(runs.contains_key("run-000"));
+        assert!(!runs.contains_key("run-001"));
+        assert!(runs.contains_key(&format!("run-{:03}", MAX_RETAINED_RUNS + 4)));
     }
 }

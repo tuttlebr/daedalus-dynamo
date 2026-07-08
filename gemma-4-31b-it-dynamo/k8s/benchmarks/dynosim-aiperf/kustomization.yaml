@@ -19,8 +19,8 @@ configMapGenerator:
       - RUN_DYNOSIM=true
       - RUN_AIPERF=true
       - ENDPOINT_URL=http://gemma-4-31b-it-vllm-agg-0:8000
-      - MODEL_NAME=google/gemma-4-31B-it
-      - TOKENIZER_NAME=google/gemma-4-31B-it
+      - MODEL_NAME=nvidia/Gemma-4-31B-IT-NVFP4
+      - TOKENIZER_NAME=nvidia/Gemma-4-31B-IT-NVFP4
       - TOKENIZER_TRUST_REMOTE_CODE=true
       - PREFIX_RATIOS=0.05,0.25,0.5,0.75,0.95
       - INPUT_SEQUENCE_LENGTH=8192

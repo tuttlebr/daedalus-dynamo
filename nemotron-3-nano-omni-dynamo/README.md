@@ -60,9 +60,8 @@ Useful deploy env overrides:
 - `NAMESPACE=...` — default `daedalus-dynamo`
 - `WORKBENCH_AUTH_TOKEN=...` — optional; used only when creating the Workbench auth secret for the first time.
 - `WORKBENCH_AUTH_USER=...` — default `routing-workbench`; HTTP Basic username for the Workbench UI/API.
-- `WORKER_REPLICAS=...` — default `1`; worker replicas for this backend.
-- `NEMOTRON_TENSOR_PARALLEL_SIZE=...` — default `1`; keep `1` for NVFP4 on the Marlin fallback path.
-- `NEMOTRON_GPUS_PER_WORKER=...` — default matches `NEMOTRON_TENSOR_PARALLEL_SIZE`.
+- Worker replicas, GPU requests, and runtime args are owned by
+  `k8s/base/dynamo.yaml`; keep TP=1 for NVFP4 on the Marlin fallback path.
 - `SKIP_BUILD=1`, `SKIP_PUSH=1`, or `SKIP_DEPLOY=1` for partial runs
 
 ### Local image build
@@ -376,9 +375,8 @@ the final `DynamoGraphDeployment` under
   `--enable-streaming-tool-dispatch`, and
   `--enable-streaming-reasoning-dispatch` enable the agent-harness frontend
   path for Anthropic-compatible clients and early tool/reasoning SSE events.
-- `VllmWorker` requests two GPUs and keeps required pod anti-affinity in place
-  so the two default worker replicas land on different eligible high-memory GPU
-  nodes.
+- `VllmWorker` requests one GPU and keeps required node affinity for eligible
+  high-memory GPU nodes.
 
 ## Event plane transport
 
@@ -419,11 +417,11 @@ Routing Workbench lives once at
 shared text-only demo app to the Gateway API Inference Extension endpoint:
 
 ```text
-OPENAI_BASE_URL=http://inference-gateway:80/v1
+OPENAI_BASE_URL=http://inference-gateway:32359/v1
 ```
 
 Set `DEPLOY_WORKBENCH=1` when you want this demo app. Custom apps should use
-`http://inference-gateway:80/v1` as their OpenAI base URL and choose a model
+`http://inference-gateway:32359/v1` as their OpenAI base URL and choose a model
 returned by `/v1/models`.
 
 ## File Layout

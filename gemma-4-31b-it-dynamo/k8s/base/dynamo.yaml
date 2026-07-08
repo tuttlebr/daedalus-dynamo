@@ -54,7 +54,7 @@ spec:
               exec python3 -m dynamo.frontend
               --router-mode kv
               --no-router-kv-events
-              --router-min-initial-workers 2
+              --router-min-initial-workers 1
               --enable-anthropic-api
               --strip-anthropic-preamble
               --enable-streaming-tool-dispatch
@@ -113,7 +113,7 @@ spec:
             - name: REDIS_URL
               value: redis://gemma431b-redis:6379
             - name: MODEL_NAME
-              value: google/gemma-4-31B-it
+              value: nvidia/Gemma-4-31B-IT-NVFP4
             - name: MODEL_CACHE_PATH
               value: /model/.model-express/cache
             - name: HF_HUB_CACHE
@@ -185,12 +185,12 @@ spec:
     VllmWorker:
       componentType: worker
       envFromSecret: hf-token-secret
-      replicas: 2
+      replicas: 1
       resources:
         limits:
-          gpu: "2"
+          gpu: "1"
         requests:
-          gpu: "2"
+          gpu: "1"
       livenessProbe:
         httpGet:
           path: /live
@@ -232,7 +232,7 @@ spec:
             failureThreshold: 360
           env:
             - name: MODEL_NAME
-              value: google/gemma-4-31B-it
+              value: nvidia/Gemma-4-31B-IT-NVFP4
             - name: HF_HUB_CACHE
               value: /model/.model-express/cache
             - name: MODEL_CACHE_PATH
@@ -295,16 +295,18 @@ spec:
                 --trust-remote-code \
                 --dyn-tool-call-parser gemma4 \
                 --dyn-reasoning-parser gemma4 \
-                --tensor-parallel-size 2 \
+                --tensor-parallel-size 1 \
                 --pipeline-parallel-size 1 \
                 --data-parallel-size 1 \
-                --gpu-memory-utilization 0.9 \
-                --max-num-batched-tokens 4096 \
-                --max-num-seqs 4 \
+                --gpu-memory-utilization 0.90 \
+                --max-model-len 65536 \
+                --max-num-seqs 8 \
+                --max-num-batched-tokens 8192 \
                 --enable-chunked-prefill \
                 --scheduling-policy priority \
                 --enable-prefix-caching \
                 --prefix-caching-hash-algo sha256 \
+                --kv-cache-dtype fp8 \
                 --no-enable-log-requests
           securityContext:
             capabilities:

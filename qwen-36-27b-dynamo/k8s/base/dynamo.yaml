@@ -1,12 +1,12 @@
 apiVersion: nvidia.com/v1alpha1
 kind: DynamoGraphDeployment
 metadata:
-  name: qwen36-27b-sglang-agg
+  name: qwen36-27b-vllm-agg
   labels:
-    app.kubernetes.io/name: qwen36-27b-sglang-agg
+    app.kubernetes.io/name: qwen36-27b-vllm-agg
     app.kubernetes.io/part-of: qwen36-photo-demo
 spec:
-  backendFramework: sglang
+  backendFramework: vllm
   pvcs:
     - name: qwen27b-model-cache
       create: false
@@ -113,7 +113,7 @@ spec:
             - name: REDIS_URL
               value: redis://qwen27b-redis:6379
             - name: MODEL_NAME
-              value: Qwen/Qwen3.6-27B-FP8
+              value: nvidia/Qwen3.6-27B-NVFP4
             - name: MODEL_CACHE_PATH
               value: /model/.model-express/cache
             - name: HF_HUB_CACHE
@@ -152,7 +152,7 @@ spec:
               mkdir -p /model/.model-express
               cat > /model/.model-express/config.yaml << EOF
               local_path: $MODEL_CACHE_PATH
-              server_endpoint: http://qwen36-27b-sglang-agg-modelexpress:8000
+              server_endpoint: http://qwen36-27b-vllm-agg-modelexpress:8000
               timeout_secs: null
               EOF
 
@@ -182,15 +182,15 @@ spec:
               echo "Server PID: $SERVER_PID"
               wait "$SERVER_PID"
 
-    SGLangWorker:
+    VllmWorker:
       componentType: worker
       envFromSecret: hf-token-secret
       replicas: 1
       resources:
         limits:
-          gpu: "2"
+          gpu: "1"
         requests:
-          gpu: "2"
+          gpu: "1"
       livenessProbe:
         httpGet:
           path: /live
@@ -232,17 +232,23 @@ spec:
             failureThreshold: 360
           env:
             - name: MODEL_NAME
-              value: Qwen/Qwen3.6-27B-FP8
+              value: nvidia/Qwen3.6-27B-NVFP4
             - name: HF_HUB_CACHE
               value: /model/.model-express/cache
             - name: MODEL_CACHE_PATH
               value: /model/.model-express/cache
             - name: MODEL_EXPRESS_URL
-              value: http://qwen36-27b-sglang-agg-modelexpress:8000
+              value: http://qwen36-27b-vllm-agg-modelexpress:8000
             - name: MODEL_EXPRESS_HOST
-              value: qwen36-27b-sglang-agg-modelexpress
+              value: qwen36-27b-vllm-agg-modelexpress
             - name: MODEL_EXPRESS_PORT
               value: "8000"
+            - name: DYN_VLLM_EMBEDDING_TRANSFER_MODE
+              value: local
+            - name: DYN_MULTIMODAL_EMBEDDING_CACHE_GB
+              value: "4"
+            - name: DYN_MM_ALLOW_INTERNAL
+              value: "1"
             - name: DYN_REQUEST_PLANE
               value: tcp
             - name: DYN_EVENT_PLANE
@@ -278,20 +284,44 @@ spec:
                 sleep 2
               done
 
-              exec python3 -m dynamo.sglang \
-                --model-path "${MODEL_NAME}" \
-                --served-model-name "${MODEL_NAME}" \
-                --tp-size 2 \
+              python3 - <<'PY'
+              from pathlib import Path
+
+              path = Path("/usr/local/lib/python3.12/dist-packages/vllm/model_executor/models/qwen3_5.py")
+              old = 'AutoWeightsLoader(\n            self,\n            skip_prefixes=["mtp."],\n        )'
+              new = 'AutoWeightsLoader(\n            self,\n            skip_prefixes=["mtp."],\n            ignore_unexpected_suffixes=[".input_scale"],\n        )'
+              text = path.read_text()
+              if old in text:
+                path.write_text(text.replace(old, new))
+              elif 'ignore_unexpected_suffixes=[".input_scale"]' not in text:
+                raise SystemExit("Unable to patch vLLM Qwen3.5 loader for NVFP4 input_scale tensors")
+              PY
+
+                exec python3 -m dynamo.vllm \
+                  --model "${MODEL_NAME}" \
+                  --load-format mx \
+                  --quantization modelopt \
+                  --served-model-name "${MODEL_NAME}" \
+                  --enable-multimodal \
+                --frontend-decoding \
+                --multimodal-embedding-cache-capacity-gb "${DYN_MULTIMODAL_EMBEDDING_CACHE_GB}" \
+                --mm-processor-cache-gb 8 \
                 --trust-remote-code \
                 --dyn-tool-call-parser qwen3_coder \
                 --dyn-reasoning-parser qwen3 \
-                --mem-fraction-static 0.85 \
-                --context-length 65536 \
-                --chunked-prefill-size 8192 \
-                --max-running-requests 8 \
-                --schedule-policy lof \
-                --enable-priority-scheduling \
-                --enable-metrics
+                --tensor-parallel-size 1 \
+                --pipeline-parallel-size 1 \
+                --data-parallel-size 1 \
+                --gpu-memory-utilization 0.90 \
+                --max-model-len 65536 \
+                --max-num-seqs 8 \
+                --max-num-batched-tokens 8192 \
+                --enable-chunked-prefill \
+                --scheduling-policy priority \
+                --enable-prefix-caching \
+                --prefix-caching-hash-algo sha256 \
+                --kv-cache-dtype fp8 \
+                --no-enable-log-requests
           securityContext:
             capabilities:
               add:

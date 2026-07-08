@@ -185,7 +185,7 @@ spec:
     VllmWorker:
       componentType: worker
       envFromSecret: hf-token-secret
-      replicas: 4
+      replicas: 1
       resources:
         limits:
           gpu: "1"
@@ -302,13 +302,13 @@ spec:
                 --pipeline-parallel-size 1 \
                 --data-parallel-size 1 \
                 --gpu-memory-utilization 0.90 \
-                --max-num-batched-tokens 2560 \
-                --max-model-len auto \
                 --max-num-seqs 8 \
+                --max-num-batched-tokens 8192 \
                 --enable-chunked-prefill \
                 --scheduling-policy priority \
                 --enable-prefix-caching \
                 --prefix-caching-hash-algo sha256 \
+                --kv-cache-dtype fp8 \
                 --no-enable-log-requests
           securityContext:
             capabilities:

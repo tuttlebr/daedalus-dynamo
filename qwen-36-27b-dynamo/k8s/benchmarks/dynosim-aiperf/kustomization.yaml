@@ -18,9 +18,9 @@ configMapGenerator:
       - EXTRA_PIP_PACKAGES=
       - RUN_DYNOSIM=true
       - RUN_AIPERF=true
-      - ENDPOINT_URL=http://qwen36-27b-sglang-agg-frontend:8000
-      - MODEL_NAME=Qwen/Qwen3.6-27B-FP8
-      - TOKENIZER_NAME=Qwen/Qwen3.6-27B-FP8
+      - ENDPOINT_URL=http://qwen36-27b-vllm-agg-frontend:8000
+      - MODEL_NAME=nvidia/Qwen3.6-27B-NVFP4
+      - TOKENIZER_NAME=nvidia/Qwen3.6-27B-NVFP4
       - TOKENIZER_TRUST_REMOTE_CODE=true
       - PREFIX_RATIOS=0.05,0.25,0.5,0.75,0.95
       - INPUT_SEQUENCE_LENGTH=8192
@@ -34,7 +34,7 @@ configMapGenerator:
       - DYNOSIM_ARRIVAL_INTERVAL_MS=0
       - DYNOSIM_TURNS_PER_SESSION=1
       - DYNOSIM_INTER_TURN_DELAY_MS=0
-      - 'DYNOSIM_ENGINE_ARGS_JSON={"engine_type":"sglang","page_size":16,"chunked_prefill_size":2048,"max_running_requests":8}'
+      - 'DYNOSIM_ENGINE_ARGS_JSON={"engine_type":"vllm","block_size":64,"enable_prefix_caching":true,"enable_chunked_prefill":true,"max_num_seqs":4,"max_num_batched_tokens":2048}'
       - 'DYNOSIM_ROUTER_CONFIG_JSON={"router_queue_policy":"fcfs"}'
       - DYNOSIM_EXTRA_ARGS=
       - DYNAMO_AGENT_HINTS_ENABLED=true
@@ -61,7 +61,7 @@ configMapGenerator:
       - DGDR_NAME=qwen36-dynosim-candidate
       - DGDR_NAMESPACE=
       - DGDR_IMAGE=nvcr.io/nvidia/ai-dynamo/dynamo-planner:1.1.1
-      - DGDR_BACKEND=sglang
+      - DGDR_BACKEND=vllm
       - DGDR_SEARCH_STRATEGY=rapid
       - DGDR_AUTO_APPLY=false
       - DGDR_TTFT_MS=500

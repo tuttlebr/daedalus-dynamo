@@ -43,7 +43,7 @@ kubectl apply -n qwen36-27b -k k8s/benchmarks/dynosim-aiperf
 
 Default workload:
 
-- endpoint: `http://qwen36-27b-sglang-agg-frontend:8000`
+- endpoint: `http://qwen36-27b-vllm-agg-frontend:8000`
 - prefix ratios: `0.1,0.5,0.9`
 - input/output tokens: `4096/128`
 - requests/concurrency: `200/4`
@@ -90,9 +90,9 @@ Useful knobs:
   Offline `kv_router` simulation requires at least two workers, so set
   `DYNOSIM_ROUTER_MODES=round_robin` if you intentionally simulate one worker.
 - `DYNOSIM_ENGINE_ARGS_JSON` controls mocker engine settings. The shipped
-  default mirrors this repo's SGLang worker shape at the level DynoSim's
-  SGLang path accepts: radix prefix caching, chunked prefill with
-  `chunked_prefill_size=2048`, `page_size=16`, and `max_running_requests=8`.
+  default mirrors this repo's vLLM worker shape at the level DynoSim's vLLM
+  path accepts: prefix caching, chunked prefill, `block_size=64`,
+  `max_num_seqs=4`, and `max_num_batched_tokens=2048`.
 - `DYNOSIM_ROUTER_CONFIG_JSON` passes KV-router settings such as
   `router_queue_policy`.
 - `DYNOSIM_EXTRA_ARGS` and `AIPERF_EXTRA_ARGS` let you append CLI flags without

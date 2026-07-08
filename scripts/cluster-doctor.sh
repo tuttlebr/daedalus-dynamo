@@ -171,6 +171,7 @@ check_crds() {
   local crd label
   for crd in \
     dynamographdeployments.nvidia.com \
+    dynamographdeploymentscalingadapters.nvidia.com \
     podcliquesets.grove.io \
     gateways.gateway.networking.k8s.io \
     httproutes.gateway.networking.k8s.io \
@@ -296,6 +297,44 @@ check_nats() {
     ok "nats" "dynamo-platform-nats service present"
   else
     warn "nats" "no dynamo-platform-nats service. The frontend uses DYN_EVENT_PLANE=zmq (no NATS dependency); only NATS-based event flows are affected."
+  fi
+  return 0
+}
+
+check_workload_recovery() {
+  section "Dynamo workload recovery"
+  if ! kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1; then
+    skip "recovery:namespace" "namespace ${NAMESPACE} does not exist"
+    return 0
+  fi
+  if ! api_resource_exists dynamographdeployments.nvidia.com; then
+    skip "recovery:dgd-ready" "DynamoGraphDeployment CRD is not installed"
+    return 0
+  fi
+
+  local failed_pods not_ready
+  failed_pods="$(
+    kq get pods \
+      -n "${NAMESPACE}" \
+      -l 'app.kubernetes.io/managed-by=grove-operator,nvidia.com/dynamo-graph-deployment-name' \
+      --field-selector=status.phase=Failed \
+      -o jsonpath='{range .items[*]}{.metadata.name}{":"}{.status.reason}{" "}{end}'
+  )"
+  if [[ -n "${failed_pods// /}" ]]; then
+    warn "recovery:failed-pods" "failed Grove/Dynamo pod(s): ${failed_pods}. Run ./deploy.sh recover <backend>."
+  else
+    ok "recovery:failed-pods" "no failed Grove/Dynamo pods"
+  fi
+
+  not_ready="$(
+    kq get dynamographdeployment -n "${NAMESPACE}" --no-headers |
+      awk '$2 != "True" {print $1 "=" $2}' |
+      tr '\n' ' '
+  )"
+  if [[ -n "${not_ready// /}" ]]; then
+    warn "recovery:dgd-ready" "not-ready DGD(s): ${not_ready}. Run ./deploy.sh recover <backend>; use DEPLOY_RECOVERY_JANITOR=1 for opt-in cleanup."
+  else
+    ok "recovery:dgd-ready" "all live DGDs report Ready=True"
   fi
   return 0
 }
@@ -434,6 +473,7 @@ main() {
   check_device_plugin
   check_storage
   check_nats
+  check_workload_recovery
   check_transport_env
   check_rdma_resources
   check_network_operator

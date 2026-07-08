@@ -152,8 +152,8 @@ def build_extra_inputs(osl: int) -> dict[str, Any]:
 
 
 def run() -> int:
-    endpoint_url = env("ENDPOINT_URL", "http://qwen36-27b-sglang-agg-frontend:8000")
-    model = env("MODEL_NAME", "Qwen/Qwen3.6-27B-FP8")
+    endpoint_url = env("ENDPOINT_URL", "http://qwen36-27b-vllm-agg-frontend:8000")
+    model = env("MODEL_NAME", "nvidia/Qwen3.6-27B-NVFP4")
     tokenizer = env("TOKENIZER_NAME", model) or model
     prefix_ratios = env_ratios("PREFIX_RATIOS", "0.1,0.5,0.9")
     isl = env_int("INPUT_SEQUENCE_LENGTH", 4096)
