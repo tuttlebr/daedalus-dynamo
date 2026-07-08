@@ -193,6 +193,23 @@ different service name or namespace. `DYNAMO_PLANNER_TTFT_MS` and
 `DYNAMO_PLANNER_ITL_MS` are passed into the Planner config for latency/SLA
 targets even when the default optimization target is throughput.
 
+The Planner also consumes worker forward-pass metrics over Dynamo's event
+plane. Current vLLM worker and frontend manifests use ZMQ, so
+`DYNAMO_PLANNER_EVENT_PLANE` defaults to `zmq`. Keep the Planner, worker, and
+frontend on the same event transport or the Planner will report
+`load_reason=no_fpm_data` even while frontend Prometheus request metrics are
+available.
+
+This cluster's Dynamo operator registers worker metadata in the base
+`DYN_NAMESPACE`, while newer Planner images can look for
+`<DYN_NAMESPACE>-<worker-hash>`. `DYNAMO_PLANNER_WORKER_NAMESPACE_COMPAT`
+defaults to `legacy`, which renders worker-hash annotations that tell the
+Planner to use the base namespace and reapplies them after deploy because the
+operator may rewrite those annotations during reconciliation. The running
+Planner refreshes this namespace periodically after the patch lands. Set it to
+`hashed` only with an operator/runtime stack that actually registers worker
+metadata under hashed worker namespaces.
+
 Use advisory mode to see Planner decisions without letting it patch worker
 replicas:
 
@@ -283,7 +300,7 @@ If `routing-workbench-auth` already exists, `deploy.sh` preserves it.
 
 ## Configuration
 
-Important root-level environment variables:
+Important root-level environment variables and fixed ports:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -295,7 +312,7 @@ Important root-level environment variables:
 | `DEPLOY_PHOTO_TAGGER` | unset | Compatibility alias for `DEPLOY_WORKBENCH`; `1` enables the demo app and `0` disables it. |
 | `WORKBENCH_IMAGE_REPOSITORY` | `${REGISTRY}/routing-workbench` | Workbench image repository. |
 | `WORKBENCH_NODEPORT` | `30153` | Workbench NodePort. |
-| `GATEWAY_PORT` | `32359` | Shared inference Gateway listener and generated LoadBalancer Service port. |
+| Gateway listener / NodePort | `32359` | Hard-coded shared inference Gateway listener, Service port, and node-exposed port. |
 | `OPENAI_BASE_URL` | `http://inference-gateway:32359/v1` | Workbench OpenAI-compatible base URL. |
 | `DEFAULT_BACKEND` | first selected backend | Backend used to derive the default workbench model. |
 | `WORKBENCH_DEFAULT_MODEL` | backend model id | Workbench model override. |
@@ -325,6 +342,11 @@ Important root-level environment variables:
 | `DYNAMO_PLANNER_PROMETHEUS_ENDPOINT` | kube-prometheus-stack URL | Prometheus URL used by Planner throughput metrics. |
 | `DYNAMO_PLANNER_PROMETHEUS_PORT` | `0` | Optional Planner metrics port; `0` disables exposing a Planner metrics port. |
 | `DYNAMO_PLANNER_WORKER_SUBCOMPONENT_TYPE` | `decode` | Worker subcomponent marker injected with the scaling adapter; keep `decode` for current aggregated manifests. |
+| `DYNAMO_PLANNER_EVENT_PLANE` | `zmq` | Planner event transport for worker forward-pass metrics; keep aligned with worker/frontend. |
+| `DYNAMO_PLANNER_WORKER_NAMESPACE_COMPAT` | `legacy` | Worker namespace compatibility mode: `legacy` applies base-namespace FPM discovery annotations; `hashed` leaves worker-hash annotations unmanaged. |
+| `DYNAMO_PLANNER_WORKER_NAMESPACE_COMPAT_WAIT_SECONDS` | `180` | Max wait for the DGD to become Ready before applying the namespace compatibility patch; `0` skips the wait. |
+| `DYNAMO_WORKER_METRICS_PODMONITOR` | `1` | Apply a supplemental `dynamo-decode-worker` PodMonitor when the CRD is present. |
+| `DYNAMO_PODMONITOR_NAMESPACE` | `dynamo-system` | Namespace where the supplemental decode-worker PodMonitor is created. |
 | `DYNAMO_PLANNER_DECODE_SCALE_UP_KV_RATE` / `DYNAMO_PLANNER_DECODE_SCALE_DOWN_KV_RATE` | unset | Required only when `DYNAMO_PLANNER_OPTIMIZATION_TARGET=load`; KV-rate thresholds for load-based decode scaling. |
 | `DYNAMO_PLANNER_ADVISORY` | `false` | Run Planner in suggestion-only mode without applying scale changes. |
 | `RECOVER_DRY_RUN` | `0` | Print `recover` actions without deleting pods or patching DGDs. |

@@ -38,7 +38,6 @@ WORKBENCH_AUTH_SECRET="${WORKBENCH_AUTH_SECRET:-routing-workbench-auth}"
 APP_LABEL_VALUE="daedalus-dynamo-demo"
 APP_LABEL="app.kubernetes.io/part-of=${APP_LABEL_VALUE}"
 PREFLIGHT_TIMEOUT_SECONDS="${PREFLIGHT_TIMEOUT_SECONDS:-20}"
-GATEWAY_PORT="${GATEWAY_PORT:-32359}"
 WORKBENCH_NODEPORT="${WORKBENCH_NODEPORT:-30153}"
 GATEWAY_REQUEST_TIMEOUT="${GATEWAY_REQUEST_TIMEOUT:-300s}"
 MODEL_CATALOG_IMAGE="${MODEL_CATALOG_IMAGE:-python:3.12-alpine}"
@@ -60,9 +59,14 @@ DYNAMO_PLANNER_MAX_GPU_BUDGET="${DYNAMO_PLANNER_MAX_GPU_BUDGET:-8}"
 DYNAMO_PLANNER_TTFT_MS="${DYNAMO_PLANNER_TTFT_MS:-500.0}"
 DYNAMO_PLANNER_ITL_MS="${DYNAMO_PLANNER_ITL_MS:-50.0}"
 DYNAMO_PLANNER_ADVISORY="${DYNAMO_PLANNER_ADVISORY:-false}"
-DYNAMO_PLANNER_PROMETHEUS_ENDPOINT="${DYNAMO_PLANNER_PROMETHEUS_ENDPOINT:-http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090}"
+DYNAMO_PLANNER_PROMETHEUS_ENDPOINT="${DYNAMO_PLANNER_PROMETHEUS_ENDPOINT:-http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090}"
 DYNAMO_PLANNER_PROMETHEUS_PORT="${DYNAMO_PLANNER_PROMETHEUS_PORT:-0}"
 DYNAMO_PLANNER_WORKER_SUBCOMPONENT_TYPE="${DYNAMO_PLANNER_WORKER_SUBCOMPONENT_TYPE:-decode}"
+DYNAMO_PLANNER_EVENT_PLANE="${DYNAMO_PLANNER_EVENT_PLANE:-zmq}"
+DYNAMO_PLANNER_WORKER_NAMESPACE_COMPAT="${DYNAMO_PLANNER_WORKER_NAMESPACE_COMPAT:-legacy}"
+DYNAMO_PLANNER_WORKER_NAMESPACE_COMPAT_WAIT_SECONDS="${DYNAMO_PLANNER_WORKER_NAMESPACE_COMPAT_WAIT_SECONDS:-180}"
+DYNAMO_WORKER_METRICS_PODMONITOR="${DYNAMO_WORKER_METRICS_PODMONITOR:-1}"
+DYNAMO_PODMONITOR_NAMESPACE="${DYNAMO_PODMONITOR_NAMESPACE:-dynamo-system}"
 
 NEMOTRON_IMAGE_REPOSITORY="${NEMOTRON_IMAGE_REPOSITORY:-${REGISTRY}/nemotron-3-nano-omni}"
 QWEN35B_IMAGE_REPOSITORY="${QWEN35B_IMAGE_REPOSITORY:-${REGISTRY}/qwen36-35b-dynamo}"
@@ -124,7 +128,7 @@ Common environment:
   DEFAULT_BACKEND=<backend>    Workbench model backend; defaults to first selected backend
   WORKBENCH_DEFAULT_MODEL=<id> Workbench model override; defaults from DEFAULT_BACKEND
   WORKBENCH_NODEPORT=30153     shared Workbench UI NodePort
-  GATEWAY_PORT=32359           shared inference Gateway listener / LoadBalancer service port
+  shared inference Gateway listener and NodePort are hard-coded to 32359
   GEMMA431B_IMAGE_REPOSITORY=<image-repo> Gemma 4 31B backend image repository
   NEMOTRONNANO_IMAGE_REPOSITORY=<image-repo> Nemotron Nano text backend image repository
   RUN_DOCTOR=1                 run the cluster doctor before deploy (advisory)
@@ -134,6 +138,11 @@ Common environment:
   RECOVER_WAIT_SECONDS=0       wait for recovered DGDs to become Ready; 0 prints watch command
   RECOVERY_JANITOR_SCHEDULE='*/5 * * * *' Cron schedule when DEPLOY_RECOVERY_JANITOR=1
   DYNAMO_PLANNER_IMAGE=<image> dedicated Planner image
+  DYNAMO_PLANNER_EVENT_PLANE=zmq Planner event transport; must match worker/frontend
+  DYNAMO_PLANNER_WORKER_NAMESPACE_COMPAT=legacy apply worker-hash compatibility annotations
+  DYNAMO_PLANNER_WORKER_NAMESPACE_COMPAT_WAIT_SECONDS=180 wait for DGD Ready before compatibility patch
+  DYNAMO_WORKER_METRICS_PODMONITOR=1 apply supplemental PodMonitor for decode workers
+  DYNAMO_PODMONITOR_NAMESPACE=dynamo-system namespace for supplemental PodMonitors
 
 Backend worker replicas, GPU counts, runtime args, direct services, PVCs, and
 transport settings come from each selected folder's k8s/base YAML.
@@ -171,17 +180,7 @@ validate_nodeport() {
     die "${name} must be in the default Kubernetes NodePort range 30000-32767 (got '${value}')."
 }
 
-validate_port() {
-  local name="$1"
-  local value="$2"
-  [[ "${value}" =~ ^[0-9]+$ ]] || die "${name} must be a numeric TCP port (got '${value}')."
-  if ((value < 1 || value > 65535)); then
-    die "${name} must be between 1 and 65535 (got '${value}')."
-  fi
-}
-
 validate_serving_config() {
-  validate_port GATEWAY_PORT "${GATEWAY_PORT}"
   if workbench_enabled; then
     validate_nodeport WORKBENCH_NODEPORT "${WORKBENCH_NODEPORT}"
   fi
@@ -331,6 +330,8 @@ inject_planner_into_dgd() {
     -v planner_config="${planner_config}" \
     -v hf_secret="${HF_TOKEN_SECRET}" \
     -v subcomponent="${DYNAMO_PLANNER_WORKER_SUBCOMPONENT_TYPE}" \
+    -v event_plane="${DYNAMO_PLANNER_EVENT_PLANE,,}" \
+    -v worker_namespace_compat="${DYNAMO_PLANNER_WORKER_NAMESPACE_COMPAT,,}" \
     -v prometheus_endpoint="${DYNAMO_PLANNER_PROMETHEUS_ENDPOINT}" \
     -v prometheus_port="${DYNAMO_PLANNER_PROMETHEUS_PORT}" '
     function reset_doc() {
@@ -353,6 +354,8 @@ inject_planner_into_dgd() {
       print "          image: " planner_image
       print "          imagePullPolicy: IfNotPresent"
       print "          env:"
+      print "            - name: DYN_EVENT_PLANE"
+      print "              value: \"" event_plane "\""
       print "            - name: PROMETHEUS_ENDPOINT"
       print "              value: \"" prometheus_endpoint "\""
       print "            - name: PLANNER_PROMETHEUS_PORT"
@@ -394,6 +397,16 @@ inject_planner_into_dgd() {
     $1 == "kind:" && $2 == "DynamoGraphDeployment" {
       in_dgd = 1
       print
+      next
+    }
+
+    in_dgd && $1 == "metadata:" {
+      print
+      if (worker_namespace_compat == "legacy") {
+        print "  annotations:"
+        print "    nvidia.com/current-worker-hash: legacy"
+        print "    nvidia.com/current-worker-hash-v2: legacy"
+      }
       next
     }
 
@@ -493,6 +506,11 @@ recovery_janitor_enabled() {
   [[ "${value,,}" != "0" && "${value,,}" != "false" && "${value,,}" != "no" ]]
 }
 
+worker_metrics_podmonitor_enabled() {
+  local value="${DYNAMO_WORKER_METRICS_PODMONITOR:-1}"
+  [[ "${value,,}" != "0" && "${value,,}" != "false" && "${value,,}" != "no" ]]
+}
+
 planner_enabled() {
   local value="${DEPLOY_PLANNER:-1}"
   [[ "${value,,}" != "0" && "${value,,}" != "false" && "${value,,}" != "no" ]]
@@ -545,6 +563,16 @@ validate_planner_config() {
       ;;
   esac
 
+  case "${DYNAMO_PLANNER_EVENT_PLANE,,}" in
+    zmq|nats) ;;
+    *) die "DYNAMO_PLANNER_EVENT_PLANE must be zmq or nats." ;;
+  esac
+
+  case "${DYNAMO_PLANNER_WORKER_NAMESPACE_COMPAT,,}" in
+    legacy|hashed) ;;
+    *) die "DYNAMO_PLANNER_WORKER_NAMESPACE_COMPAT must be legacy or hashed." ;;
+  esac
+
   case "${DYNAMO_PLANNER_OPTIMIZATION_TARGET}" in
     throughput|latency|sla|load) ;;
     *) die "DYNAMO_PLANNER_OPTIMIZATION_TARGET must be throughput, latency, sla, or load." ;;
@@ -562,6 +590,7 @@ validate_planner_config() {
   validate_positive_int DYNAMO_PLANNER_LOAD_ADJUSTMENT_INTERVAL_SECONDS "${DYNAMO_PLANNER_LOAD_ADJUSTMENT_INTERVAL_SECONDS}"
   validate_positive_int DYNAMO_PLANNER_MAX_GPU_BUDGET "${DYNAMO_PLANNER_MAX_GPU_BUDGET}"
   validate_nonnegative_int DYNAMO_PLANNER_PROMETHEUS_PORT "${DYNAMO_PLANNER_PROMETHEUS_PORT}"
+  validate_nonnegative_int DYNAMO_PLANNER_WORKER_NAMESPACE_COMPAT_WAIT_SECONDS "${DYNAMO_PLANNER_WORKER_NAMESPACE_COMPAT_WAIT_SECONDS}"
   validate_number DYNAMO_PLANNER_TTFT_MS "${DYNAMO_PLANNER_TTFT_MS}"
   validate_number DYNAMO_PLANNER_ITL_MS "${DYNAMO_PLANNER_ITL_MS}"
   if [[ -n "${DYNAMO_PLANNER_MIN_ENDPOINT:-}" ]]; then
@@ -922,6 +951,16 @@ spec:
         metadata:
           annotations:
             sidecar.istio.io/inject: "false"
+  service:
+    spec:
+      type: LoadBalancer
+      allocateLoadBalancerNodePorts: true
+      ports:
+        - name: listener-32359
+          port: 32359
+          protocol: TCP
+          targetPort: 32359
+          nodePort: 32359
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
@@ -939,7 +978,7 @@ spec:
       name: ${GATEWAY_NAME}-params
   listeners:
     - name: http
-      port: ${GATEWAY_PORT}
+      port: 32359
       protocol: HTTP
 ---
 apiVersion: agentgateway.dev/v1alpha1
@@ -1011,10 +1050,86 @@ EOF
   done
 }
 
+render_decode_worker_podmonitor() {
+  cat <<EOF
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: dynamo-decode-worker
+  namespace: ${DYNAMO_PODMONITOR_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: dynamo-decode-worker
+    app.kubernetes.io/part-of: ${APP_LABEL_VALUE}
+spec:
+  namespaceSelector:
+    any: true
+  podMetricsEndpoints:
+    - interval: 5s
+      path: /metrics
+      port: system
+    - interval: 5s
+      path: /metrics
+      port: nixl
+  selector:
+    matchLabels:
+      nvidia.com/dynamo-component-type: decode
+      nvidia.com/metrics-enabled: "true"
+EOF
+}
+
+apply_decode_worker_podmonitor() {
+  worker_metrics_podmonitor_enabled || return 0
+
+  if ! kubectl get crd podmonitors.monitoring.coreos.com > /dev/null 2>&1; then
+    echo "WARN: PodMonitor CRD not found; skipping supplemental decode-worker metrics scrape." >&2
+    return 0
+  fi
+
+  if ! kubectl get namespace "${DYNAMO_PODMONITOR_NAMESPACE}" > /dev/null 2>&1; then
+    echo "WARN: PodMonitor namespace ${DYNAMO_PODMONITOR_NAMESPACE} not found; skipping supplemental decode-worker metrics scrape." >&2
+    return 0
+  fi
+
+  echo "==> Applying supplemental decode-worker PodMonitor in namespace ${DYNAMO_PODMONITOR_NAMESPACE}"
+  render_decode_worker_podmonitor | kubectl apply -f -
+}
+
+apply_planner_worker_namespace_compat() {
+  planner_enabled || return 0
+  [[ "${DYNAMO_PLANNER_WORKER_NAMESPACE_COMPAT,,}" == "legacy" ]] || return 0
+
+  local backend dgd
+  for backend in "${SELECTED_BACKENDS[@]}"; do
+    dgd="$(backend_dgd "${backend}")"
+    if [[ "${DYNAMO_PLANNER_WORKER_NAMESPACE_COMPAT_WAIT_SECONDS}" != "0" ]]; then
+      echo "==> Waiting for ${dgd} to settle before Planner namespace compatibility patch"
+      if ! kubectl wait dynamographdeployment.nvidia.com/"${dgd}" \
+        -n "${NAMESPACE}" \
+        --for=condition=Ready \
+        --timeout="${DYNAMO_PLANNER_WORKER_NAMESPACE_COMPAT_WAIT_SECONDS}s"; then
+        echo "WARN: ${dgd} did not become Ready before compatibility patch; patching anyway." >&2
+      fi
+    fi
+    echo "==> Patching ${dgd} Planner worker namespace compatibility annotations"
+    kubectl annotate dynamographdeployment.nvidia.com "${dgd}" \
+      "nvidia.com/current-worker-hash=legacy" \
+      "nvidia.com/current-worker-hash-v2=legacy" \
+      -n "${NAMESPACE}" \
+      --overwrite
+    sleep 5
+    kubectl annotate dynamographdeployment.nvidia.com "${dgd}" \
+      "nvidia.com/current-worker-hash=legacy" \
+      "nvidia.com/current-worker-hash-v2=legacy" \
+      -n "${NAMESPACE}" \
+      --overwrite
+  done
+}
+
 render_workbench() {
   local selected_model openai_base_url
   selected_model="$(default_model)"
-  openai_base_url="${OPENAI_BASE_URL:-http://${GATEWAY_NAME}:${GATEWAY_PORT}/v1}"
+  openai_base_url="${OPENAI_BASE_URL:-http://${GATEWAY_NAME}:32359/v1}"
 
   cat <<EOF
 ---
@@ -1616,9 +1731,11 @@ apply_deployment() {
   push_images
 
   cleanup_legacy_qwen27_sglang_resources
+  apply_decode_worker_podmonitor
 
   echo "==> Applying Daedalus Dynamo GAIE deployment to namespace ${NAMESPACE}"
   render_manifest | kubectl apply -n "${NAMESPACE}" -f -
+  apply_planner_worker_namespace_compat
   cleanup_legacy_photo_tagger_resources
   if ! workbench_enabled; then
     cleanup_workbench_resources
@@ -1632,14 +1749,14 @@ apply_deployment() {
   echo "  kubectl get pods -n ${NAMESPACE} -w"
   echo
   echo "Port-forward the shared inference gateway:"
-  echo "  kubectl port-forward -n ${NAMESPACE} svc/${GATEWAY_NAME} 8000:${GATEWAY_PORT}"
+  echo "  kubectl port-forward -n ${NAMESPACE} svc/${GATEWAY_NAME} 8000:32359"
   echo
   if workbench_enabled; then
     echo "Open the Dynamo Routing Workbench:"
     echo "  http://<any-node-ip>:${WORKBENCH_NODEPORT}/"
   else
     echo "Deploy your application separately and point it at:"
-    echo "  http://${GATEWAY_NAME}.${NAMESPACE}.svc.cluster.local:${GATEWAY_PORT}/v1"
+    echo "  http://${GATEWAY_NAME}.${NAMESPACE}.svc.cluster.local:32359/v1"
   fi
 }
 
