@@ -1,5 +1,5 @@
 {{- if eq .Values.model.deploymentMode "direct" }}
-apiVersion: nvidia.com/v1alpha1
+apiVersion: nvidia.com/v1beta1
 kind: DynamoGraphDeployment
 metadata:
   name: {{ include "dynamo-model.name" . | quote }}

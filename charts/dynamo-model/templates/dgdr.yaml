@@ -48,7 +48,7 @@ spec:
       decode_scale_down_kv_rate: {{ .Values.planner.decodeScaleDownKvRate }}
   overrides:
     dgd:
-      apiVersion: nvidia.com/v1alpha1
+      apiVersion: nvidia.com/v1beta1
       kind: DynamoGraphDeployment
       metadata:
         name: {{ include "dynamo-model.name" . | quote }}

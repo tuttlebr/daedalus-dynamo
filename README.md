@@ -18,18 +18,83 @@ and uninstalling releases by model.
 
 ## Prerequisites
 
-The Makefile expects `make`, `docker`, `helm`, and `kubectl` on the host. The
-cluster must already have the Dynamo and Grove operators, NVIDIA GPU support, a
-default StorageClass, and an RWX-capable StorageClass for model cache PVCs.
+The deployment host needs:
 
-Install or upgrade Gateway API, Gateway API Inference Extension, and
-agentgateway with:
+- Bash, GNU Make, Docker, Helm, `kubectl`, and Python 3
+- a working `kubectl` context with cluster-scoped CRD and Helm permissions
+- push access to the configured image registry, with every GPU and gateway node
+  able to pull from that registry
+- network access to GitHub release assets and the agentgateway OCI registry
+- a Hugging Face token that can read the selected model
+
+The cluster must already have the Dynamo and Grove operators, NVIDIA GPU
+support, a default StorageClass, and an RWX-capable StorageClass for model
+cache PVCs. `make install-gateway` does not install those dependencies. The
+Prometheus Operator is optional; without its CRDs, the gateway metrics Service
+is created but its ServiceMonitor and alert rules are skipped.
+
+Helm 3.17 or newer is required only when using `TAKE_OWNERSHIP=1` to migrate
+existing resources into a Helm release.
+
+## First-Time Installation
+
+All commands below are run from the repository root. Confirm the intended
+cluster before installing cluster-scoped APIs:
+
+```bash
+kubectl config current-context
+make models
+```
+
+### 1. Configure Image Repositories
+
+Checked-in values use the Daedalus registry. Authenticate Docker before the
+first build and ensure the Kubernetes nodes are configured to pull from it:
+
+```bash
+docker login daedalus.ddns.me:5050
+```
+
+To use another registry, export both full image references. Keep these exports
+in the shell for later `make` commands because every gateway apply reconciles
+the image stored in `AgentgatewayParameters`:
+
+```bash
+export GATEWAY_IMAGE=registry.example.com/daedalus/agentgateway:v1.3.1
+export IMAGE=registry.example.com/daedalus/dynamo-vllm-runtime:1.3.0-dev.1
+docker login registry.example.com
+```
+
+Both references must include a registry, repository, and tag. For a private
+registry, configure node-level pull credentials before deployment; the chart
+does not create registry credentials.
+
+### 2. Install the Inference Gateway
+
+Install or upgrade Gateway API, Gateway API Inference Extension, agentgateway,
+and the shared hardened gateway:
 
 ```bash
 make install-gateway
 ```
 
-Run the read-only cluster doctor before deploying:
+This is an idempotent cluster setup step, not a per-model requirement. It
+builds and pushes `GATEWAY_IMAGE`, installs the control plane, then applies the
+gateway base and monitoring resources. Once the same gateway image is already
+published, reuse it with:
+
+```bash
+SKIP_GATEWAY_BUILD=1 SKIP_GATEWAY_PUSH=1 make install-gateway
+```
+
+`INSTALL_GATEWAY=1 make deploy-<model>` can combine this step with a model
+deployment, but the explicit first-time sequence makes cluster and registry
+failures easier to isolate.
+
+### 3. Run the Cluster Preflight
+
+The doctor is read-only and verifies operators, storage, GPU capacity, gateway
+replicas, API compatibility, and live process FD limits:
 
 ```bash
 make doctor
@@ -68,11 +133,33 @@ catalog. To deploy an already pushed image:
 SKIP_BUILD=1 SKIP_PUSH=1 HF_TOKEN=<hugging-face-token> make deploy-qwen35b
 ```
 
+The explicit `make install-gateway` step must have succeeded at least once.
+Normal model deployments reconcile gateway resources but do not reinstall its
+cluster-scoped CRDs or control plane.
+
 For an existing release whose resources were created outside Helm, use Helm
 3.17+ ownership adoption:
 
 ```bash
 TAKE_OWNERSHIP=1 SKIP_BUILD=1 SKIP_PUSH=1 HF_TOKEN=<hugging-face-token> make deploy-qwen35b
+```
+
+Check the release and endpoint after deployment:
+
+```bash
+make status-qwen35b
+kubectl get dgd,pods,httproute -n daedalus-dynamo
+kubectl get svc inference-gateway -n daedalus-dynamo
+curl --fail http://192.168.1.234:32359/v1/models
+```
+
+Use the gateway address reported by the Service when it differs from the
+Daedalus endpoint. For local access without a reachable LoadBalancer or
+NodePort:
+
+```bash
+kubectl port-forward -n daedalus-dynamo svc/inference-gateway 8000:32359
+curl --fail http://127.0.0.1:8000/v1/models
 ```
 
 ## Common Commands
@@ -90,10 +177,15 @@ make uninstall-qwen35b
 make lint-all
 make deploy-all
 make uninstall-all
-kubectl port-forward -n daedalus-dynamo svc/inference-gateway 8000:32359
 ```
 
 `make upgrade` runs only Helm. `make deploy` is the full image plus Helm flow.
+Use `make upgrade-<model>` for chart-only changes that leave the model identity,
+route, secret, and gateway unchanged. When `model.name`, `model.id`, the
+namespace, or gateway settings change, use the full deploy path with
+`SKIP_BUILD=1 SKIP_PUSH=1`; it also refreshes the HTTPRoute and `/v1/models`
+catalog.
+
 `make uninstall` removes the Helm release, deletes that model's HTTPRoute, and
 refreshes the catalog. Chart-managed PVCs are annotated with
 `helm.sh/resource-policy: keep`, so model cache and Redis data claims remain
@@ -162,6 +254,18 @@ by the model chart.
 Model-specific settings live in [`values/`](./values). Shared defaults live in
 [`charts/dynamo-model/values.yaml`](./charts/dynamo-model/values.yaml).
 
+Configuration is resolved in this order:
+
+1. Shared chart defaults in `charts/dynamo-model/values.yaml`.
+2. The selected `values/<model>.yaml` file.
+3. Makefile-controlled image, secret, and optional deployment-mode overrides.
+4. Additional `HELM_ARGS`, which take final precedence.
+
+Use a model values file for durable model identity, worker arguments, resource
+sizing, Planner policy, and model-specific environment variables. Use Makefile
+variables for one deployment invocation, and reserve `HELM_ARGS` for deliberate
+Helm overrides that do not yet belong in a checked-in values file.
+
 Render direct DGD mode, which is the checked-in default:
 
 ```bash
@@ -180,6 +284,18 @@ Pass arbitrary Helm overrides through `HELM_ARGS`:
 HELM_ARGS='--set planner.advisory=true --set planner.maxGpuBudget=2' \
   SKIP_BUILD=1 SKIP_PUSH=1 HF_TOKEN=<hugging-face-token> make deploy-qwen35b
 ```
+
+Validate configuration before applying it:
+
+```bash
+make lint-qwen35b
+make dry-run-qwen35b
+```
+
+To add a model, copy an existing file under `values/`, change at least
+`model.name`, `model.id`, `model.image`, and the worker arguments, then run
+`make lint MODEL=<new-file-basename>`. The Makefile discovers values files
+automatically; no per-model deployment script is needed.
 
 Useful Makefile variables:
 
