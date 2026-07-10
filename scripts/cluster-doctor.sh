@@ -17,7 +17,7 @@ set -euo pipefail
 #   SKIP  could not evaluate (tool/pod absent); not counted in the verdict.
 # Exit status is non-zero only when at least one check FAILs.
 #
-# Usage:  ./deploy.sh doctor   |   scripts/cluster-doctor.sh   |   DOCTOR_JSON=1 scripts/cluster-doctor.sh
+# Usage:  make doctor   |   scripts/cluster-doctor.sh   |   DOCTOR_JSON=1 scripts/cluster-doctor.sh
 
 cd "$(dirname "$0")/.."
 REPO_ROOT="$(pwd)"
@@ -36,6 +36,11 @@ DOCTOR_PROBE_NODE_SELECTOR="${DOCTOR_PROBE_NODE_SELECTOR:-nvidia.com/gpu.present
 DOCTOR_PROBE_GPU="${DOCTOR_PROBE_GPU:-1}"
 DOCTOR_PROBE_TIMEOUT="${DOCTOR_PROBE_TIMEOUT:-180}"
 DOCTOR_JSON="${DOCTOR_JSON:-0}"
+GATEWAY_NAME="${GATEWAY_NAME:-inference-gateway}"
+AGENTGATEWAY_NAMESPACE="${AGENTGATEWAY_NAMESPACE:-agentgateway-system}"
+MIN_GATEWAY_REPLICAS="${MIN_GATEWAY_REPLICAS:-2}"
+MIN_NOFILE_LIMIT="${MIN_NOFILE_LIMIT:-131072}"
+GATEWAY_FD_METRICS_PORT="${GATEWAY_FD_METRICS_PORT:-9090}"
 
 INTERCONNECT="${REPO_ROOT}/scripts/check_interconnect.py"
 PROBE_MANIFEST="${REPO_ROOT}/scripts/cluster-doctor-probe-pod.yaml"
@@ -181,7 +186,7 @@ check_crds() {
     if api_resource_exists "${crd}"; then
       ok "${label}" "installed"
     else
-      fail "${label}" "missing (${crd}). Install operators or run: INSTALL_GATEWAY=1 ./deploy.sh install-gateway"
+      fail "${label}" "missing (${crd}). Install operators or run: make install-gateway"
     fi
   done
   return 0
@@ -321,7 +326,7 @@ check_workload_recovery() {
       -o jsonpath='{range .items[*]}{.metadata.name}{":"}{.status.reason}{" "}{end}'
   )"
   if [[ -n "${failed_pods// /}" ]]; then
-    warn "recovery:failed-pods" "failed Grove/Dynamo pod(s): ${failed_pods}. Run ./deploy.sh recover <backend>."
+    warn "recovery:failed-pods" "failed Grove/Dynamo pod(s): ${failed_pods}. Inspect failed pods and redeploy the affected model with make deploy-<model>."
   else
     ok "recovery:failed-pods" "no failed Grove/Dynamo pods"
   fi
@@ -332,10 +337,151 @@ check_workload_recovery() {
       tr '\n' ' '
   )"
   if [[ -n "${not_ready// /}" ]]; then
-    warn "recovery:dgd-ready" "not-ready DGD(s): ${not_ready}. Run ./deploy.sh recover <backend>; use DEPLOY_RECOVERY_JANITOR=1 for opt-in cleanup."
+    warn "recovery:dgd-ready" "not-ready DGD(s): ${not_ready}. Inspect the DGD and redeploy the affected model with make deploy-<model>."
   else
     ok "recovery:dgd-ready" "all live DGDs report Ready=True"
   fi
+  return 0
+}
+
+check_process_nofile_limits() { # label selector description
+  local label_selector="$1" description="$2" pods pod limit found=0
+  pods="$(
+    kq get pods -n "${NAMESPACE}" -l "${label_selector}" \
+      -o jsonpath='{range .items[?(@.status.phase=="Running")]}{.metadata.name}{"\n"}{end}'
+  )"
+  if [[ -z "${pods}" ]]; then
+    skip "fd:${description}" "no running ${description} pod"
+    return 0
+  fi
+  while IFS= read -r pod; do
+    [[ -z "${pod}" ]] && continue
+    found=1
+    limit="$(
+      kubectl exec -n "${NAMESPACE}" "${pod}" -- \
+        sh -c 'grep "^Max open files" /proc/1/limits | tr -s " " | cut -d " " -f 4' \
+        2>/dev/null || true
+    )"
+    if [[ ! "${limit}" =~ ^[0-9]+$ ]]; then
+      fail "fd:${description}" "could not read RLIMIT_NOFILE from ${pod}"
+    elif ((limit < MIN_NOFILE_LIMIT)); then
+      fail "fd:${description}" "${pod} soft limit is ${limit}; require >= ${MIN_NOFILE_LIMIT}"
+    else
+      ok "fd:${description}" "${pod} soft limit ${limit}"
+    fi
+  done <<<"${pods}"
+  ((found == 1)) || skip "fd:${description}" "no running ${description} pod"
+  return 0
+}
+
+check_gateway_resilience() {
+  section "Inference gateway resilience"
+  local controller_desired controller_available controller_image gateway_desired gateway_available
+  local gateway_images controller_tag gateway_tag hpa_min hpa_max pdb_min tcproute_served
+  local pods pod raw open_fds soft_limit utilization
+
+  if ! kubectl get deployment agentgateway -n "${AGENTGATEWAY_NAMESPACE}" >/dev/null 2>&1; then
+    skip "gateway:controller" "agentgateway controller is not installed; run make install-gateway"
+  else
+    controller_desired="$(kq get deployment agentgateway -n "${AGENTGATEWAY_NAMESPACE}" -o jsonpath='{.spec.replicas}')"
+    controller_available="$(kq get deployment agentgateway -n "${AGENTGATEWAY_NAMESPACE}" -o jsonpath='{.status.availableReplicas}')"
+    controller_available="${controller_available:-0}"
+    if ((controller_available < MIN_GATEWAY_REPLICAS)); then
+      fail "gateway:controller" "${controller_available}/${controller_desired:-0} controller replicas available; require >= ${MIN_GATEWAY_REPLICAS}"
+    else
+      ok "gateway:controller" "${controller_available}/${controller_desired} controller replicas available"
+    fi
+  fi
+
+  tcproute_served="$(
+    kq get crd tcproutes.gateway.networking.k8s.io \
+      -o jsonpath='{.spec.versions[?(@.name=="v1alpha2")].served}'
+  )"
+  if [[ "${tcproute_served}" == "true" ]]; then
+    ok "gateway:api-compat" "TCPRoute v1alpha2 is served for the agentgateway controller"
+  else
+    fail "gateway:api-compat" "TCPRoute v1alpha2 is not served; agentgateway v1.3.1 cannot finish informer sync"
+  fi
+
+  if ! kubectl get deployment "${GATEWAY_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+    skip "gateway:deployment" "${GATEWAY_NAME} is not deployed in ${NAMESPACE}"
+    return 0
+  fi
+
+  gateway_desired="$(kq get deployment "${GATEWAY_NAME}" -n "${NAMESPACE}" -o jsonpath='{.spec.replicas}')"
+  gateway_available="$(kq get deployment "${GATEWAY_NAME}" -n "${NAMESPACE}" -o jsonpath='{.status.availableReplicas}')"
+  gateway_available="${gateway_available:-0}"
+  if ((gateway_available < MIN_GATEWAY_REPLICAS)); then
+    fail "gateway:deployment" "${gateway_available}/${gateway_desired:-0} proxy replicas available; require >= ${MIN_GATEWAY_REPLICAS}"
+  else
+    ok "gateway:deployment" "${gateway_available}/${gateway_desired} proxy replicas available"
+  fi
+
+  controller_image="$(kq get deployment agentgateway -n "${AGENTGATEWAY_NAMESPACE}" -o jsonpath='{.spec.template.spec.containers[?(@.name=="controller")].image}')"
+  gateway_images="$(kq get deployment "${GATEWAY_NAME}" -n "${NAMESPACE}" -o jsonpath='{.spec.template.spec.containers[?(@.name=="agentgateway")].image}')"
+  controller_tag="${controller_image##*:}"
+  gateway_tag="${gateway_images##*:}"
+  if [[ -n "${controller_image}" && -n "${gateway_images}" && "${controller_tag}" == "${gateway_tag}" ]]; then
+    ok "gateway:version" "controller and proxy use ${controller_tag}"
+  else
+    fail "gateway:version" "controller ${controller_image:-missing} and proxy ${gateway_images:-missing} are version-skewed"
+  fi
+
+  if kubectl get hpa "${GATEWAY_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+    hpa_min="$(kq get hpa "${GATEWAY_NAME}" -n "${NAMESPACE}" -o jsonpath='{.spec.minReplicas}')"
+    hpa_max="$(kq get hpa "${GATEWAY_NAME}" -n "${NAMESPACE}" -o jsonpath='{.spec.maxReplicas}')"
+    if ((hpa_min < MIN_GATEWAY_REPLICAS || hpa_max <= hpa_min)); then
+      fail "gateway:autoscaling" "HPA range ${hpa_min:-0}-${hpa_max:-0} does not preserve HA and scale-out headroom"
+    else
+      ok "gateway:autoscaling" "HPA range ${hpa_min}-${hpa_max}"
+    fi
+  else
+    fail "gateway:autoscaling" "no HPA targets deployment/${GATEWAY_NAME}"
+  fi
+
+  if kubectl get pdb "${GATEWAY_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+    pdb_min="$(kq get pdb "${GATEWAY_NAME}" -n "${NAMESPACE}" -o jsonpath='{.spec.minAvailable}')"
+    ok "gateway:pdb" "PodDisruptionBudget minAvailable=${pdb_min:-configured}"
+  else
+    fail "gateway:pdb" "no PodDisruptionBudget protects deployment/${GATEWAY_NAME}"
+  fi
+
+  pods="$(
+    kq get pods -n "${NAMESPACE}" \
+      -l "gateway.networking.k8s.io/gateway-name=${GATEWAY_NAME}" \
+      -o jsonpath='{range .items[?(@.status.phase=="Running")]}{.metadata.name}{"\n"}{end}'
+  )"
+  while IFS= read -r pod; do
+    [[ -z "${pod}" ]] && continue
+    raw="$(
+      kubectl get --raw \
+        "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:${GATEWAY_FD_METRICS_PORT}/proxy/metrics" \
+        2>/dev/null || true
+    )"
+    open_fds="$(printf '%s\n' "${raw}" | awk '/^daedalus_gateway_process_open_fds[{ ]/ {print $NF; exit}')"
+    soft_limit="$(printf '%s\n' "${raw}" | awk '/^daedalus_gateway_process_soft_limit_fds[{ ]/ {print $NF; exit}')"
+    if [[ ! "${open_fds}" =~ ^[0-9]+$ || ! "${soft_limit}" =~ ^[0-9]+$ ]]; then
+      fail "gateway:fd-metrics" "FD metrics unavailable from ${pod}"
+      continue
+    fi
+    if ((soft_limit < MIN_NOFILE_LIMIT)); then
+      fail "gateway:fd-limit" "${pod} soft limit ${soft_limit}; require >= ${MIN_NOFILE_LIMIT}"
+      continue
+    fi
+    utilization="$(awk -v open="${open_fds}" -v limit="${soft_limit}" 'BEGIN {printf "%.1f", (open / limit) * 100}')"
+    if ((open_fds * 10 >= soft_limit * 9)); then
+      fail "gateway:fd-headroom" "${pod} uses ${open_fds}/${soft_limit} FDs (${utilization}%)"
+    elif ((open_fds * 10 >= soft_limit * 8)); then
+      warn "gateway:fd-headroom" "${pod} uses ${open_fds}/${soft_limit} FDs (${utilization}%)"
+    else
+      ok "gateway:fd-headroom" "${pod} uses ${open_fds}/${soft_limit} FDs (${utilization}%)"
+    fi
+  done <<<"${pods}"
+
+  check_process_nofile_limits \
+    'nvidia.com/dynamo-component-type=frontend,nvidia.com/dynamo-component=Frontend' \
+    frontend
+  check_process_nofile_limits 'nvidia.com/dynamo-component-type=decode' worker
   return 0
 }
 
@@ -345,7 +491,7 @@ check_transport_env() {
   [[ -f "${INTERCONNECT}" ]] || { skip "transport:env" "scripts/check_interconnect.py not found"; return 0; }
   local tmp out verdict
   tmp="$(mktemp)"
-  if DEPLOY_WORKBENCH=0 "${REPO_ROOT}/deploy.sh" render "${DOCTOR_ENV_BACKEND}" >"${tmp}" 2>/dev/null; then
+  if make --no-print-directory -C "${REPO_ROOT}" render MODEL="${DOCTOR_ENV_BACKEND}" >"${tmp}" 2>/dev/null; then
     out="$(python3 "${INTERCONNECT}" env "${tmp}" 2>/dev/null || true)"
     verdict="$(printf '%s' "${out}" | sed -n 's/.*"verdict": *"\(.*\)".*/\1/p' | head -1)"
     if printf '%s' "${verdict}" | grep -q 'no transport gaps'; then
@@ -474,6 +620,7 @@ main() {
   check_storage
   check_nats
   check_workload_recovery
+  check_gateway_resilience
   check_transport_env
   check_rdma_resources
   check_network_operator

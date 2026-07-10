@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["model", "modelCache", "redis", "frontend", "worker", "planner"],
+  "properties": {
+    "model": {
+      "type": "object",
+      "required": ["name", "id", "image", "deploymentMode"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "id": { "type": "string", "minLength": 1 },
+        "image": { "type": "string", "minLength": 1 },
+        "backendFramework": { "type": "string", "enum": ["vllm", "sglang", "trtllm"] },
+        "deploymentMode": { "type": "string", "enum": ["direct", "dgdr"] },
+        "envFromSecret": { "type": "string", "minLength": 1 }
+      }
+    },
+    "planner": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "workerNamespaceCompat": { "type": "string", "enum": ["legacy", "hashed", "off"] },
+        "compatHook": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "waitSeconds": { "type": "integer", "minimum": 0 },
+            "restartPlanner": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "worker": {
+      "type": "object",
+      "properties": {
+        "nofileLimit": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{4,}$"
+        },
+        "vllmArgs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "extraEnv": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "value"],
+            "properties": {
+              "name": { "type": "string" },
+              "value": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "frontend": {
+      "type": "object",
+      "properties": {
+        "nofileLimit": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{4,}$"
+        }
+      }
+    }
+  }
+}

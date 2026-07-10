@@ -46,7 +46,7 @@ current dashboard does not include them. To validate the interconnect fabric
 today, use the cluster doctor:
 
 ```bash
-./deploy.sh doctor
+make doctor
 ```
 
 ## GPU Worker Correlation
@@ -83,3 +83,30 @@ The dashboard recognizes common aggregated and disaggregated worker role names,
 including `vllmworker`, `sglangworker`, `trtllmworker`,
 `tensorrtllmworker`, `prefill`, `decode`, `backend`, `worker`, `encoder`, and
 `encode`.
+
+## Gateway FD Metrics
+
+The inference gateway includes a same-UID metrics sidecar that reads the proxy
+process through the shared pod process namespace. It exports:
+
+- `daedalus_gateway_process_open_fds`
+- `daedalus_gateway_process_soft_limit_fds`
+- `daedalus_gateway_process_hard_limit_fds`
+- `daedalus_gateway_process_fd_headroom_fds`
+- `daedalus_gateway_process_fd_utilization_ratio`
+- `daedalus_gateway_pod_tcp_sockets{state=...}`
+
+`make gateway-monitoring` creates a `ServiceMonitor` and a `PrometheusRule` when
+the Prometheus Operator CRDs are installed. The rules warn at 80 percent FD
+utilization, become critical at 90 percent, detect missing FD telemetry, and
+alert when available gateway replicas fall below two.
+
+Inspect one pod directly through the Kubernetes API:
+
+```bash
+pod=$(kubectl get pod -n daedalus-dynamo \
+  -l gateway.networking.k8s.io/gateway-name=inference-gateway \
+  -o jsonpath='{.items[0].metadata.name}')
+kubectl get --raw \
+  "/api/v1/namespaces/daedalus-dynamo/pods/${pod}:9090/proxy/metrics"
+```

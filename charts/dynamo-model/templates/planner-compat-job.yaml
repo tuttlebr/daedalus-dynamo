@@ -1,0 +1,85 @@
+{{- if and .Values.planner.enabled (eq .Values.planner.workerNamespaceCompat "legacy") .Values.planner.compatHook.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ printf "%s-planner-compat" (include "dynamo-model.name" .) | quote }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ printf "%s-planner-compat" (include "dynamo-model.name" .) | quote }}
+rules:
+  - apiGroups:
+      - nvidia.com
+    resources:
+      - dynamographdeployments
+    verbs:
+      - get
+      - list
+      - watch
+      - patch
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ printf "%s-planner-compat" (include "dynamo-model.name" .) | quote }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ printf "%s-planner-compat" (include "dynamo-model.name" .) | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ printf "%s-planner-compat" (include "dynamo-model.name" .) | quote }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-planner-compat" (include "dynamo-model.name" .) | quote }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ printf "%s-planner-compat" (include "dynamo-model.name" .) | quote }}
+      containers:
+        - name: kubectl
+          image: {{ .Values.planner.compatHook.image | quote }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              dgd={{ include "dynamo-model.name" . | quote }}
+              ns={{ .Release.Namespace | quote }}
+              timeout={{ printf "%ss" (toString .Values.planner.compatHook.waitSeconds) | quote }}
+
+              kubectl wait "dgd/${dgd}" -n "${ns}" --for=condition=Ready --timeout="${timeout}" || true
+              kubectl annotate "dgd/${dgd}" -n "${ns}" \
+                nvidia.com/current-worker-hash=legacy \
+                nvidia.com/current-worker-hash-v2=legacy \
+                --overwrite
+              sleep 5
+              kubectl annotate "dgd/${dgd}" -n "${ns}" \
+                nvidia.com/current-worker-hash=legacy \
+                nvidia.com/current-worker-hash-v2=legacy \
+                --overwrite
+              {{- if .Values.planner.compatHook.restartPlanner }}
+              kubectl delete pod -n "${ns}" \
+                -l "nvidia.com/dynamo-component=Planner,nvidia.com/dynamo-graph-deployment-name=${dgd}" \
+                --ignore-not-found=true
+              {{- end }}
+{{- end }}

@@ -27,7 +27,7 @@ repos:
         entry: scripts/pre-commit/check-python.sh
         language: system
         pass_filenames: false
-        files: '(^|/)k8s/benchmarks/.*\.py$|(^|/)scripts/[^/]*\.py$'
+        files: '(^|/)scripts/[^/]*\.py$|(^|/)tests/[^/]*\.py$'
 
       - id: kustomize-render
         name: Kubernetes Kustomize render checks

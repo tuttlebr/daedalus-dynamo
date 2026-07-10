@@ -1,0 +1,30 @@
+ARG AGENTGATEWAY_IMAGE="cr.agentgateway.dev/agentgateway:v1.3.1"
+
+FROM alpine:3.22 AS entrypoint-builder
+
+RUN apk add --no-cache build-base
+
+COPY gateway/agentgateway-entrypoint.c /src/agentgateway-entrypoint.c
+
+RUN cc \
+      -D_FORTIFY_SOURCE=2 \
+      -O2 \
+      -Wall \
+      -Werror \
+      -Wextra \
+      -static \
+      -s \
+      -o /agentgateway-entrypoint \
+      /src/agentgateway-entrypoint.c
+
+FROM ${AGENTGATEWAY_IMAGE}
+
+COPY --from=entrypoint-builder --chmod=0555 \
+  /agentgateway-entrypoint /usr/local/bin/agentgateway-entrypoint
+
+ENV AGENTGATEWAY_NOFILE_LIMIT=131072
+
+ENTRYPOINT ["/usr/local/bin/agentgateway-entrypoint"]
+
+LABEL org.opencontainers.image.source="https://github.com/btuttle/daedalus-dynamo"
+LABEL org.opencontainers.image.description="Agentgateway with a verified high RLIMIT_NOFILE soft limit"

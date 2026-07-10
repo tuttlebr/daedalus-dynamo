@@ -1,0 +1,341 @@
+{{- if eq .Values.model.deploymentMode "direct" }}
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  name: {{ include "dynamo-model.name" . | quote }}
+  labels:
+    {{- include "dynamo-model.labels" . | nindent 4 }}
+spec:
+  backendFramework: {{ .Values.model.backendFramework }}
+  pvcs:
+    - name: {{ .Values.modelCache.name | quote }}
+      create: false
+  services:
+    Frontend:
+      componentType: frontend
+      envFromSecret: {{ .Values.model.envFromSecret | quote }}
+      replicas: {{ .Values.frontend.replicas }}
+      volumeMounts:
+        - name: {{ .Values.modelCache.name | quote }}
+          mountPoint: {{ .Values.modelCache.mountPath | quote }}
+      extraPodSpec:
+        mainContainer:
+          image: {{ .Values.model.image | quote }}
+          imagePullPolicy: {{ .Values.model.imagePullPolicy }}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.frontend.httpPort }}
+            periodSeconds: 10
+            timeoutSeconds: 1800
+            failureThreshold: 60
+          env:
+            - name: HF_HUB_CACHE
+              value: {{ .Values.modelCache.cachePath | quote }}
+            - name: DYN_HTTP_BODY_LIMIT_MB
+              value: {{ .Values.frontend.httpBodyLimitMb | quote }}
+            - name: DYN_REQUEST_PLANE
+              value: {{ .Values.frontend.requestPlane | quote }}
+            - name: DYN_EVENT_PLANE
+              value: {{ .Values.frontend.eventPlane | quote }}
+            - name: DYN_FRONTEND_NOFILE_LIMIT
+              value: {{ .Values.frontend.nofileLimit | quote }}
+            - name: DYN_TOKENIZER
+              value: {{ .Values.frontend.tokenizer | quote }}
+            - name: DYN_ROUTER_QUEUE_POLICY
+              value: {{ .Values.frontend.queuePolicy | quote }}
+          command:
+            - /bin/bash
+            - -lc
+          args:
+            - |
+              set -euo pipefail
+              ulimit -S -n "${DYN_FRONTEND_NOFILE_LIMIT}"
+              if (( $(ulimit -S -n) < DYN_FRONTEND_NOFILE_LIMIT )); then
+                echo "ERROR: frontend RLIMIT_NOFILE is below ${DYN_FRONTEND_NOFILE_LIMIT}" >&2
+                exit 78
+              fi
+              echo "Frontend RLIMIT_NOFILE soft=$(ulimit -S -n) hard=$(ulimit -H -n)"
+              unset NATS_SERVER &&
+              exec python3 -m dynamo.frontend
+              --router-mode {{ .Values.frontend.routerMode }}
+              --no-router-kv-events
+              --router-min-initial-workers {{ .Values.frontend.minInitialWorkers }}
+              --enable-anthropic-api
+              --strip-anthropic-preamble
+              --enable-streaming-tool-dispatch
+              --enable-streaming-reasoning-dispatch
+              --http-port {{ .Values.frontend.httpPort }}
+              --active-decode-blocks-threshold "None"
+              --active-prefill-tokens-threshold "None"
+              --active-prefill-tokens-threshold-frac "None"
+              --router-track-output-blocks
+    {{- if .Values.modelexpress.enabled }}
+    ModelExpress:
+      componentType: frontend
+      envFromSecret: {{ .Values.model.envFromSecret | quote }}
+      replicas: 1
+      livenessProbe:
+        tcpSocket:
+          port: {{ .Values.modelexpress.port }}
+        initialDelaySeconds: 30
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      readinessProbe:
+        tcpSocket:
+          port: {{ .Values.modelexpress.port }}
+        initialDelaySeconds: 10
+        periodSeconds: 5
+        timeoutSeconds: 3
+        failureThreshold: 3
+      volumeMounts:
+        - name: {{ .Values.modelCache.name | quote }}
+          mountPoint: {{ .Values.modelCache.mountPath | quote }}
+      extraPodSpec:
+        mainContainer:
+          image: {{ .Values.modelexpress.image | quote }}
+          imagePullPolicy: {{ .Values.modelexpress.imagePullPolicy }}
+          env:
+            - name: MODEL_EXPRESS_SERVER_PORT
+              value: {{ .Values.modelexpress.port | quote }}
+            - name: MODEL_EXPRESS_LOG_LEVEL
+              value: {{ .Values.modelexpress.logLevel | quote }}
+            - name: MODEL_EXPRESS_CACHE_DIRECTORY
+              value: {{ .Values.modelCache.cachePath | quote }}
+            - name: MX_METADATA_BACKEND
+              value: {{ .Values.modelexpress.metadataBackend | quote }}
+            - name: MX_REDIS_HOST
+              value: {{ .Values.redis.name | quote }}
+            - name: MX_REDIS_PORT
+              value: "6379"
+            - name: REDIS_URL
+              value: {{ printf "redis://%s:6379" .Values.redis.name | quote }}
+            - name: MODEL_NAME
+              value: {{ .Values.model.id | quote }}
+            - name: MODEL_CACHE_PATH
+              value: {{ .Values.modelCache.cachePath | quote }}
+            - name: HF_HUB_CACHE
+              value: {{ .Values.modelCache.cachePath | quote }}
+            - name: HF_XET_HIGH_PERFORMANCE
+              value: "1"
+          command:
+            - /bin/bash
+            - -lc
+          args:
+            - |
+              set -euo pipefail
+
+              echo "Waiting for Redis metadata backend..."
+              for i in $(seq 1 60); do
+                if timeout 1 bash -c "</dev/tcp/${MX_REDIS_HOST}/${MX_REDIS_PORT}" 2> /dev/null; then
+                  echo "Redis is reachable."
+                  break
+                fi
+                if [ "$i" -eq 60 ]; then
+                  echo "ERROR: Redis did not become reachable at ${MX_REDIS_HOST}:${MX_REDIS_PORT}" >&2
+                  exit 1
+                fi
+                echo "Waiting for Redis... ($i/60)"
+                sleep 2
+              done
+
+              echo "Starting Model Express Server..."
+              ./modelexpress-server &
+
+              SERVER_PID=$!
+              echo "Server started with PID: $SERVER_PID"
+
+              echo "Setting up Model Express configuration..."
+              mkdir -p "$MODEL_CACHE_PATH"
+              mkdir -p {{ .Values.modelCache.mountPath }}/.model-express
+              cat > {{ .Values.modelCache.mountPath }}/.model-express/config.yaml << EOF
+              local_path: $MODEL_CACHE_PATH
+              server_endpoint: http://{{ include "dynamo-model.name" . }}-modelexpress:{{ .Values.modelexpress.port }}
+              timeout_secs: null
+              EOF
+
+              echo "Waiting for server to be ready..."
+              for i in $(seq 1 60); do
+                if ./modelexpress-cli --endpoint http://localhost:{{ .Values.modelexpress.port }} health > /dev/null 2>&1; then
+                  echo "Server is ready!"
+                  break
+                fi
+                echo "Waiting for server... ($i/60)"
+                sleep 2
+              done
+
+              echo "Downloading $MODEL_NAME model..."
+              ./modelexpress-cli --endpoint http://localhost:{{ .Values.modelexpress.port }} \
+                --cache-path "$MODEL_CACHE_PATH" \
+                model download "$MODEL_NAME" --strategy {{ .Values.modelexpress.downloadStrategy }}
+
+              SNAPSHOTS_PARENT="$MODEL_CACHE_PATH/models--${MODEL_NAME//\//--}/snapshots"
+              SNAPSHOT_DIR="$(ls -td "$SNAPSHOTS_PARENT"/*/ 2>/dev/null | head -1 || true)"
+              if [ -n "$SNAPSHOT_DIR" ]; then
+                SNAPSHOTS_PARENT=$(dirname "$SNAPSHOT_DIR")
+                ln -sfn "$(basename "$SNAPSHOT_DIR")" "$SNAPSHOTS_PARENT/latest"
+                echo "Created symlink: latest -> $(basename "$SNAPSHOT_DIR")"
+              fi
+
+              echo "Server PID: $SERVER_PID"
+              wait "$SERVER_PID"
+    {{- end }}
+    {{- if .Values.planner.enabled }}
+    Planner:
+      envFromSecret: {{ .Values.model.envFromSecret | quote }}
+      componentType: planner
+      replicas: 1
+      extraPodSpec:
+        mainContainer:
+          image: {{ .Values.planner.image | quote }}
+          imagePullPolicy: {{ .Values.planner.imagePullPolicy }}
+          env:
+            - name: DYN_EVENT_PLANE
+              value: {{ .Values.planner.eventPlane | quote }}
+            - name: PROMETHEUS_ENDPOINT
+              value: {{ .Values.planner.prometheusEndpoint | quote }}
+            - name: PLANNER_PROMETHEUS_PORT
+              value: {{ .Values.planner.prometheusPort | quote }}
+          {{- if ne (toString .Values.planner.prometheusPort) "0" }}
+          ports:
+            - name: planner-metrics
+              containerPort: {{ .Values.planner.prometheusPort }}
+          {{- end }}
+          {{- if eq .Values.planner.workerNamespaceCompat "legacy" }}
+          command:
+            - python3
+            - -c
+          args:
+            - |
+              {{- include "dynamo-model.plannerLegacyNamespacePatch" . | nindent 14 }}
+            - --config
+            - >-
+              {{ include "dynamo-model.plannerConfigJson" . }}
+          {{- else }}
+          command:
+            - python3
+            - -m
+            - dynamo.planner
+          args:
+            - --config
+            - >-
+              {{ include "dynamo-model.plannerConfigJson" . }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.planner.resources | nindent 12 }}
+    {{- end }}
+    {{ .Values.worker.componentName }}:
+      componentType: worker
+      subComponentType: decode
+      scalingAdapter:
+        enabled: true
+      envFromSecret: {{ .Values.model.envFromSecret | quote }}
+      replicas: {{ .Values.worker.replicas }}
+      resources:
+        limits:
+          gpu: {{ .Values.worker.gpu | quote }}
+        requests:
+          gpu: {{ .Values.worker.gpu | quote }}
+      livenessProbe:
+        httpGet:
+          path: /live
+          port: system
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 6
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: system
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      volumeMounts:
+        - name: {{ .Values.modelCache.name | quote }}
+          mountPoint: {{ .Values.modelCache.mountPath | quote }}
+      sharedMemory:
+        size: {{ .Values.worker.sharedMemorySize | quote }}
+      extraPodSpec:
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+                - matchExpressions:
+                    - key: nvidia.com/gpu.memory
+                      operator: Gt
+                      values:
+                        - {{ .Values.worker.nodeGpuMemoryGt | quote }}
+        mainContainer:
+          image: {{ .Values.model.image | quote }}
+          imagePullPolicy: {{ .Values.model.imagePullPolicy }}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 9090
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 360
+          env:
+            - name: MODEL_NAME
+              value: {{ .Values.model.id | quote }}
+            - name: HF_HUB_CACHE
+              value: {{ .Values.modelCache.cachePath | quote }}
+            - name: MODEL_CACHE_PATH
+              value: {{ .Values.modelCache.cachePath | quote }}
+            - name: MODEL_EXPRESS_URL
+              value: {{ printf "http://%s-modelexpress:%v" (include "dynamo-model.name" .) .Values.modelexpress.port | quote }}
+            - name: MODEL_EXPRESS_HOST
+              value: {{ printf "%s-modelexpress" (include "dynamo-model.name" .) | quote }}
+            - name: MODEL_EXPRESS_PORT
+              value: {{ .Values.modelexpress.port | quote }}
+            - name: DYN_REQUEST_PLANE
+              value: {{ .Values.worker.requestPlane | quote }}
+            - name: DYN_EVENT_PLANE
+              value: {{ .Values.worker.eventPlane | quote }}
+            - name: DYN_HTTP_BODY_LIMIT_MB
+              value: {{ .Values.worker.httpBodyLimitMb | quote }}
+            - name: DYN_WORKER_NOFILE_LIMIT
+              value: {{ .Values.worker.nofileLimit | quote }}
+            - name: UCX_NET_DEVICES
+              value: {{ .Values.worker.ucxNetDevices | quote }}
+            - name: UCX_TLS
+              value: {{ .Values.worker.ucxTls | quote }}
+            {{- range .Values.worker.extraEnv }}
+            - name: {{ .name | quote }}
+              value: {{ .value | quote }}
+            {{- end }}
+          command:
+            - /bin/bash
+            - -lc
+          args:
+            - |
+              set -euo pipefail
+              ulimit -S -n "${DYN_WORKER_NOFILE_LIMIT}"
+              if (( $(ulimit -S -n) < DYN_WORKER_NOFILE_LIMIT )); then
+                echo "ERROR: worker RLIMIT_NOFILE is below ${DYN_WORKER_NOFILE_LIMIT}" >&2
+                exit 78
+              fi
+              echo "Worker RLIMIT_NOFILE soft=$(ulimit -S -n) hard=$(ulimit -H -n)"
+
+              echo "Waiting for ModelExpress at ${MODEL_EXPRESS_HOST}:${MODEL_EXPRESS_PORT}..."
+              for i in $(seq 1 180); do
+                if timeout 1 bash -c "</dev/tcp/${MODEL_EXPRESS_HOST}/${MODEL_EXPRESS_PORT}" 2> /dev/null; then
+                  echo "ModelExpress is reachable."
+                  break
+                fi
+                if [ "$i" -eq 180 ]; then
+                  echo "ERROR: ModelExpress did not become reachable at ${MODEL_EXPRESS_HOST}:${MODEL_EXPRESS_PORT}" >&2
+                  exit 1
+                fi
+                echo "Waiting for ModelExpress... ($i/180)"
+                sleep 2
+              done
+
+              exec python3 -m dynamo.vllm \
+                --model "${MODEL_NAME}" \
+                {{- range .Values.worker.vllmArgs }}
+                {{ . }} \
+                {{- end }}
+                --no-enable-log-requests
+{{- end }}

@@ -1,0 +1,7 @@
+Release {{ .Release.Name }} rendered {{ .Values.model.deploymentMode }} resources for {{ .Values.model.id }}.
+
+Inspect the rendered manifests:
+  helm template {{ .Release.Name }} {{ .Chart.Name }} -n {{ .Release.Namespace }} -f <values-file>
+
+Watch the Dynamo deployment:
+  kubectl get dgd {{ include "dynamo-model.name" . }} -n {{ .Release.Namespace }} -w

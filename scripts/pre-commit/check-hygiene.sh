@@ -10,7 +10,7 @@ for file in "$@"; do
   [[ -e "${file}" ]] || continue
 
   case "${file}" in
-    routing-workbench/target/*|*/routing-workbench/target/*|*/__pycache__/*|*.pyc|*.pyo|*.pyd|*.so|*.rlib|*.rmeta)
+    */__pycache__/*|*.pyc|*.pyo|*.pyd|*.so|*.rlib|*.rmeta)
       echo "Generated build artifact is not allowed: ${file}" >&2
       status=1
       continue
@@ -20,7 +20,7 @@ for file in "$@"; do
       status=1
       continue
       ;;
-    rendered*.yaml|*/rendered*.yaml|*-base.yaml|*-daedalus.yaml|*-aiperf.yaml|*-dynosim-aiperf.yaml)
+    rendered*.yaml|*/rendered*.yaml|*-base.yaml|*-daedalus.yaml)
       echo "Rendered manifest artifact is not allowed: ${file}" >&2
       status=1
       continue

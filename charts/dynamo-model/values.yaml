@@ -1,0 +1,145 @@
+app:
+  partOf: daedalus-dynamo
+
+model:
+  name: example-vllm-agg
+  id: nvidia/example-model
+  image: example.com/dynamo-model:latest
+  imagePullPolicy: IfNotPresent
+  backendFramework: vllm
+  deploymentMode: direct
+  envFromSecret: hf-token-secret
+
+modelCache:
+  name: dynamo-model-cache
+  create: true
+  storage: 256Gi
+  accessModes:
+    - ReadWriteMany
+  mountPath: /model
+  cachePath: /model/.model-express/cache
+  storageClassName: ""
+
+redis:
+  enabled: true
+  name: dynamo-redis
+  dataPvcName: dynamo-redis-data
+  image: redis:7-alpine
+  imagePullPolicy: IfNotPresent
+  storage: 256Gi
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: "1"
+      memory: 4Gi
+
+modelexpress:
+  enabled: true
+  image: nvcr.io/nvidia/ai-dynamo/modelexpress-server:0.3.0
+  imagePullPolicy: IfNotPresent
+  port: 8000
+  logLevel: info
+  metadataBackend: redis
+  downloadStrategy: server-only
+
+frontend:
+  replicas: 1
+  httpPort: 8000
+  httpBodyLimitMb: "200"
+  requestPlane: tcp
+  eventPlane: zmq
+  nofileLimit: "131072"
+  tokenizer: fastokens
+  queuePolicy: wspt
+  routerMode: kv
+  minInitialWorkers: 1
+
+worker:
+  componentName: VllmWorker
+  replicas: 1
+  gpu: "1"
+  httpBodyLimitMb: "400"
+  requestPlane: tcp
+  eventPlane: zmq
+  nofileLimit: "131072"
+  sharedMemorySize: 64Gi
+  ucxNetDevices: eth0
+  ucxTls: tcp,cuda_copy,cuda_ipc
+  nodeGpuMemoryGt: "40959"
+  extraEnv: []
+  vllmArgs:
+    - --served-model-name "${MODEL_NAME}"
+    - --frontend-decoding
+    - --tensor-parallel-size 1
+    - --pipeline-parallel-size 1
+    - --data-parallel-size 1
+    - --gpu-memory-utilization 0.90
+    - --max-num-seqs 8
+    - --max-num-batched-tokens 8192
+    - --enable-chunked-prefill
+    - --scheduling-policy priority
+    - --enable-prefix-caching
+    - --prefix-caching-hash-algo sha256
+    - --kv-cache-dtype fp8
+
+planner:
+  enabled: true
+  image: nvcr.io/nvidia/ai-dynamo/dynamo-planner:1.3.0-dev.1
+  imagePullPolicy: IfNotPresent
+  environment: kubernetes
+  mode: agg
+  optimizationTarget: load
+  enableThroughputScaling: false
+  enableLoadScaling: true
+  preDeploymentSweepingMode: none
+  throughputAdjustmentIntervalSeconds: 120
+  loadAdjustmentIntervalSeconds: 5
+  throughputMetricsSource: frontend
+  maxGpuBudget: 4
+  minEndpoint: 1
+  ttftMs: 1500.0
+  itlMs: 75.0
+  advisory: false
+  decodeScaleUpKvRate: 0.88
+  decodeScaleDownKvRate: 0.55
+  prometheusEndpoint: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+  prometheusPort: "0"
+  eventPlane: zmq
+  workerNamespaceCompat: legacy
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+  dgdr:
+    searchStrategy: thorough
+    autoApply: true
+    workload:
+      isl: 4096
+      osl: 512
+      concurrency: 2
+    hardware:
+      gpuSku: l40s
+      totalGpus: 4
+      numGpusPerNode: 2
+      vramMb: 46068
+  compatHook:
+    enabled: false
+    image: bitnami/kubectl:1.35.3
+    waitSeconds: 600
+    restartPlanner: true
+
+metrics:
+  podMonitor:
+    enabled: false
+    name: dynamo-decode-worker
+    namespace: dynamo-system
+    partOf: daedalus-dynamo-demo
+    interval: 5s

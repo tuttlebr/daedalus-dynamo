@@ -1,0 +1,24 @@
+model:
+  name: nemotron-3-nano-vllm-agg
+  id: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-vllm-runtime:1.3.0-dev.1
+  deploymentMode: direct
+
+worker:
+  extraEnv: []
+  vllmArgs:
+    - --served-model-name "${MODEL_NAME}"
+    - --frontend-decoding
+    - --dyn-tool-call-parser nemotron_nano
+    - --dyn-reasoning-parser nemotron_nano
+    - --tensor-parallel-size 1
+    - --pipeline-parallel-size 1
+    - --data-parallel-size 1
+    - --gpu-memory-utilization 0.90
+    - --max-num-seqs 8
+    - --max-num-batched-tokens 8192
+    - --enable-chunked-prefill
+    - --scheduling-policy priority
+    - --enable-prefix-caching
+    - --prefix-caching-hash-algo sha256
+    - --kv-cache-dtype fp8

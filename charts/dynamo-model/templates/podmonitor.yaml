@@ -1,0 +1,24 @@
+{{- if .Values.metrics.podMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ .Values.metrics.podMonitor.name | quote }}
+  namespace: {{ .Values.metrics.podMonitor.namespace | quote }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.metrics.podMonitor.name | quote }}
+    app.kubernetes.io/part-of: {{ .Values.metrics.podMonitor.partOf | quote }}
+spec:
+  namespaceSelector:
+    any: true
+  podMetricsEndpoints:
+    - interval: {{ .Values.metrics.podMonitor.interval | quote }}
+      path: /metrics
+      port: system
+    - interval: {{ .Values.metrics.podMonitor.interval | quote }}
+      path: /metrics
+      port: nixl
+  selector:
+    matchLabels:
+      nvidia.com/dynamo-component-type: decode
+      nvidia.com/metrics-enabled: "true"
+{{- end }}

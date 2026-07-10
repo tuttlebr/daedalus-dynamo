@@ -1,0 +1,17 @@
+{{- if .Values.modelCache.create }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.modelCache.name | quote }}
+  annotations:
+    "helm.sh/resource-policy": keep
+  labels:
+    {{- include "dynamo-model.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    {{- toYaml .Values.modelCache.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.modelCache.storage | quote }}
+  {{- include "dynamo-model.storageClass" .Values.modelCache | nindent 2 }}
+{{- end }}

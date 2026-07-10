@@ -1,6 +1,0 @@
-services:
-  qwen36-27b-dynamo:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: daedalus.ddns.me:5050/btuttle/qwen36-27b-dynamo:latest

@@ -1,0 +1,80 @@
+{{- if eq .Values.model.deploymentMode "dgdr" }}
+apiVersion: nvidia.com/v1beta1
+kind: DynamoGraphDeploymentRequest
+metadata:
+  name: {{ include "dynamo-model.name" . | quote }}
+  labels:
+    {{- include "dynamo-model.labels" . | nindent 4 }}
+    nvidia.com/dynamo-graph-deployment-name: {{ include "dynamo-model.name" . | quote }}
+spec:
+  model: {{ .Values.model.id | quote }}
+  backend: {{ .Values.model.backendFramework }}
+  image: {{ .Values.planner.image | quote }}
+  searchStrategy: {{ .Values.planner.dgdr.searchStrategy }}
+  autoApply: {{ .Values.planner.dgdr.autoApply }}
+  workload:
+    isl: {{ .Values.planner.dgdr.workload.isl }}
+    osl: {{ .Values.planner.dgdr.workload.osl }}
+    concurrency: {{ .Values.planner.dgdr.workload.concurrency }}
+  sla:
+    ttft: {{ .Values.planner.ttftMs }}
+    itl: {{ .Values.planner.itlMs }}
+  hardware:
+    gpuSku: {{ .Values.planner.dgdr.hardware.gpuSku | quote }}
+    totalGpus: {{ .Values.planner.dgdr.hardware.totalGpus }}
+    numGpusPerNode: {{ .Values.planner.dgdr.hardware.numGpusPerNode }}
+    vramMb: {{ .Values.planner.dgdr.hardware.vramMb }}
+  modelCache:
+    pvcName: {{ .Values.modelCache.name | quote }}
+    pvcMountPath: {{ .Values.modelCache.mountPath | quote }}
+  features:
+    planner:
+      environment: {{ .Values.planner.environment }}
+      backend: {{ .Values.model.backendFramework }}
+      mode: {{ .Values.planner.mode }}
+      optimization_target: {{ .Values.planner.optimizationTarget }}
+      enable_throughput_scaling: {{ .Values.planner.enableThroughputScaling }}
+      enable_load_scaling: {{ .Values.planner.enableLoadScaling }}
+      pre_deployment_sweeping_mode: {{ .Values.planner.preDeploymentSweepingMode }}
+      throughput_adjustment_interval_seconds: {{ .Values.planner.throughputAdjustmentIntervalSeconds }}
+      load_adjustment_interval_seconds: {{ .Values.planner.loadAdjustmentIntervalSeconds }}
+      throughput_metrics_source: {{ .Values.planner.throughputMetricsSource }}
+      max_gpu_budget: {{ .Values.planner.maxGpuBudget }}
+      min_endpoint: {{ .Values.planner.minEndpoint }}
+      ttft_ms: {{ .Values.planner.ttftMs }}
+      itl_ms: {{ .Values.planner.itlMs }}
+      advisory: {{ .Values.planner.advisory }}
+      decode_scale_up_kv_rate: {{ .Values.planner.decodeScaleUpKvRate }}
+      decode_scale_down_kv_rate: {{ .Values.planner.decodeScaleDownKvRate }}
+  overrides:
+    dgd:
+      apiVersion: nvidia.com/v1alpha1
+      kind: DynamoGraphDeployment
+      metadata:
+        name: {{ include "dynamo-model.name" . | quote }}
+        labels:
+          {{- include "dynamo-model.labels" . | nindent 10 }}
+      spec:
+        services:
+          Planner:
+            envs:
+              - name: PROMETHEUS_ENDPOINT
+                value: {{ .Values.planner.prometheusEndpoint | quote }}
+              - name: PLANNER_PROMETHEUS_PORT
+                value: {{ .Values.planner.prometheusPort | quote }}
+              - name: DYN_EVENT_PLANE
+                value: {{ .Values.planner.eventPlane | quote }}
+            {{- if eq .Values.planner.workerNamespaceCompat "legacy" }}
+            extraPodSpec:
+              mainContainer:
+                command:
+                  - python3
+                  - -c
+                args:
+                  - |
+                    {{- include "dynamo-model.plannerLegacyNamespacePatch" . | nindent 20 }}
+                  - --config
+                  - >-
+                    {{ include "dynamo-model.plannerConfigJson" . }}
+            {{- end }}
+{{- end }}
