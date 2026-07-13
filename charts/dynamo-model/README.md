@@ -60,6 +60,23 @@ Set `planner.workerNamespaceCompat=hashed` only with an operator/runtime stack
 that publishes worker metadata and forward-pass metrics under
 `<DYN_NAMESPACE>-<worker-hash>`.
 
+## Planner Warm Floors
+
+The worker scaling adapter owns live worker replicas after a
+`DynamoGraphDeployment` has been created. Do not change
+`worker.replicas` on an existing deployment with the adapter enabled; the
+admission webhook rejects it. Upgrade the Planner policy first, then establish
+or raise a warm floor through the adapter:
+
+```bash
+kubectl scale dgdsa/<dgd-name>-<worker-component-lowercase> \
+  -n <namespace> --replicas=<planner.minEndpoint>
+```
+
+Use the same floor in `planner.minEndpoint` so Planner does not immediately
+scale it down. Let Planner remain the only autoscaler for that worker adapter;
+use a distinct HPA only if the frontend itself is proven to be the bottleneck.
+
 The old post-install annotation hook remains in values for emergency manual use,
 but it is disabled by default and is not part of the normal deploy path.
 

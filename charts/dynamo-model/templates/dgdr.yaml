@@ -48,7 +48,8 @@ spec:
       decode_scale_down_kv_rate: {{ .Values.planner.decodeScaleDownKvRate }}
   overrides:
     dgd:
-      apiVersion: nvidia.com/v1beta1
+      # DGDR overrides use the v1alpha1 services schema rendered below.
+      apiVersion: nvidia.com/v1alpha1
       kind: DynamoGraphDeployment
       metadata:
         name: {{ include "dynamo-model.name" . | quote }}

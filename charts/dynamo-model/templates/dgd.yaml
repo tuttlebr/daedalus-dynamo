@@ -1,5 +1,7 @@
 {{- if eq .Values.model.deploymentMode "direct" }}
-apiVersion: nvidia.com/v1beta1
+# This template uses the v1alpha1 services/pvcs schema. Migrating to v1beta1
+# also requires converting the spec to components/podTemplate.
+apiVersion: nvidia.com/v1alpha1
 kind: DynamoGraphDeployment
 metadata:
   name: {{ include "dynamo-model.name" . | quote }}

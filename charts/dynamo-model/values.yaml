@@ -105,8 +105,8 @@ planner:
   ttftMs: 1500.0
   itlMs: 75.0
   advisory: false
-  decodeScaleUpKvRate: 0.88
-  decodeScaleDownKvRate: 0.55
+  decodeScaleUpKvRate: .8
+  decodeScaleDownKvRate: .3
   prometheusEndpoint: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
   prometheusPort: "0"
   eventPlane: zmq
