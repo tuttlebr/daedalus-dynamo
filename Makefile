@@ -67,9 +67,34 @@ MODEL_ID ?= $(MODEL_ID_FROM_VALUES)
 MODEL_ROUTE_NAME ?= daedalus-dynamo-$(MODEL_NAME)
 
 REGISTRY ?= daedalus.ddns.me:5050/btuttle
+IMAGE_WAS_SET := $(if $(filter undefined,$(origin IMAGE)),,1)
+IMAGE_REPOSITORY_WAS_SET := $(if $(filter undefined,$(origin IMAGE_REPOSITORY)),,1)
+IMAGE_TAG_WAS_SET := $(if $(filter undefined,$(origin IMAGE_TAG)),,1)
 IMAGE_REPOSITORY ?= $(if $(MODEL_IMAGE_REPOSITORY),$(MODEL_IMAGE_REPOSITORY),$(REGISTRY)/daedalus-dynamo-vllm-runtime)
 IMAGE_TAG ?= $(if $(MODEL_IMAGE_TAG),$(MODEL_IMAGE_TAG),latest)
 IMAGE ?= $(IMAGE_REPOSITORY):$(IMAGE_TAG)
+
+DEPLOY_ALL_IMAGE_GOALS := deploy-all-check deploy-all-images
+ifneq ($(filter $(DEPLOY_ALL_IMAGE_GOALS),$(MAKECMDGOALS)),)
+DEPLOY_ALL_IMAGES := $(sort $(shell \
+	for model in $(MODELS); do \
+		image="$$(sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*image:[[:space:]]*//p' "$(VALUES_DIR)/$$model.yaml" 2>/dev/null | head -1 | tr -d '"')"; \
+		repository="$$(printf '%s\n' "$$image" | sed 's/:[^/:]*$$//')"; \
+		tag="$$(printf '%s\n' "$$image" | sed 's/^.*://')"; \
+		if [ -n "$(IMAGE_WAS_SET)" ]; then \
+			resolved_image='$(IMAGE)'; \
+		else \
+			if [ -n "$(IMAGE_REPOSITORY_WAS_SET)" ]; then repository='$(IMAGE_REPOSITORY)'; fi; \
+			if [ -n "$(IMAGE_TAG_WAS_SET)" ]; then tag='$(IMAGE_TAG)'; fi; \
+			if [ -z "$$repository" ]; then repository='$(REGISTRY)/daedalus-dynamo-vllm-runtime'; fi; \
+			if [ -z "$$tag" ]; then tag=latest; fi; \
+			resolved_image="$$repository:$$tag"; \
+		fi; \
+		printf '%s\n' "$$resolved_image"; \
+	done))
+endif
+DEPLOY_ALL_RELEASE_TARGETS := $(addprefix deploy-all-release-,$(MODELS))
+DEPLOY_ALL_ROUTE_TARGETS := $(addprefix deploy-all-route-,$(MODELS))
 
 DEPLOYMENT_MODE ?=
 HELM_ARGS ?=
@@ -120,6 +145,7 @@ help:
 		'All-model targets:' \
 		'  make lint-all' \
 		'  make deploy-all' \
+		'  make -j5 deploy-all             Parallelize independent model releases and routes.' \
 		'  make uninstall-all' \
 		'' \
 		'Useful variables:' \
@@ -283,16 +309,15 @@ deploy: check-model
 	@if [[ "$(INSTALL_GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
 		$(MAKE) --no-print-directory install-gateway MODEL="$(MODEL)"; \
 	elif [[ "$(GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
-		$(MAKE) --no-print-directory gateway-base MODEL="$(MODEL)"; \
-		$(MAKE) --no-print-directory gateway-monitoring MODEL="$(MODEL)"; \
+		$(MAKE) --no-print-directory gateway-base gateway-monitoring MODEL="$(MODEL)"; \
 	fi
 	@$(MAKE) --no-print-directory upgrade MODEL="$(MODEL)"
 	@if [[ "$(PLANNER_COMPAT)" =~ ^(1|true|yes)$$ ]]; then \
 		$(MAKE) --no-print-directory planner-compat MODEL="$(MODEL)"; \
 	fi
 	@if [[ "$(GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
-		$(MAKE) --no-print-directory gateway-route MODEL="$(MODEL)"; \
-		$(MAKE) --no-print-directory gateway-catalog MODEL="$(MODEL)"; \
+		$(MAKE) --no-print-directory gateway-route-apply MODEL="$(MODEL)"; \
+		$(MAKE) --no-print-directory gateway-catalog-apply MODEL="$(MODEL)"; \
 	fi
 
 .PHONY: uninstall delete
@@ -325,11 +350,12 @@ install-gateway: check-kubectl check-helm check-python
 		$(MAKE) --no-print-directory push-gateway-image; \
 	fi
 	@AGENTGATEWAY_VERSION="$(AGENTGATEWAY_VERSION)" scripts/install-inference-gateway.sh
-	@$(MAKE) --no-print-directory gateway-base MODEL="$(MODEL)"
-	@$(MAKE) --no-print-directory gateway-monitoring MODEL="$(MODEL)"
+	@$(MAKE) --no-print-directory gateway-base gateway-monitoring MODEL="$(MODEL)"
 
-.PHONY: gateway gateway-base gateway-route gateway-unroute gateway-catalog gateway-monitoring
-gateway: gateway-base gateway-route gateway-catalog gateway-monitoring
+.PHONY: gateway gateway-base gateway-route gateway-route-apply gateway-unroute gateway-catalog gateway-catalog-apply gateway-monitoring
+gateway: gateway-base gateway-monitoring
+	@$(MAKE) --no-print-directory gateway-route-apply MODEL="$(MODEL)"
+	@$(MAKE) --no-print-directory gateway-catalog-apply MODEL="$(MODEL)"
 
 gateway-base: namespace
 	@for crd in \
@@ -386,7 +412,10 @@ gateway-monitoring: namespace
 		echo "WARN: Prometheus Operator CRDs are absent; FD metrics Service remains available but ServiceMonitor/alerts were skipped."; \
 	fi
 
-gateway-route: check-model gateway-base
+gateway-route: gateway-base
+	@$(MAKE) --no-print-directory gateway-route-apply MODEL="$(MODEL)"
+
+gateway-route-apply: check-model check-kubectl
 	@echo "==> Applying $(GATEWAY_NAME) route for $(MODEL_ID)"
 	@APP_LABEL_VALUE="$(APP_LABEL_VALUE)" \
 		GATEWAY_NAME="$(GATEWAY_NAME)" \
@@ -399,7 +428,10 @@ gateway-route: check-model gateway-base
 gateway-unroute: check-model check-kubectl
 	@$(KUBECTL) delete httproute "$(MODEL_ROUTE_NAME)" -n "$(NAMESPACE)" --ignore-not-found
 
-gateway-catalog: namespace check-python
+gateway-catalog: namespace
+	@$(MAKE) --no-print-directory gateway-catalog-apply MODEL="$(MODEL)"
+
+gateway-catalog-apply: check-kubectl check-python
 	@echo "==> Refreshing model catalog from deployed model routes"
 	@models_json="$$( \
 		$(KUBECTL) get httproute \
@@ -425,7 +457,8 @@ doctor: check-kubectl
 validate-resilience: check-helm check-python
 	@scripts/validate-gateway-resilience.sh
 
-.PHONY: lint-all deploy-all uninstall-all
+.PHONY: lint-all deploy-all deploy-all-check deploy-all-images deploy-all-shared deploy-all-releases deploy-all-routes uninstall-all
+.PHONY: $(DEPLOY_ALL_RELEASE_TARGETS) $(DEPLOY_ALL_ROUTE_TARGETS)
 lint-all:
 	@for model in $(MODELS); do \
 		echo "==> lint $$model"; \
@@ -433,10 +466,82 @@ lint-all:
 	done
 
 deploy-all:
+	@$(MAKE) --no-print-directory deploy-all-check
+	@$(MAKE) --no-print-directory deploy-all-images
+	@$(MAKE) --no-print-directory deploy-all-shared
+	@$(MAKE) --no-print-directory deploy-all-releases
+	@if [[ "$(GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
+		$(MAKE) --no-print-directory deploy-all-routes; \
+		$(MAKE) --no-print-directory gateway-catalog-apply; \
+	fi
+
+deploy-all-check:
 	@for model in $(MODELS); do \
-		echo "==> deploy $$model"; \
-		$(MAKE) --no-print-directory deploy MODEL="$$model"; \
+		$(MAKE) --no-print-directory check-model MODEL="$$model"; \
 	done
+	@test -n "$(strip $(DEPLOY_ALL_IMAGES))" || { echo "ERROR: no model images resolved."; exit 2; }
+	@$(MAKE) --no-print-directory check-helm
+	@if [[ ! "$(SKIP_BUILD)" =~ ^(1|true|yes)$$ ]] || [[ ! "$(SKIP_PUSH)" =~ ^(1|true|yes)$$ ]]; then \
+		$(MAKE) --no-print-directory check-docker; \
+	fi
+	@if [[ ! "$(SKIP_SECRET)" =~ ^(1|true|yes)$$ ]] || \
+		[[ "$(GATEWAY)" =~ ^(1|true|yes)$$ ]] || \
+		[[ "$(INSTALL_GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
+		$(MAKE) --no-print-directory check-kubectl; \
+	fi
+	@if [[ "$(GATEWAY)" =~ ^(1|true|yes)$$ ]] || [[ "$(INSTALL_GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
+		$(MAKE) --no-print-directory check-python; \
+	fi
+
+deploy-all-images:
+	@if [[ ! "$(SKIP_BUILD)" =~ ^(1|true|yes)$$ ]]; then \
+		echo "==> Building shared runtime image with tags: $(DEPLOY_ALL_IMAGES)"; \
+		build_args=(); \
+		if [[ -n "$(BASE_IMAGE)" ]]; then \
+			build_args+=(--build-arg "BASE_IMAGE=$(BASE_IMAGE)"); \
+		fi; \
+		image_args=(); \
+		for image in $(DEPLOY_ALL_IMAGES); do \
+			image_args+=(-t "$$image"); \
+		done; \
+		$(DOCKER) build "$${build_args[@]}" "$${image_args[@]}" $(DOCKER_BUILD_ARGS) -f "$(DOCKERFILE)" "$(CONTEXT)"; \
+	fi
+	@if [[ ! "$(SKIP_PUSH)" =~ ^(1|true|yes)$$ ]]; then \
+		for image in $(DEPLOY_ALL_IMAGES); do \
+			echo "==> Pushing $$image"; \
+			$(DOCKER) push "$$image"; \
+		done; \
+	fi
+
+deploy-all-shared:
+	@if [[ "$(INSTALL_GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
+		if [[ ! "$(SKIP_SECRET)" =~ ^(1|true|yes)$$ ]]; then \
+			$(MAKE) --no-print-directory secret MODEL="$(firstword $(MODELS))"; \
+		fi; \
+		$(MAKE) --no-print-directory install-gateway MODEL="$(firstword $(MODELS))"; \
+	elif [[ "$(GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
+		shared_targets=(gateway-base gateway-monitoring); \
+		if [[ ! "$(SKIP_SECRET)" =~ ^(1|true|yes)$$ ]]; then \
+			shared_targets=(secret "$${shared_targets[@]}"); \
+		fi; \
+		$(MAKE) --no-print-directory "$${shared_targets[@]}" MODEL="$(firstword $(MODELS))"; \
+	elif [[ ! "$(SKIP_SECRET)" =~ ^(1|true|yes)$$ ]]; then \
+		$(MAKE) --no-print-directory secret MODEL="$(firstword $(MODELS))"; \
+	fi
+
+deploy-all-releases: $(DEPLOY_ALL_RELEASE_TARGETS)
+
+$(DEPLOY_ALL_RELEASE_TARGETS): deploy-all-release-%:
+	@echo "==> deploy $*"
+	@$(MAKE) --no-print-directory upgrade MODEL="$*"
+	@if [[ "$(PLANNER_COMPAT)" =~ ^(1|true|yes)$$ ]]; then \
+		$(MAKE) --no-print-directory planner-compat MODEL="$*"; \
+	fi
+
+deploy-all-routes: $(DEPLOY_ALL_ROUTE_TARGETS)
+
+$(DEPLOY_ALL_ROUTE_TARGETS): deploy-all-route-%:
+	@$(MAKE) --no-print-directory gateway-route-apply MODEL="$*"
 
 uninstall-all:
 	@for model in $(MODELS); do \
