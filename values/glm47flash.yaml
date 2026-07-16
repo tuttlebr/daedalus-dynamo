@@ -1,0 +1,83 @@
+model:
+  name: glm-47-flash-vllm-agg
+  id: unsloth/GLM-4.7-Flash-NVFP4
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-vllm-runtime:1.3.0-src-de2ad9b-vllm0.25.1-daedalus.1
+  deploymentMode: direct
+
+worker:
+  # L40S nodes advertise 46068 MiB; the A30 advertises 24576 MiB.
+  nodeGpuMemoryGt: "40959"
+  extraEnv:
+    - name: DYN_VLLM_EMBEDDING_TRANSFER_MODE
+      value: local
+    - name: VLLM_ATTENTION_BACKEND
+      value: TRITON_MLA
+  vllmArgs:
+    - --served-model-name "${MODEL_NAME}"
+    - --dyn-tool-call-parser glm47
+    - --dyn-reasoning-parser glm45
+    - --tensor-parallel-size 1
+    - --pipeline-parallel-size 1
+    - --data-parallel-size 1
+    - --gpu-memory-utilization 0.90
+    - --max-num-seqs 4
+    - --max-num-batched-tokens 4096
+    - --enable-chunked-prefill
+    - --scheduling-policy priority
+    - --enable-prefix-caching
+    - --prefix-caching-hash-algo sha256
+    # Start conservatively on SM89. Enable vLLM MTP only after baseline health.
+    - --max-model-len 32768
+
+# The source-built worker/frontend image is about 20 GB. Keep the frontend on
+# an L40S node so it can reuse that shared image without exhausting the smaller
+# ephemeral-storage pool on daedalus-01.
+frontend:
+  nodeSelector:
+    nvidia.com/gpu.product: NVIDIA-L40S
+
+# The generic Planner "latency" mode only reacts once an aggregated worker is
+# above its fixed 40% KV threshold. This model's observed frontend backlog is
+# much smaller, so use the tunable load policy as a latency guardrail instead.
+# The two KV thresholds are percentages (not fractions): 0.25 means 0.25%.
+# On an existing DGD, establish this floor through its scaling adapter; the
+# adapter owns live worker replicas after the DGD has been created.
+planner:
+  optimizationTarget: load
+  enableThroughputScaling: false
+  enableLoadScaling: true
+  preDeploymentSweepingMode: none
+  loadAdjustmentIntervalSeconds: 5
+  minEndpoint: 1
+  maxGpuBudget: 4
+  decodeScaleUpKvRate: 0.75
+  decodeScaleDownKvRate: 0.05
+  advisory: false
+
+modelCache:
+  name: glm47flash-model-cache
+  create: true
+  storage: 64Gi
+  accessModes:
+    - ReadWriteMany
+  mountPath: /model
+  cachePath: /model/.model-express/cache
+  storageClassName: ""
+
+redis:
+  enabled: true
+  name: glm47flash-redis
+  dataPvcName: glm47flash-redis-data
+  image: redis:7-alpine
+  imagePullPolicy: Always
+  storage: 64Gi
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: "1"
+      memory: 4Gi

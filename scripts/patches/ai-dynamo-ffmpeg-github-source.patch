@@ -1,0 +1,16 @@
+diff --git a/container/templates/wheel_builder.Dockerfile b/container/templates/wheel_builder.Dockerfile
+index 8b727a9..ddc3f35 100644
+--- a/container/templates/wheel_builder.Dockerfile
++++ b/container/templates/wheel_builder.Dockerfile
+@@ -327,8 +327,9 @@ RUN --mount=type=secret,id=aws-web-identity-token,target=/run/secrets/aws-token \
+     make install && \
+     ldconfig && \
+     cd /tmp && \
+-    curl --retry 5 --retry-delay 3 -LO https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz && \
+-    tar xf ffmpeg-${FFMPEG_VERSION}.tar.xz && \
++    git clone --depth 1 --branch n${FFMPEG_VERSION} https://github.com/FFmpeg/FFmpeg.git ffmpeg-${FFMPEG_VERSION} && \
++    test "$(git -C ffmpeg-${FFMPEG_VERSION} rev-parse HEAD)" = \
++        "9047fa1b084f76b1b4d065af2d743df1b40dfb56" && \
+     cd ffmpeg-${FFMPEG_VERSION} && \
+     ./configure \
+         --prefix=/usr/local \

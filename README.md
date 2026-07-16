@@ -7,6 +7,7 @@ and uninstalling releases by model.
 
 | Model target | Values file | Model | Runtime |
 | --- | --- | --- | --- |
+| `glm47flash` | `values/glm47flash.yaml` | `unsloth/GLM-4.7-Flash-NVFP4` | vLLM |
 | `nemotron-omni` | `values/nemotron-omni.yaml` | `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4` | vLLM |
 | `qwen35b` | `values/qwen35b.yaml` | `nvidia/Qwen3.6-35B-A3B-NVFP4` | vLLM |
 | `qwen27b` | `values/qwen27b.yaml` | `nvidia/Qwen3.6-27B-NVFP4` | vLLM |
@@ -118,6 +119,7 @@ Deploy a specific model either with `MODEL=` or a pattern target:
 
 ```bash
 HF_TOKEN=<hugging-face-token> make deploy MODEL=qwen35b
+HF_TOKEN=<hugging-face-token> make deploy-glm47flash
 HF_TOKEN=<hugging-face-token> make deploy-qwen27b
 HF_TOKEN=<hugging-face-token> make deploy-gemma431b
 HF_TOKEN=<hugging-face-token> make deploy-nemotron
@@ -236,18 +238,45 @@ not return close to the per-pod baseline after cooldown.
 
 ## Images
 
-By default, the Makefile reads `model.image` from the selected values file and
-uses that repository and tag for both Docker and Helm. Override the tag or the
-whole image when needed:
+By default, the Makefile builds the shared vLLM runtime from pinned
+`ai-dynamo/dynamo` source, reads `model.image` from the selected values file,
+and uses that repository and tag for both Docker and Helm. The checked-in
+source commit builds against vLLM 0.25.1, which is required by GLM 4.7 Flash.
+All model values reference the same image so one build and node pull can be
+reused across backends.
+
+Build and push the shared source runtime once, then deploy without rebuilding:
+
+```bash
+make build-glm47flash
+make push-glm47flash
+SKIP_BUILD=1 SKIP_PUSH=1 HF_TOKEN=<hugging-face-token> make deploy-glm47flash
+```
+
+Override the source commit or pinned upstream vLLM image only together with a
+new output tag, so the pinned shared tag always describes its actual contents:
 
 ```bash
 IMAGE_TAG=test make build-qwen35b
 IMAGE=registry.example.com/dynamo/qwen35b:test make deploy-qwen35b
-BASE_IMAGE=nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.3.0-dev.1-cuda13 make build-qwen35b
+IMAGE_TAG=src-<short-commit> DYNAMO_SOURCE_REF=<full-ai-dynamo-commit> make build-qwen35b
+IMAGE_TAG=vllm-<version> DYNAMO_VLLM_RUNTIME_TAG='<tag>@sha256:<digest>' make build-qwen35b
 ```
 
-The root [`Dockerfile`](./Dockerfile) builds the shared vLLM runtime image used
-by the model chart.
+Set `BUILD_FROM_SOURCE=0` only to use the legacy root
+[`Dockerfile`](./Dockerfile) flow with a compatible base and an explicit,
+distinct `IMAGE` or `IMAGE_TAG`; the Makefile refuses to place that build under
+the pinned source-runtime tag. In legacy mode `BASE_IMAGE`, `DOCKERFILE`, and
+`CONTEXT` apply.
+The source builder applies two fail-closed patches. Because `ffmpeg.org` is
+unreachable from the Daedalus build network, it fetches FFmpeg 8.1 from the
+official FFmpeg GitHub tag and verifies commit `9047fa1b` before compiling. It
+also installs a fully pinned, additive dependency set that supplies Dynamo's
+missing Kubernetes/zstandard requirements and the text/audio helpers used by
+the models sharing this image, without allowing the resolver to change the
+pinned CUDA, PyTorch, vLLM, FlashInfer, or CUTLASS stack. The `daedalus.1` tag
+suffix identifies this checked patch bundle; the build rejects changed patch
+content until its bundle digest and output tag are bumped together.
 
 ## Helm Values
 
@@ -306,7 +335,10 @@ Useful Makefile variables:
 | `NAMESPACE` | `daedalus-dynamo` | Kubernetes namespace. |
 | `IMAGE` | selected `model.image` | Full runtime image reference. |
 | `IMAGE_TAG` | tag from selected `model.image` | Runtime image tag override. |
-| `BASE_IMAGE` | Dynamo vLLM CUDA 13 runtime | Docker build base image. |
+| `BUILD_FROM_SOURCE` | `1` | Build the official `ai-dynamo` vLLM runtime target from source. |
+| `DYNAMO_SOURCE_REF` | pinned commit | Full `ai-dynamo/dynamo` source revision. |
+| `DYNAMO_VLLM_RUNTIME_TAG` | pinned vLLM 0.25.1 image digest | Upstream runtime used by the source build. |
+| `BASE_IMAGE` | Dynamo vLLM CUDA 13 runtime | Base for the legacy `BUILD_FROM_SOURCE=0` flow. |
 | `DEPLOYMENT_MODE` | values file setting | Optional `direct` or `dgdr` override. |
 | `TAKE_OWNERSHIP` | `0` | Pass Helm `--take-ownership`. |
 | `SKIP_BUILD` / `SKIP_PUSH` | `0` | Skip image steps during `make deploy`. |

@@ -120,7 +120,7 @@ spec:
           containers:
             - name: fd-metrics
               image: ${GATEWAY_FD_EXPORTER_IMAGE}
-              imagePullPolicy: IfNotPresent
+              imagePullPolicy: Always
               command:
                 - python3
                 - /opt/daedalus/gateway-fd-metrics.py
@@ -465,7 +465,7 @@ spec:
       containers:
         - name: model-catalog
           image: ${MODEL_CATALOG_IMAGE}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8000

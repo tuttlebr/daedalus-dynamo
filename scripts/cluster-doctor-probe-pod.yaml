@@ -27,7 +27,7 @@ spec:
   containers:
     - name: probe
       image: __PROBE_IMAGE__
-      imagePullPolicy: IfNotPresent
+      imagePullPolicy: Always
       command: ["sleep", "__SLEEP__"]
       securityContext:
         capabilities:

@@ -30,9 +30,25 @@
         }
       }
     },
+    "modelexpress": {
+      "type": "object",
+      "properties": {
+        "resetRegistryOnStart": { "type": "boolean" },
+        "waitForCacheReady": { "type": "boolean" }
+      }
+    },
     "worker": {
       "type": "object",
       "properties": {
+        "nodeGpuMemoryGt": {
+          "$ref": "#/definitions/gpuMemoryBoundary"
+        },
+        "nodeGpuMemoryLt": {
+          "$ref": "#/definitions/gpuMemoryBoundary"
+        },
+        "applyVllmModelOptLmHeadPatch": {
+          "type": "boolean"
+        },
         "nofileLimit": {
           "type": "string",
           "pattern": "^[1-9][0-9]{4,}$"
@@ -62,6 +78,15 @@
           "pattern": "^[1-9][0-9]{4,}$"
         }
       }
+    }
+  },
+  "definitions": {
+    "gpuMemoryBoundary": {
+      "description": "A GPU memory boundary in MiB; an empty string disables the boundary.",
+      "oneOf": [
+        { "type": "string", "pattern": "^(|0|[1-9][0-9]*)$" },
+        { "type": "integer", "minimum": 0 }
+      ]
     }
   }
 }

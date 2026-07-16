@@ -3,4 +3,4 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-vllm-runtime:1.3.0-dev.1
+    image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-vllm-runtime:1.3.0-src-de2ad9b-vllm0.25.1-daedalus.1

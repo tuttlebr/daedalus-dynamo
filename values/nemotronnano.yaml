@@ -1,7 +1,7 @@
 model:
   name: nemotron-3-nano-vllm-agg
   id: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4
-  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-vllm-runtime:1.3.0-dev.1
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-vllm-runtime:1.3.0-src-de2ad9b-vllm0.25.1-daedalus.1
   deploymentMode: direct
 
 worker:
@@ -35,8 +35,36 @@ planner:
   enableLoadScaling: true
   preDeploymentSweepingMode: none
   loadAdjustmentIntervalSeconds: 5
-  minEndpoint: 2
+  minEndpoint: 1
   maxGpuBudget: 4
-  decodeScaleUpKvRate: 0.25
+  decodeScaleUpKvRate: 0.75
   decodeScaleDownKvRate: 0.05
   advisory: false
+
+modelCache:
+  name: nemotronnano-model-cache
+  create: true
+  storage: 64Gi
+  accessModes:
+    - ReadWriteMany
+  mountPath: /model
+  cachePath: /model/.model-express/cache
+  storageClassName: ""
+
+redis:
+  enabled: true
+  name: nemotronnano-redis
+  dataPvcName: nemotronnano-redis-data
+  image: redis:7-alpine
+  imagePullPolicy: Always
+  storage: 64Gi
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: "1"
+      memory: 4Gi

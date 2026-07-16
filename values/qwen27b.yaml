@@ -1,7 +1,7 @@
 model:
   name: qwen36-27b-vllm-agg
   id: nvidia/Qwen3.6-27B-NVFP4
-  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-vllm-runtime:1.3.0-dev.1
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-vllm-runtime:1.3.0-src-de2ad9b-vllm0.25.1-daedalus.1
   deploymentMode: direct
 
 worker:
@@ -34,3 +34,49 @@ worker:
     - --enable-prefix-caching
     - --prefix-caching-hash-algo sha256
     - --kv-cache-dtype fp8
+
+# The generic Planner "latency" mode only reacts once an aggregated worker is
+# above its fixed 40% KV threshold. This model's observed frontend backlog is
+# much smaller, so use the tunable load policy as a latency guardrail instead.
+# The two KV thresholds are percentages (not fractions): 0.25 means 0.25%.
+# On an existing DGD, establish this floor through its scaling adapter; the
+# adapter owns live worker replicas after the DGD has been created.
+planner:
+  optimizationTarget: load
+  enableThroughputScaling: false
+  enableLoadScaling: true
+  preDeploymentSweepingMode: none
+  loadAdjustmentIntervalSeconds: 5
+  minEndpoint: 1
+  maxGpuBudget: 4
+  decodeScaleUpKvRate: 0.75
+  decodeScaleDownKvRate: 0.05
+  advisory: false
+
+modelCache:
+  name: qwen27b-model-cache
+  create: true
+  storage: 64Gi
+  accessModes:
+    - ReadWriteMany
+  mountPath: /model
+  cachePath: /model/.model-express/cache
+  storageClassName: ""
+
+redis:
+  enabled: true
+  name: qwen27b-redis
+  dataPvcName: qwen27b-redis-data
+  image: redis:7-alpine
+  imagePullPolicy: Always
+  storage: 64Gi
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: "1"
+      memory: 4Gi

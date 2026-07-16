@@ -57,7 +57,7 @@ spec:
       containers:
         - name: kubectl
           image: {{ .Values.planner.compatHook.image | quote }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           command:
             - /bin/sh
             - -ec

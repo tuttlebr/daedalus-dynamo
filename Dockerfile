@@ -1,9 +1,9 @@
-ARG BASE_IMAGE="nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.3.0-dev.1-cuda13"
+ARG BASE_IMAGE="nvcr.io/nvidia/ai-dynamo/vllm-runtime-nightly:latest"
 
 FROM ${BASE_IMAGE}
 USER root
 
-RUN pip install --no-cache-dir \
+RUN pip install -U --no-cache-dir \
       blake3 \
       cupy-cuda13x \
       ftfy \

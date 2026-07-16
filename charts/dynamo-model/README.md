@@ -99,6 +99,43 @@ default is `131072`; override `frontend.nofileLimit` or `worker.nofileLimit`
 only when the container runtime hard limit and expected concurrency justify a
 different value.
 
+Worker placement defaults to nodes whose `nvidia.com/gpu.memory` label is
+greater than `worker.nodeGpuMemoryGt` (in MiB). Set `worker.nodeGpuMemoryLt` to
+select nodes below a boundary instead; when it is non-empty, the `Lt` boundary
+takes precedence over `nodeGpuMemoryGt`.
+
+Set `frontend.nodeSelector` when a large shared worker/frontend image should be
+kept off storage-constrained CPU nodes. Selecting the same GPU product as the
+worker lets Kubernetes reuse image layers when both components land on one
+node; the frontend remains CPU-only and does not request a GPU.
+
 The model cache PVC and Redis data PVC are annotated with
 `helm.sh/resource-policy: keep`, so Helm uninstall leaves the storage claims in
 place for later reuse or manual cleanup.
+
+## ModelExpress Restart Recovery
+
+`modelexpress.resetRegistryOnStart=true` removes only the selected model's
+Redis registry record before ModelExpress reconciles the persistent cache. It
+does not remove cached model files. This prevents an interrupted download from
+leaving a stale `DOWNLOADING` record that later servers and workers wait on
+indefinitely. Disable it only when another ModelExpress server intentionally
+shares the same Redis model record and owns the active download.
+
+With `modelexpress.waitForCacheReady=true`, workers wait for the `latest`
+snapshot link that ModelExpress creates after a successful download.
+ModelExpress invalidates an existing link before exposing its server, then
+recreates it only after cache reconciliation succeeds. This keeps workers from
+falling back to a second direct Hub download or accepting a stale completion
+marker when ModelExpress is restarted, avoiding concurrent writers in the
+shared cache.
+
+`worker.applyVllmModelOptLmHeadPatch=true` applies the narrowly scoped,
+version-guarded changes from upstream vLLM PR
+[#42124](https://github.com/vllm-project/vllm/pull/42124) inside a vLLM 0.22.0
+worker container before startup. It enables ModelOpt quantization for a
+separately quantized `ParallelLMHead`, passes the quantization config to the
+Qwen3.5/3.6 and MTP heads, and accepts scalar scale tensors. The patch fails
+closed on another vLLM version or an unexpected source layout. Disable and
+remove it after the runtime image moves to vLLM 0.23.0 or another build that
+contains PR #42124.

@@ -1,0 +1,58 @@
+diff --git a/container/templates/vllm_runtime.Dockerfile b/container/templates/vllm_runtime.Dockerfile
+--- a/container/templates/vllm_runtime.Dockerfile
++++ b/container/templates/vllm_runtime.Dockerfile
+@@ -203,6 +203,34 @@ RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
+     uv pip install {{ pip_target }} --no-deps \
+         "modelexpress==${MODELEXPRESS_VERSION}"
+ {% endif %}
++
++# ai-dynamo is installed above with --no-deps to preserve the upstream vLLM
++# solve. Add the requirements absent from the pinned vLLM image, plus the text
++# and audio helpers required by the shared Daedalus model set. Pin every
++# required distribution version and keep --no-deps so core CUDA/vLLM packages cannot
++# be changed by a later resolver run.
++RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
++    set -eux; \
++    export UV_CACHE_DIR=/root/.cache/uv; \
++    uv pip install {{ pip_target }} --no-deps \
++        "audioread==3.1.0" \
++        "decorator==5.3.1" \
++        "durationpy==0.10" \
++        "ftfy==6.3.1" \
++        "joblib==1.5.3" \
++        "kubernetes==32.0.1" \
++        "lazy-loader==0.5" \
++        "librosa==0.11.0" \
++        "narwhals==2.24.0" \
++        "oauthlib==3.3.1" \
++        "platformdirs==4.10.0" \
++        "pooch==1.9.0" \
++        "requests-oauthlib==2.0.0" \
++        "scikit-learn==1.9.0" \
++        "soxr==1.1.0" \
++        "threadpoolctl==3.6.0" \
++        "websocket-client==1.9.0" \
++        "zstandard==0.23.0"
+ 
+ {% endif %}
+ 
+diff --git a/container/compliance/policy/licenses.toml b/container/compliance/policy/licenses.toml
+--- a/container/compliance/policy/licenses.toml
++++ b/container/compliance/policy/licenses.toml
+@@ -2556,8 +2556,16 @@ reason = "pip itself is MIT; bundled vendored deps include LGPL packages used o
+ [[exceptions]]
+ type = "dpkg"
+ name = "ucf"
+ allow = ["GPL-2.0-only"]
+ reason = "Update Configuration File framework; Debian system component invoked as a separate process during package configuration — mere aggregation"
+ 
++# Daedalus shared-runtime audio resampling dependency.
++[[exceptions]]
++type = "python"
++name = "soxr"
++version = "1.1.0"
++allow = ["LGPL-2.1-or-later"]
++reason = "Dynamically loaded Python extension used without modification by librosa for audio resampling; generated NOTICES and SBOM retain the LGPL attribution and source identity."
++
+ # --- Rust [[exceptions]] ---
+ 

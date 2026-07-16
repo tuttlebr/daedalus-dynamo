@@ -21,6 +21,10 @@ spec:
         - name: {{ .Values.modelCache.name | quote }}
           mountPoint: {{ .Values.modelCache.mountPath | quote }}
       extraPodSpec:
+        {{- with .Values.frontend.nodeSelector }}
+        nodeSelector:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
         mainContainer:
           image: {{ .Values.model.image | quote }}
           imagePullPolicy: {{ .Values.model.imagePullPolicy }}
@@ -59,18 +63,18 @@ spec:
               fi
               echo "Frontend RLIMIT_NOFILE soft=$(ulimit -S -n) hard=$(ulimit -H -n)"
               unset NATS_SERVER &&
-              exec python3 -m dynamo.frontend
-              --router-mode {{ .Values.frontend.routerMode }}
-              --no-router-kv-events
-              --router-min-initial-workers {{ .Values.frontend.minInitialWorkers }}
-              --enable-anthropic-api
-              --strip-anthropic-preamble
-              --enable-streaming-tool-dispatch
-              --enable-streaming-reasoning-dispatch
-              --http-port {{ .Values.frontend.httpPort }}
-              --active-decode-blocks-threshold "None"
-              --active-prefill-tokens-threshold "None"
-              --active-prefill-tokens-threshold-frac "None"
+              exec python3 -m dynamo.frontend \
+              --router-mode {{ .Values.frontend.routerMode }} \
+              --no-router-kv-events \
+              --router-min-initial-workers {{ .Values.frontend.minInitialWorkers }} \
+              --enable-anthropic-api \
+              --strip-anthropic-preamble \
+              --enable-streaming-tool-dispatch \
+              --enable-streaming-reasoning-dispatch \
+              --http-port {{ .Values.frontend.httpPort }} \
+              --active-decode-blocks-threshold "None" \
+              --active-prefill-tokens-threshold "None" \
+              --active-prefill-tokens-threshold-frac "None" \
               --router-track-output-blocks
     {{- if .Values.modelexpress.enabled }}
     ModelExpress:
@@ -141,6 +145,34 @@ spec:
                 echo "Waiting for Redis... ($i/60)"
                 sleep 2
               done
+
+              {{- if .Values.modelexpress.waitForCacheReady }}
+              # Invalidate the completion marker before exposing the server.
+              # Workers wait for ModelExpress TCP readiness first, so they
+              # cannot observe a stale link from an earlier cache attempt.
+              MODEL_SNAPSHOTS_PARENT="$MODEL_CACHE_PATH/models--${MODEL_NAME//\//--}/snapshots"
+              MODEL_READY_LINK="$MODEL_SNAPSHOTS_PARENT/latest"
+              if [ -L "$MODEL_READY_LINK" ]; then
+                unlink "$MODEL_READY_LINK"
+                echo "Invalidated stale ModelExpress cache-ready marker."
+              fi
+              {{- end }}
+
+              {{- if .Values.modelexpress.resetRegistryOnStart }}
+              # ModelExpress 0.4.1 persists DOWNLOADING in Redis, but an
+              # interrupted downloader does not reclaim that state on restart.
+              # Remove only this model's registry record; cached blobs remain
+              # intact and the provider resumes or validates them below.
+              MODEL_REGISTRY_KEY="mx:model:HuggingFace:${MODEL_NAME}"
+              MODEL_REGISTRY_KEY_BYTES=${#MODEL_REGISTRY_KEY}
+              exec 3<>"/dev/tcp/${MX_REDIS_HOST}/${MX_REDIS_PORT}"
+              printf '*2\r\n$3\r\nDEL\r\n$%s\r\n%s\r\n' \
+                "$MODEL_REGISTRY_KEY_BYTES" "$MODEL_REGISTRY_KEY" >&3
+              IFS= read -r REDIS_RESET_REPLY <&3 || true
+              exec 3>&-
+              exec 3<&-
+              echo "Reset ModelExpress registry before cache reconciliation (${REDIS_RESET_REPLY:-no reply})."
+              {{- end }}
 
               echo "Starting Model Express Server..."
               ./modelexpress-server &
@@ -265,9 +297,15 @@ spec:
               nodeSelectorTerms:
                 - matchExpressions:
                     - key: nvidia.com/gpu.memory
+                      {{- if .Values.worker.nodeGpuMemoryLt }}
+                      operator: Lt
+                      values:
+                        - {{ .Values.worker.nodeGpuMemoryLt | quote }}
+                      {{- else }}
                       operator: Gt
                       values:
                         - {{ .Values.worker.nodeGpuMemoryGt | quote }}
+                      {{- end }}
         mainContainer:
           image: {{ .Values.model.image | quote }}
           imagePullPolicy: {{ .Values.model.imagePullPolicy }}
@@ -333,6 +371,114 @@ spec:
                 echo "Waiting for ModelExpress... ($i/180)"
                 sleep 2
               done
+
+              {{- if .Values.modelexpress.waitForCacheReady }}
+              MODEL_SNAPSHOTS_PARENT="$MODEL_CACHE_PATH/models--${MODEL_NAME//\//--}/snapshots"
+              MODEL_READY_LINK="$MODEL_SNAPSHOTS_PARENT/latest"
+              echo "Waiting for ModelExpress to finish the shared-cache download..."
+              while [ ! -L "$MODEL_READY_LINK" ] || [ ! -d "$MODEL_READY_LINK" ]; do
+                sleep 5
+              done
+              echo "Model cache is ready at $MODEL_READY_LINK."
+              {{- end }}
+
+              {{- if .Values.worker.applyVllmModelOptLmHeadPatch }}
+              # vLLM PR #42124 landed after 0.22.0 and fixes ModelOpt
+              # checkpoints with a separately quantized ParallelLMHead.
+              # Apply only those upstream source changes in this ephemeral
+              # container, with strict version and source-layout guards.
+              echo "Applying vLLM 0.22.0 ModelOpt LM-head compatibility patch..."
+              python3 - <<'PY'
+              from importlib.metadata import version
+              from pathlib import Path
+
+              expected_version = "0.22.0"
+              actual_version = version("vllm")
+              if actual_version != expected_version:
+                  raise RuntimeError(
+                      "Refusing vLLM ModelOpt LM-head patch: expected "
+                      f"{expected_version}, found {actual_version}"
+                  )
+
+              package = Path("/usr/local/lib/python3.12/dist-packages/vllm/model_executor")
+
+              def replace_exact(
+                  path: Path, before: str, after: str, expected_count: int = 1
+              ) -> None:
+                  text = path.read_text()
+                  before_count = text.count(before)
+                  after_count = text.count(after)
+                  if before_count == 0 and after_count >= expected_count:
+                      return
+                  if before_count != expected_count or after_count != 0:
+                      raise RuntimeError(
+                          f"Refusing unexpected vLLM source layout in {path}: "
+                          f"before={before_count}, after={after_count}"
+                      )
+                  path.write_text(text.replace(before, after, expected_count))
+
+              modelopt = package / "layers/quantization/modelopt.py"
+              replace_exact(
+                  modelopt,
+                  "from vllm.model_executor.parameter import (\n",
+                  "from vllm.model_executor.layers.vocab_parallel_embedding "
+                  "import ParallelLMHead\n"
+                  "from vllm.model_executor.parameter import (\n",
+              )
+              replace_exact(
+                  modelopt,
+                  "if isinstance(layer, LinearBase):",
+                  "if isinstance(layer, (LinearBase, ParallelLMHead)):",
+                  expected_count=4,
+              )
+
+              vocab = package / "layers/vocab_parallel_embedding.py"
+              replace_exact(
+                  vocab,
+                  "        if params_dtype is None:\n"
+                  "            params_dtype = torch.get_default_dtype()\n"
+                  "        # Divide the weight matrix along the vocabulary dimension.\n",
+                  "        if params_dtype is None:\n"
+                  "            params_dtype = torch.get_default_dtype()\n"
+                  "        self.params_dtype = params_dtype\n"
+                  "        # Divide the weight matrix along the vocabulary dimension.\n",
+              )
+              replace_exact(
+                  vocab,
+                  "        if output_dim is None:\n"
+                  "            assert param.data.shape == loaded_weight.shape\n",
+                  "        if output_dim is None:\n"
+                  "            if (\n"
+                  "                loaded_weight.ndim == 0\n"
+                  "                and param.data.ndim == 1\n"
+                  "                and param.data.numel() == 1\n"
+                  "            ):\n"
+                  "                loaded_weight = loaded_weight.reshape(1)\n"
+                  "            assert param.data.shape == loaded_weight.shape\n",
+              )
+
+              quant_config_arg = (
+                  "                    config.hidden_size,\n"
+                  "                    prefix=maybe_prefix(prefix, \"lm_head\"),\n"
+              )
+              quant_config_fix = (
+                  "                    config.hidden_size,\n"
+                  "                    quant_config=self.quant_config,\n"
+                  "                    prefix=maybe_prefix(prefix, \"lm_head\"),\n"
+              )
+              replace_exact(
+                  package / "models/qwen3_5.py",
+                  quant_config_arg,
+                  quant_config_fix,
+              )
+              replace_exact(
+                  package / "models/qwen3_5_mtp.py",
+                  quant_config_arg,
+                  quant_config_fix,
+              )
+              print("Applied vLLM ModelOpt LM-head compatibility patch.")
+              PY
+              {{- end }}
 
               exec python3 -m dynamo.vllm \
                 --model "${MODEL_NAME}" \

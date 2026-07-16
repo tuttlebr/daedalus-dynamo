@@ -1,7 +1,7 @@
 model:
   name: gemma-4-31b-it-vllm-agg
   id: nvidia/Gemma-4-31B-IT-NVFP4
-  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-vllm-runtime:1.3.0-dev.1
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-vllm-runtime:1.3.0-src-de2ad9b-vllm0.25.1-daedalus.1
   deploymentMode: direct
 
 worker:
@@ -9,7 +9,7 @@ worker:
     - name: DYN_VLLM_EMBEDDING_TRANSFER_MODE
       value: local
     - name: DYN_MULTIMODAL_EMBEDDING_CACHE_GB
-      value: "4"
+      value: "1"
     - name: DYN_MM_ALLOW_INTERNAL
       value: "1"
   vllmArgs:
@@ -17,8 +17,6 @@ worker:
     - --enable-multimodal
     - --frontend-decoding
     - --multimodal-embedding-cache-capacity-gb "${DYN_MULTIMODAL_EMBEDDING_CACHE_GB}"
-    - --mm-processor-cache-gb 8
-    - --limit-mm-per-prompt '{"image":4,"audio":1}'
     - --trust-remote-code
     - --dyn-tool-call-parser gemma4
     - --dyn-reasoning-parser gemma4
@@ -26,10 +24,57 @@ worker:
     - --pipeline-parallel-size 1
     - --data-parallel-size 1
     - --gpu-memory-utilization 0.90
-    - --max-num-seqs 8
-    - --max-num-batched-tokens 8192
+    - --max-num-seqs 4
+    - --max-num-batched-tokens 4096
     - --enable-chunked-prefill
     - --scheduling-policy priority
     - --enable-prefix-caching
     - --prefix-caching-hash-algo sha256
     - --kv-cache-dtype fp8
+    - --max-model-len 81920
+
+# The generic Planner "latency" mode only reacts once an aggregated worker is
+# above its fixed 40% KV threshold. This model's observed frontend backlog is
+# much smaller, so use the tunable load policy as a latency guardrail instead.
+# The two KV thresholds are percentages (not fractions): 0.25 means 0.25%.
+# On an existing DGD, establish this floor through its scaling adapter; the
+# adapter owns live worker replicas after the DGD has been created.
+planner:
+  optimizationTarget: load
+  enableThroughputScaling: false
+  enableLoadScaling: true
+  preDeploymentSweepingMode: none
+  loadAdjustmentIntervalSeconds: 5
+  minEndpoint: 1
+  maxGpuBudget: 4
+  decodeScaleUpKvRate: 0.75
+  decodeScaleDownKvRate: 0.05
+  advisory: false
+
+modelCache:
+  name: gemma431b-model-cache
+  create: true
+  storage: 64Gi
+  accessModes:
+    - ReadWriteMany
+  mountPath: /model
+  cachePath: /model/.model-express/cache
+  storageClassName: ""
+
+redis:
+  enabled: true
+  name: gemma431b-redis
+  dataPvcName: gemma431b-redis-data
+  image: redis:7-alpine
+  imagePullPolicy: Always
+  storage: 64Gi
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: "1"
+      memory: 4Gi
