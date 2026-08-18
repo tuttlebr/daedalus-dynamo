@@ -13,7 +13,7 @@ CHART = ROOT / "charts" / "dynamo-model"
 MODEL_VALUES = sorted((ROOT / "values").glob("*.yaml"))
 SHARED_RUNTIME_IMAGE = (
     "daedalus.ddns.me:5050/btuttle/daedalus-dynamo-vllm-runtime:"
-    "1.3.0-src-de2ad9b-vllm0.25.1-daedalus.1"
+    "20260717-5930e58"
 )
 
 

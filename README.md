@@ -63,7 +63,7 @@ the image stored in `AgentgatewayParameters`:
 
 ```bash
 export GATEWAY_IMAGE=registry.example.com/daedalus/agentgateway:v1.3.1
-export IMAGE=registry.example.com/daedalus/dynamo-vllm-runtime:1.3.0-dev.1
+export IMAGE=registry.example.com/daedalus/dynamo-vllm-runtime:1.3.0
 docker login registry.example.com
 ```
 
@@ -166,6 +166,15 @@ NodePort:
 kubectl port-forward -n daedalus-dynamo svc/inference-gateway 8000:32359
 curl --fail http://127.0.0.1:8000/v1/models
 ```
+
+Run one Responses API request against the first model in that catalog:
+
+```bash
+scripts/smoke-test-responses.py --url http://192.168.1.234:32359
+```
+
+Pass `--model <model-id>` to select a specific deployment. The script also
+accepts `ENDPOINT_URL`, `MODEL_ID`, and `OPENAI_API_KEY` from the environment.
 
 ## Nemotron 3.5 Lightning GB10 Release
 
@@ -338,15 +347,14 @@ not return close to the per-pod baseline after cooldown.
 
 ## Images
 
-By default, the Makefile builds the shared vLLM runtime from pinned
-`ai-dynamo/dynamo` source, reads `model.image` from the selected values file,
-and uses that repository and tag for both Docker and Helm. The checked-in
-source commit builds against vLLM 0.25.1, which is required by GLM 4.7 Flash.
-All vLLM model values reference the same image so one build and node pull can
-be reused. Backend-specific specifications can instead use a published runtime
-directly; deploy those with `SKIP_BUILD=1 SKIP_PUSH=1`.
+By default, the Makefile builds the root [`Dockerfile`](./Dockerfile), which
+uses NVIDIA's nightly Dynamo vLLM runtime image as its base. It reads
+`model.image` from the selected values file and uses that repository and tag
+for both Docker and Helm. The vLLM model values share that image so one build
+and node pull can be reused. Backend-specific specifications can instead use a
+published runtime directly; deploy those with `SKIP_BUILD=1 SKIP_PUSH=1`.
 
-Build and push the shared source runtime once, then deploy without rebuilding:
+Build and push the shared runtime once, then deploy without rebuilding:
 
 ```bash
 make build-glm47flash
@@ -354,30 +362,14 @@ make push-glm47flash
 SKIP_BUILD=1 SKIP_PUSH=1 HF_TOKEN=<hugging-face-token> make deploy-glm47flash
 ```
 
-Override the source commit or pinned upstream vLLM image only together with a
-new output tag, so the pinned shared tag always describes its actual contents:
+Override the resulting image tag or the Dockerfile's nightly base image when
+needed:
 
 ```bash
 IMAGE_TAG=test make build-qwen35b
 IMAGE=registry.example.com/dynamo/qwen35b:test make deploy-qwen35b
-IMAGE_TAG=src-<short-commit> DYNAMO_SOURCE_REF=<full-ai-dynamo-commit> make build-qwen35b
-IMAGE_TAG=vllm-<version> DYNAMO_VLLM_RUNTIME_TAG='<tag>@sha256:<digest>' make build-qwen35b
+BASE_IMAGE=nvcr.io/nvidia/ai-dynamo/vllm-runtime-nightly:latest make build-qwen35b
 ```
-
-Set `BUILD_FROM_SOURCE=0` only to use the legacy root
-[`Dockerfile`](./Dockerfile) flow with a compatible base and an explicit,
-distinct `IMAGE` or `IMAGE_TAG`; the Makefile refuses to place that build under
-the pinned source-runtime tag. In legacy mode `BASE_IMAGE`, `DOCKERFILE`, and
-`CONTEXT` apply.
-The source builder applies two fail-closed patches. Because `ffmpeg.org` is
-unreachable from the Daedalus build network, it fetches FFmpeg 8.1 from the
-official FFmpeg GitHub tag and verifies commit `9047fa1b` before compiling. It
-also installs a fully pinned, additive dependency set that supplies Dynamo's
-missing Kubernetes/zstandard requirements and the text/audio helpers used by
-the models sharing this image, without allowing the resolver to change the
-pinned CUDA, PyTorch, vLLM, FlashInfer, or CUTLASS stack. The `daedalus.1` tag
-suffix identifies this checked patch bundle; the build rejects changed patch
-content until its bundle digest and output tag are bumped together.
 
 ## Helm Values
 
@@ -442,10 +434,7 @@ Useful Makefile variables:
 | `NAMESPACE` | `daedalus-dynamo` | Kubernetes namespace. |
 | `IMAGE` | selected `model.image` | Full runtime image reference. |
 | `IMAGE_TAG` | tag from selected `model.image` | Runtime image tag override. |
-| `BUILD_FROM_SOURCE` | `1` | Build the official `ai-dynamo` vLLM runtime target from source. |
-| `DYNAMO_SOURCE_REF` | pinned commit | Full `ai-dynamo/dynamo` source revision. |
-| `DYNAMO_VLLM_RUNTIME_TAG` | pinned vLLM 0.25.1 image digest | Upstream runtime used by the source build. |
-| `BASE_IMAGE` | Dynamo vLLM CUDA 13 runtime | Base for the legacy `BUILD_FROM_SOURCE=0` flow. |
+| `BASE_IMAGE` | Dockerfile's pinned Dynamo nightly image | Docker build base image. |
 | `DEPLOYMENT_MODE` | values file setting | Optional `direct` or `dgdr` override. |
 | `TAKE_OWNERSHIP` | `0` | Pass Helm `--take-ownership`. |
 | `SKIP_BUILD` / `SKIP_PUSH` | `0` | Skip image steps during `make deploy`. |

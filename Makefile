@@ -54,14 +54,8 @@ PYTHON ?= python3
 
 DOCKERFILE ?= Dockerfile
 CONTEXT ?= .
-BASE_IMAGE ?= nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.3.0-dev.1-cuda13
+BASE_IMAGE ?= nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.3.1
 DOCKER_BUILD_ARGS ?=
-BUILD_FROM_SOURCE ?= 1
-DYNAMO_SOURCE_BUILD_SCRIPT ?= scripts/build-dynamo-source-runtime.sh
-DYNAMO_SOURCE_REPO ?= https://github.com/ai-dynamo/dynamo.git
-DYNAMO_SOURCE_REF ?= de2ad9b9de09737d553a9b8f2baf917ec7be2ef0
-DYNAMO_VLLM_RUNTIME_TAG ?= v0.25.1-ubuntu2404@sha256:acb93b1843633e41b40db68f3a38e81c7335dac6b354145c1a749a03e1fc2af7
-DYNAMO_SOURCE_IMAGE_TAG ?= 1.3.0-src-de2ad9b-vllm0.25.1-daedalus.1
 
 MODEL_IMAGE_FROM_VALUES := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*image:[[:space:]]*//p' "$(MODEL_VALUES)" 2>/dev/null | head -1 | tr -d '"')
 MODEL_DGD_FROM_VALUES := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*name:[[:space:]]*//p' "$(MODEL_VALUES)" 2>/dev/null | head -1 | tr -d '"')
@@ -203,25 +197,11 @@ check-python:
 .PHONY: build
 build: check-model check-docker
 	@echo "==> Building $(IMAGE) for $(MODEL_NAME)"
-	@if [[ "$(BUILD_FROM_SOURCE)" =~ ^(1|true|yes)$$ ]]; then \
-		DYNAMO_SOURCE_REPO="$(DYNAMO_SOURCE_REPO)" \
-		DYNAMO_SOURCE_REF="$(DYNAMO_SOURCE_REF)" \
-		DYNAMO_VLLM_RUNTIME_TAG="$(DYNAMO_VLLM_RUNTIME_TAG)" \
-		DOCKER="$(DOCKER)" PYTHON="$(PYTHON)" \
-		"$(DYNAMO_SOURCE_BUILD_SCRIPT)" "$(IMAGE)"; \
-	else \
-		legacy_image="$(IMAGE)"; \
-		legacy_tag="$${legacy_image##*:}"; \
-		if [[ "$$legacy_tag" == "$(DYNAMO_SOURCE_IMAGE_TAG)" ]]; then \
-			echo "ERROR: BUILD_FROM_SOURCE=0 requires a distinct IMAGE or IMAGE_TAG; refusing to label the legacy base as $(DYNAMO_SOURCE_IMAGE_TAG)." >&2; \
-			exit 3; \
-		fi; \
-		build_args=(); \
-		if [[ -n "$(BASE_IMAGE)" ]]; then \
-			build_args+=(--build-arg "BASE_IMAGE=$(BASE_IMAGE)"); \
-		fi; \
-		$(DOCKER) build "$${build_args[@]}" $(DOCKER_BUILD_ARGS) -t "$(IMAGE)" -f "$(DOCKERFILE)" "$(CONTEXT)"; \
-	fi
+	@build_args=(); \
+	if [[ -n "$(BASE_IMAGE)" ]]; then \
+		build_args+=(--build-arg "BASE_IMAGE=$(BASE_IMAGE)"); \
+	fi; \
+	$(DOCKER) build "$${build_args[@]}" $(DOCKER_BUILD_ARGS) -t "$(IMAGE)" -f "$(DOCKERFILE)" "$(CONTEXT)"
 
 .PHONY: push
 push: check-model check-docker
@@ -516,30 +496,15 @@ deploy-all-check:
 deploy-all-images:
 	@if [[ ! "$(SKIP_BUILD)" =~ ^(1|true|yes)$$ ]]; then \
 		echo "==> Building shared runtime image with tags: $(DEPLOY_ALL_IMAGES)"; \
-		if [[ "$(BUILD_FROM_SOURCE)" =~ ^(1|true|yes)$$ ]]; then \
-			DYNAMO_SOURCE_REPO="$(DYNAMO_SOURCE_REPO)" \
-			DYNAMO_SOURCE_REF="$(DYNAMO_SOURCE_REF)" \
-			DYNAMO_VLLM_RUNTIME_TAG="$(DYNAMO_VLLM_RUNTIME_TAG)" \
-			DOCKER="$(DOCKER)" PYTHON="$(PYTHON)" \
-			"$(DYNAMO_SOURCE_BUILD_SCRIPT)" $(DEPLOY_ALL_IMAGES); \
-		else \
-			for image in $(DEPLOY_ALL_IMAGES); do \
-				legacy_tag="$${image##*:}"; \
-				if [[ "$$legacy_tag" == "$(DYNAMO_SOURCE_IMAGE_TAG)" ]]; then \
-					echo "ERROR: BUILD_FROM_SOURCE=0 requires a distinct IMAGE or IMAGE_TAG; refusing to label the legacy base as $(DYNAMO_SOURCE_IMAGE_TAG)." >&2; \
-					exit 3; \
-				fi; \
-			done; \
-			build_args=(); \
-			if [[ -n "$(BASE_IMAGE)" ]]; then \
-				build_args+=(--build-arg "BASE_IMAGE=$(BASE_IMAGE)"); \
-			fi; \
-			image_args=(); \
-			for image in $(DEPLOY_ALL_IMAGES); do \
-				image_args+=(-t "$$image"); \
-			done; \
-			$(DOCKER) build "$${build_args[@]}" "$${image_args[@]}" $(DOCKER_BUILD_ARGS) -f "$(DOCKERFILE)" "$(CONTEXT)"; \
+		build_args=(); \
+		if [[ -n "$(BASE_IMAGE)" ]]; then \
+			build_args+=(--build-arg "BASE_IMAGE=$(BASE_IMAGE)"); \
 		fi; \
+		image_args=(); \
+		for image in $(DEPLOY_ALL_IMAGES); do \
+			image_args+=(-t "$$image"); \
+		done; \
+		$(DOCKER) build "$${build_args[@]}" "$${image_args[@]}" $(DOCKER_BUILD_ARGS) -f "$(DOCKERFILE)" "$(CONTEXT)"; \
 	fi
 	@if [[ ! "$(SKIP_PUSH)" =~ ^(1|true|yes)$$ ]]; then \
 		for image in $(DEPLOY_ALL_IMAGES); do \

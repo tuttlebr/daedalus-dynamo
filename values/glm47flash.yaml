@@ -1,7 +1,7 @@
 model:
   name: glm-47-flash-vllm-agg
   id: unsloth/GLM-4.7-Flash-NVFP4
-  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-vllm-runtime:1.3.0-src-de2ad9b-vllm0.25.1-daedalus.1
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-vllm-runtime:20260717-5930e58
   deploymentMode: direct
 
 worker:
@@ -29,7 +29,7 @@ worker:
     # Start conservatively on SM89. Enable vLLM MTP only after baseline health.
     - --max-model-len 32768
 
-# The source-built worker/frontend image is about 20 GB. Keep the frontend on
+# The shared worker/frontend image is about 20 GB. Keep the frontend on
 # an L40S node so it can reuse that shared image without exhausting the smaller
 # ephemeral-storage pool on daedalus-01.
 frontend:
@@ -50,7 +50,7 @@ planner:
   loadAdjustmentIntervalSeconds: 5
   minEndpoint: 1
   maxGpuBudget: 4
-  decodeScaleUpKvRate: 0.75
+  decodeScaleUpKvRate: 0.25
   decodeScaleDownKvRate: 0.05
   advisory: false
 

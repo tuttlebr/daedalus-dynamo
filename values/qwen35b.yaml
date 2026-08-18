@@ -1,12 +1,11 @@
 model:
   name: qwen36-35b-vllm-agg
   id: nvidia/Qwen3.6-35B-A3B-NVFP4
-  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-vllm-runtime:1.3.0-src-de2ad9b-vllm0.25.1-daedalus.1
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-vllm-runtime:20260717-5930e58
   deploymentMode: direct
 
 worker:
-  # vLLM 0.25.1 contains the upstream ModelOpt lm_head support; the 0.22-only
-  # source patch must remain disabled on the shared source runtime.
+  # Do not apply the legacy 0.22-only source patch to the shared runtime.
   applyVllmModelOptLmHeadPatch: false
   extraEnv:
     - name: DYN_MM_ALLOW_INTERNAL
@@ -48,7 +47,7 @@ planner:
   loadAdjustmentIntervalSeconds: 5
   minEndpoint: 1
   maxGpuBudget: 4
-  decodeScaleUpKvRate: 0.75
+  decodeScaleUpKvRate: 0.25
   decodeScaleDownKvRate: 0.05
   advisory: false
 
