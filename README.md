@@ -13,6 +13,7 @@ and uninstalling releases by model.
 | `qwen27b` | `values/qwen27b.yaml` | `nvidia/Qwen3.6-27B-NVFP4` | vLLM |
 | `gemma431b` | `values/gemma431b.yaml` | `nvidia/Gemma-4-31B-IT-NVFP4` | vLLM |
 | `nemotronnano` | `values/nemotronnano.yaml` | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4` | vLLM |
+| `nemotron35lightning-gb10` | `values/nemotron35lightning-gb10.yaml` | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4` | TensorRT-LLM |
 
 `MODEL=nemotron` and `MODEL=omni` are accepted aliases for
 `MODEL=nemotron-omni`.
@@ -124,6 +125,8 @@ HF_TOKEN=<hugging-face-token> make deploy-qwen27b
 HF_TOKEN=<hugging-face-token> make deploy-gemma431b
 HF_TOKEN=<hugging-face-token> make deploy-nemotron
 HF_TOKEN=<hugging-face-token> make deploy-nemotronnano
+SKIP_BUILD=1 SKIP_PUSH=1 HF_TOKEN=<hugging-face-token> \
+  make deploy-nemotron35lightning-gb10
 ```
 
 `make deploy` builds the image, pushes it, creates or reuses
@@ -163,6 +166,103 @@ NodePort:
 kubectl port-forward -n daedalus-dynamo svc/inference-gateway 8000:32359
 curl --fail http://127.0.0.1:8000/v1/models
 ```
+
+## Nemotron 3.5 Lightning GB10 Release
+
+The `nemotron35lightning-gb10` target adds initial single-node TensorRT-LLM
+support for
+[`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4`](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4).
+It adapts NVIDIA's experimental
+[one-GPU B200 MTP recipe](https://github.com/ai-dynamo/dynamo/blob/main/recipes/nemotron-3.5-lightning/trtllm/agg-b200-mtp/deploy.yaml)
+to a node labeled `nvidia.com/gpu.product=NVIDIA-GB10`.
+
+| Setting | Release value |
+| --- | --- |
+| Runtime | `nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:1.5.0-nemotron-3.5-lightning-dev.1` |
+| Backend and topology | TensorRT-LLM aggregate, tensor parallel size 1, one worker, one GPU |
+| Speculative decoding | MTP with three draft tokens |
+| Initial batch capacity | `max_batch_size: 8`, reduced from the upstream value of 512 |
+| Initial token capacity | `max_num_tokens: 32768`, unchanged from upstream |
+| Worker memory | 96 GiB request and 16 GiB `/dev/shm` |
+| Model cache | 96 GiB RWX PVC, populated by ModelExpress |
+| Autoscaling | Disabled; the release has one worker and one available GPU |
+| Hub access | Public and non-gated; the chart still expects `hf-token-secret` |
+| License | [OpenMDW 1.1](https://openmdw.ai/license/1-1/) |
+
+The runtime and ModelExpress images publish `linux/arm64` variants. The target
+node must expose one allocatable `nvidia.com/gpu` resource and the exact GB10
+product label. The deployment also needs an RWX-capable default StorageClass
+and `hf-token-secret` with read access to the model.
+
+Check those release prerequisites before deployment:
+
+```bash
+kubectl get nodes -l 'nvidia.com/gpu.product=NVIDIA-GB10' \
+  -o custom-columns='NAME:.metadata.name,ARCH:.status.nodeInfo.architecture,MEMORY:.status.allocatable.memory,GPUS:.status.allocatable.nvidia\.com/gpu'
+kubectl get storageclass
+kubectl get secret hf-token-secret -n daedalus-dynamo
+make lint-nemotron35lightning-gb10
+make render-nemotron35lightning-gb10 >/tmp/nemotron35lightning-gb10.yaml
+kubectl apply --dry-run=server -n daedalus-dynamo \
+  -f /tmp/nemotron35lightning-gb10.yaml
+```
+
+The release uses NVIDIA's published runtime directly. Skip the repository's
+vLLM image build and push steps:
+
+```bash
+SKIP_BUILD=1 SKIP_PUSH=1 make deploy-nemotron35lightning-gb10
+```
+
+If `hf-token-secret` does not exist, provide `HF_TOKEN` on that invocation so
+the Makefile creates it without writing the token to a file. After deployment,
+verify the release, cache downloader, worker placement, model catalog, and one
+response:
+
+```bash
+make status-nemotron35lightning-gb10
+kubectl get dgd,pods,pvc,httproute -n daedalus-dynamo -o wide
+kubectl logs -n daedalus-dynamo \
+  -l 'nvidia.com/dynamo-component=ModelExpress,nvidia.com/dynamo-graph-deployment-name=nemotron-35-lightning-trtllm-gb10' \
+  --tail=100
+curl --fail http://192.168.1.234:32359/v1/models
+curl --fail http://192.168.1.234:32359/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4",
+    "messages": [{"role": "user", "content": "Say OK."}],
+    "max_tokens": 128,
+    "temperature": 0
+  }'
+```
+
+Treat batch size as the first memory-control lever. If the engine cannot
+initialize, try 4, 2, and then 1. Reduce `max_num_tokens` only after batch 1
+still fails. For example:
+
+```bash
+HELM_ARGS='--set worker.trtllm.engineConfig.max_batch_size=4' \
+  make upgrade-nemotron35lightning-gb10
+
+HELM_ARGS='--set worker.trtllm.engineConfig.max_batch_size=1 --set worker.trtllm.engineConfig.max_num_tokens=16384' \
+  make upgrade-nemotron35lightning-gb10
+```
+
+The chart writes these capacity values to the TensorRT-LLM engine file and CLI
+from one source, so the two interfaces remain aligned. ModelExpress downloads
+the checkpoint into the shared PVC, resets only stale registry metadata after
+an interrupted download, and creates the cache-ready link before the worker
+starts.
+
+This is an initial compatibility release. The runtime images, Helm render,
+repository tests, server-side Kubernetes dry-run, live GB10 scheduling, and
+ModelExpress `ServerOnly` download path have been validated. Treat engine and
+endpoint qualification as pending unless the current release reaches Ready and
+passes the model-specific smoke request above. NVIDIA's current
+[TensorRT-LLM recipe inventory](https://github.com/ai-dynamo/dynamo/blob/main/recipes/nemotron-3.5-lightning/trtllm/README.md)
+lists H100, H200, B200, and GB200, but not GB10. Use the observed initialization
+result to choose the next batch or token reduction; do not describe this profile
+as performance-qualified yet.
 
 ## Common Commands
 
@@ -242,8 +342,9 @@ By default, the Makefile builds the shared vLLM runtime from pinned
 `ai-dynamo/dynamo` source, reads `model.image` from the selected values file,
 and uses that repository and tag for both Docker and Helm. The checked-in
 source commit builds against vLLM 0.25.1, which is required by GLM 4.7 Flash.
-All model values reference the same image so one build and node pull can be
-reused across backends.
+All vLLM model values reference the same image so one build and node pull can
+be reused. Backend-specific specifications can instead use a published runtime
+directly; deploy those with `SKIP_BUILD=1 SKIP_PUSH=1`.
 
 Build and push the shared source runtime once, then deploy without rebuilding:
 
@@ -325,6 +426,12 @@ To add a model, copy an existing file under `values/`, change at least
 `model.name`, `model.id`, `model.image`, and the worker arguments, then run
 `make lint MODEL=<new-file-basename>`. The Makefile discovers values files
 automatically; no per-model deployment script is needed.
+
+The `nemotron35lightning-gb10` specification uses the official
+multi-architecture TensorRT-LLM recipe image. See
+[Nemotron 3.5 Lightning GB10 Release](#nemotron-35-lightning-gb10-release) for
+its prerequisites, initial memory profile, deployment procedure, tuning order,
+and qualification status.
 
 Useful Makefile variables:
 

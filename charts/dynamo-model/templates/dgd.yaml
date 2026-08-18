@@ -263,14 +263,20 @@ spec:
       componentType: worker
       subComponentType: decode
       scalingAdapter:
-        enabled: true
+        enabled: {{ .Values.worker.scalingAdapter.enabled }}
       envFromSecret: {{ .Values.model.envFromSecret | quote }}
       replicas: {{ .Values.worker.replicas }}
       resources:
         limits:
           gpu: {{ .Values.worker.gpu | quote }}
+          {{- if .Values.worker.memoryLimit }}
+          memory: {{ .Values.worker.memoryLimit | quote }}
+          {{- end }}
         requests:
           gpu: {{ .Values.worker.gpu | quote }}
+          {{- if .Values.worker.memoryRequest }}
+          memory: {{ .Values.worker.memoryRequest | quote }}
+          {{- end }}
       livenessProbe:
         httpGet:
           path: /live
@@ -291,6 +297,10 @@ spec:
       sharedMemory:
         size: {{ .Values.worker.sharedMemorySize | quote }}
       extraPodSpec:
+        {{- with .Values.worker.nodeSelector }}
+        nodeSelector:
+          {{- toYaml . | nindent 10 }}
+        {{- else }}
         affinity:
           nodeAffinity:
             requiredDuringSchedulingIgnoredDuringExecution:
@@ -306,16 +316,28 @@ spec:
                       values:
                         - {{ .Values.worker.nodeGpuMemoryGt | quote }}
                       {{- end }}
+        {{- end }}
+        {{- with .Values.worker.tolerations }}
+        tolerations:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
         mainContainer:
           image: {{ .Values.model.image | quote }}
           imagePullPolicy: {{ .Values.model.imagePullPolicy }}
+          {{- if .Values.worker.workingDir }}
+          workingDir: {{ .Values.worker.workingDir | quote }}
+          {{- end }}
+          {{- with .Values.worker.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           startupProbe:
             httpGet:
-              path: /health
+              path: {{ .Values.worker.startupProbe.path }}
               port: 9090
-            periodSeconds: 10
-            timeoutSeconds: 10
-            failureThreshold: 360
+            periodSeconds: {{ .Values.worker.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.worker.startupProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.worker.startupProbe.failureThreshold }}
           env:
             - name: MODEL_NAME
               value: {{ .Values.model.id | quote }}
@@ -480,10 +502,36 @@ spec:
               PY
               {{- end }}
 
+              {{- if eq .Values.model.backendFramework "trtllm" }}
+              TRTLLM_ENGINE_CONFIG=/tmp/dynamo-trtllm-engine.yaml
+              cat > "$TRTLLM_ENGINE_CONFIG" <<'TRTLLM_CONFIG'
+              {{- toYaml .Values.worker.trtllm.engineConfig | nindent 14 }}
+              TRTLLM_CONFIG
+
+              TRTLLM_ARGS=(
+                --model
+                "${MODEL_NAME}"
+                --served-model-name
+                "${MODEL_NAME}"
+                --tensor-parallel-size
+                {{ .Values.worker.trtllm.engineConfig.tensor_parallel_size | quote }}
+                --max-num-tokens
+                {{ .Values.worker.trtllm.engineConfig.max_num_tokens | quote }}
+                --max-batch-size
+                {{ .Values.worker.trtllm.engineConfig.max_batch_size | quote }}
+                --extra-engine-args
+                "$TRTLLM_ENGINE_CONFIG"
+                {{- range .Values.worker.trtllm.args }}
+                {{ . | quote }}
+                {{- end }}
+              )
+              exec python3 -m dynamo.trtllm "${TRTLLM_ARGS[@]}"
+              {{- else }}
               exec python3 -m dynamo.vllm \
                 --model "${MODEL_NAME}" \
                 {{- range .Values.worker.vllmArgs }}
                 {{ . }} \
                 {{- end }}
                 --no-enable-log-requests
+              {{- end }}
 {{- end }}

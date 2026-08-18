@@ -1,0 +1,132 @@
+model:
+  name: nemotron-35-lightning-trtllm-gb10
+  id: nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4
+  image: nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:1.5.0-nemotron-3.5-lightning-dev.1
+  imagePullPolicy: IfNotPresent
+  backendFramework: trtllm
+  deploymentMode: direct
+
+frontend:
+  routerMode: round-robin
+
+worker:
+  componentName: TrtllmWorker
+  replicas: 1
+  scalingAdapter:
+    enabled: false
+  gpu: "1"
+  # daedalus-06 currently has about 121.5 GiB allocatable unified memory.
+  # Reserve enough headroom for the OS, GPU Operator, and cache-side services.
+  memoryRequest: 96Gi
+  sharedMemorySize: 16Gi
+  nodeSelector:
+    nvidia.com/gpu.product: NVIDIA-GB10
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+  workingDir: /workspace/
+  securityContext:
+    runAsUser: 0
+    capabilities:
+      add:
+        - IPC_LOCK
+        - SYS_RESOURCE
+  startupProbe:
+    path: /live
+    periodSeconds: 30
+    timeoutSeconds: 20
+    failureThreshold: 120
+  extraEnv:
+    - name: HF_HOME
+      value: /model/.model-express
+    - name: HF_HUB_OFFLINE
+      value: "1"
+    - name: HF_MODULES_CACHE
+      value: /tmp/hf_modules
+    - name: TRITON_CACHE_DIR
+      value: /tmp/.triton-cache
+    - name: NCCL_IB_DISABLE
+      value: "1"
+    - name: PYTHONHASHSEED
+      value: "0"
+    - name: TLLM_LOG_LEVEL
+      value: INFO
+    - name: TLLM_BATCHED_GEMM_LOG_REJECTION
+      value: "1"
+    - name: TRTLLM_ENABLE_PDL
+      value: "1"
+    - name: TRTLLM_SERVER_DISABLE_GC
+      value: "1"
+    - name: TRTLLM_WORKER_DISABLE_GC
+      value: "1"
+  trtllm:
+    # First-fit GB10 profile: reduce concurrency before token capacity. Keep
+    # max_num_tokens at the upstream 32768 until batch-size fitting is tested.
+    engineConfig:
+      backend: pytorch
+      tensor_parallel_size: 1
+      max_batch_size: 8
+      max_num_tokens: 32768
+      enable_chunked_prefill: true
+      trust_remote_code: true
+      stream_interval: 10
+      kv_cache_config:
+        dtype: fp8
+        enable_block_reuse: true
+        use_kv_cache_manager_v2: true
+        mamba_state_config:
+          periodic_snapshot_interval: 0
+          additional_snapshot_offsets_from_start:
+            - 57600
+      moe_config:
+        backend: CUTLASS
+      speculative_config:
+        decoding_type: MTP
+        max_draft_len: 3
+        mtp_eagle_one_model: true
+        speculative_model: nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4
+    args:
+      - --disaggregation-mode
+      - agg
+      - --dyn-tool-call-parser
+      - nemotron_nano
+      - --dyn-reasoning-parser
+      - nemotron_nano
+
+# A single GB10 cannot scale beyond one aggregate worker.
+planner:
+  enabled: false
+  minEndpoint: 1
+  maxGpuBudget: 1
+
+# ModelExpress downloads only the base checkpoint into the shared cache. The
+# worker waits for the durable cache-ready link before starting TRT-LLM.
+modelCache:
+  name: nemotron35lightning-gb10-model-cache
+  create: true
+  storage: 96Gi
+  accessModes:
+    - ReadWriteMany
+  mountPath: /model
+  cachePath: /model/.model-express/cache
+  storageClassName: ""
+
+redis:
+  enabled: true
+  name: nemotron35lightning-gb10-redis
+  dataPvcName: nemotron35lightning-gb10-redis-data
+  image: redis:7-alpine
+  imagePullPolicy: IfNotPresent
+  storage: 8Gi
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  resources:
+    requests:
+      cpu: 250m
+      memory: 1Gi
+    limits:
+      cpu: "1"
+      memory: 2Gi

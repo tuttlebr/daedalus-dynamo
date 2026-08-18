@@ -45,6 +45,43 @@ The chart preserves the existing Redis selector contract
 (`app.kubernetes.io/name`) so existing Redis Deployments can be adopted without
 hitting immutable selector changes.
 
+## TensorRT-LLM GB10 Example
+
+Render the Nemotron 3.5 Lightning single-GB10 release:
+
+```bash
+helm template nemotron35lightning-gb10 ./charts/dynamo-model \
+  -n daedalus-dynamo \
+  -f values/nemotron35lightning-gb10.yaml
+```
+
+Install or upgrade it only after the model-cache StorageClass, Hugging Face
+secret, GPU product label, and ARM64 runtime-image access have been checked:
+
+```bash
+helm upgrade --install nemotron35lightning-gb10 ./charts/dynamo-model \
+  -n daedalus-dynamo \
+  -f values/nemotron35lightning-gb10.yaml
+```
+
+This values file renders `backendFramework: trtllm`, one `TrtllmWorker`, and a
+direct `nvidia.com/gpu.product: NVIDIA-GB10` selector. It disables Planner and
+the worker scaling adapter because the release targets one GPU. ModelExpress
+remains enabled and populates the 96 GiB shared cache before worker startup.
+
+The initial engine profile keeps the upstream `max_num_tokens: 32768` while
+reducing `max_batch_size` from 512 to 8. Continue reducing batch size through
+4, 2, and 1 before reducing `max_num_tokens`. The chart reads both CLI capacity
+flags from `worker.trtllm.engineConfig`, so a Helm override updates the engine
+file and command line together.
+
+This GB10 profile is validated by Helm lint/render, Kubernetes server-side
+dry-run, live placement on the GB10 node, and the ModelExpress download path.
+Treat engine and endpoint qualification as pending until the DGD reaches Ready
+and a model-specific request succeeds. NVIDIA's current Nemotron 3.5 Lightning
+TensorRT-LLM inventory does not include a GB10 recipe, so do not promote this
+profile as performance-qualified without live workload evidence.
+
 ## Planner Namespace Compatibility
 
 When `planner.workerNamespaceCompat=legacy`, the chart starts Planner through a
@@ -93,16 +130,25 @@ This chart owns model-local resources:
 The root Makefile handles image build/push, cluster doctor, gateway installer,
 and HF token secret creation around this chart.
 
-The direct DGD path starts both `Frontend` and `VllmWorker` through a shell
-guard that raises and verifies the `RLIMIT_NOFILE` soft limit. The shared
-default is `131072`; override `frontend.nofileLimit` or `worker.nofileLimit`
-only when the container runtime hard limit and expected concurrency justify a
-different value.
+The direct DGD path starts both `Frontend` and the configured model worker
+through a shell guard that raises and verifies the `RLIMIT_NOFILE` soft limit.
+The shared default is `131072`; override `frontend.nofileLimit` or
+`worker.nofileLimit` only when the container runtime hard limit and expected
+concurrency justify a different value.
 
 Worker placement defaults to nodes whose `nvidia.com/gpu.memory` label is
 greater than `worker.nodeGpuMemoryGt` (in MiB). Set `worker.nodeGpuMemoryLt` to
 select nodes below a boundary instead; when it is non-empty, the `Lt` boundary
-takes precedence over `nodeGpuMemoryGt`.
+takes precedence over `nodeGpuMemoryGt`. A non-empty `worker.nodeSelector`
+takes precedence over both memory-label boundaries, which supports devices such
+as GB10 that do not advertise `nvidia.com/gpu.memory`.
+
+Set `model.backendFramework=trtllm` to render a TensorRT-LLM worker. The chart
+writes `worker.trtllm.engineConfig` to an ephemeral engine configuration file,
+then passes the same `tensor_parallel_size`, `max_batch_size`, and
+`max_num_tokens` values to the Dynamo TRT-LLM CLI. This prevents the engine file
+and command line from drifting. `worker.trtllm.args` holds additional CLI
+arguments as individual array elements.
 
 Set `frontend.nodeSelector` when a large shared worker/frontend image should be
 kept off storage-constrained CPU nodes. Selecting the same GPU product as the

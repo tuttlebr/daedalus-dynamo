@@ -48,10 +48,12 @@ def render(
 
 
 class ModelChartRenderTests(unittest.TestCase):
-    def test_all_models_share_the_source_built_runtime(self) -> None:
+    def test_all_vllm_models_share_the_source_built_runtime(self) -> None:
         for values_file in MODEL_VALUES:
             with self.subTest(model=values_file.stem):
                 values = yaml.safe_load(values_file.read_text())
+                if values["model"].get("backendFramework", "vllm") != "vllm":
+                    continue
                 self.assertEqual(values["model"]["image"], SHARED_RUNTIME_IMAGE)
 
     def test_direct_dgd_uses_alpha_services_schema(self) -> None:
@@ -223,6 +225,49 @@ class ModelChartRenderTests(unittest.TestCase):
         self.assertIn("--quantization modelopt", worker_script)
         self.assertNotIn('expected_version = "0.22.0"', worker_script)
         self.assertNotIn("Applying vLLM 0.22.0", worker_script)
+
+    def test_nemotron35lightning_gb10_uses_trtllm_and_modelexpress(self) -> None:
+        documents = render(
+            ROOT / "values" / "nemotron35lightning-gb10.yaml"
+        )
+        deployment = next(
+            document
+            for document in documents
+            if document["kind"] == "DynamoGraphDeployment"
+        )
+        services = deployment["spec"]["services"]
+        worker = services["TrtllmWorker"]
+        main_container = worker["extraPodSpec"]["mainContainer"]
+        worker_script = main_container["args"][0]
+
+        self.assertEqual(deployment["spec"]["backendFramework"], "trtllm")
+        self.assertEqual(worker["replicas"], 1)
+        self.assertFalse(worker["scalingAdapter"]["enabled"])
+        self.assertEqual(
+            worker["extraPodSpec"]["nodeSelector"],
+            {"nvidia.com/gpu.product": "NVIDIA-GB10"},
+        )
+        self.assertNotIn("affinity", worker["extraPodSpec"])
+        self.assertEqual(worker["resources"]["requests"]["memory"], "96Gi")
+        self.assertEqual(worker["sharedMemory"]["size"], "16Gi")
+        self.assertEqual(main_container["startupProbe"]["httpGet"]["path"], "/live")
+        self.assertIn("exec python3 -m dynamo.trtllm", worker_script)
+        self.assertNotIn("python3 -m dynamo.vllm", worker_script)
+        self.assertIn("max_batch_size: 8", worker_script)
+        self.assertIn("max_num_tokens: 32768", worker_script)
+        self.assertIn('"8"', worker_script)
+        self.assertIn('"32768"', worker_script)
+        self.assertNotIn("Planner", services)
+
+        modelexpress = services["ModelExpress"]
+        modelexpress_script = modelexpress["extraPodSpec"]["mainContainer"][
+            "args"
+        ][0]
+        self.assertIn(
+            'model download "$MODEL_NAME" --strategy server-only',
+            modelexpress_script,
+        )
+        self.assertIn("Waiting for ModelExpress", worker_script)
 
     def test_glm47flash_uses_vllm_flags_and_l40s_safe_baseline(self) -> None:
         documents = render(ROOT / "values" / "glm47flash.yaml")

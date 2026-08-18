@@ -46,6 +46,35 @@
         "nodeGpuMemoryLt": {
           "$ref": "#/definitions/gpuMemoryBoundary"
         },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "memoryRequest": { "type": "string" },
+        "memoryLimit": { "type": "string" },
+        "workingDir": { "type": "string" },
+        "scalingAdapter": {
+          "type": "object",
+          "required": ["enabled"],
+          "properties": {
+            "enabled": { "type": "boolean" }
+          }
+        },
+        "startupProbe": {
+          "type": "object",
+          "required": ["path", "periodSeconds", "timeoutSeconds", "failureThreshold"],
+          "properties": {
+            "path": { "type": "string", "pattern": "^/" },
+            "periodSeconds": { "type": "integer", "minimum": 1 },
+            "timeoutSeconds": { "type": "integer", "minimum": 1 },
+            "failureThreshold": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "tolerations": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "securityContext": { "type": "object" },
         "applyVllmModelOptLmHeadPatch": {
           "type": "boolean"
         },
@@ -56,6 +85,17 @@
         "vllmArgs": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "trtllm": {
+          "type": "object",
+          "required": ["engineConfig", "args"],
+          "properties": {
+            "engineConfig": { "type": "object" },
+            "args": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
         },
         "extraEnv": {
           "type": "array",

@@ -67,7 +67,11 @@ frontend:
 worker:
   componentName: VllmWorker
   replicas: 1
+  scalingAdapter:
+    enabled: true
   gpu: "1"
+  memoryRequest: ""
+  memoryLimit: ""
   httpBodyLimitMb: "400"
   requestPlane: tcp
   eventPlane: zmq
@@ -78,6 +82,16 @@ worker:
   nodeGpuMemoryGt: "40959"
   # Set this to select GPUs below a memory size instead of nodeGpuMemoryGt.
   nodeGpuMemoryLt: ""
+  # A direct selector takes precedence over the GPU-memory affinity above.
+  nodeSelector: {}
+  tolerations: []
+  workingDir: ""
+  securityContext: {}
+  startupProbe:
+    path: /health
+    periodSeconds: 10
+    timeoutSeconds: 10
+    failureThreshold: 360
   # Temporary vLLM 0.22.0 backport of upstream PR #42124. Enable only for
   # ModelOpt checkpoints whose separately quantized lm_head needs that fix.
   applyVllmModelOptLmHeadPatch: false
@@ -96,6 +110,9 @@ worker:
     - --enable-prefix-caching
     - --prefix-caching-hash-algo sha256
     - --kv-cache-dtype fp8
+  trtllm:
+    engineConfig: {}
+    args: []
 
 planner:
   enabled: true
