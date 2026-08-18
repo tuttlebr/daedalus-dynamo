@@ -90,6 +90,8 @@ worker:
     args:
       - --disaggregation-mode
       - agg
+      - --guided-decoding-backend
+      - xgrammar
       - --dyn-tool-call-parser
       - nemotron_nano
       - --dyn-reasoning-parser
