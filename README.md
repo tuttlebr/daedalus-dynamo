@@ -481,7 +481,7 @@ Useful Makefile variables:
 | `GATEWAY` | `1` | Apply shared inference gateway resources, model route, and model catalog during `make deploy`. |
 | `INSTALL_GATEWAY` | `0` | Install or upgrade Gateway API, GAIE, and agentgateway before applying gateway resources. |
 | `GATEWAY_IMAGE` | internal `daedalus-agentgateway:v1.3.1` | Hardened agentgateway image built by `make gateway-image`. |
-| `GATEWAY_REPLICAS` | `2` | Static proxy replica floor before HPA reconciliation. |
+| `GATEWAY_REPLICAS` | `1` | Static proxy replica floor before HPA reconciliation. |
 | `GATEWAY_NOFILE_LIMIT` | `131072` | Verified proxy `RLIMIT_NOFILE` soft limit. |
 | `GATEWAY_HPA_MIN_REPLICAS` / `GATEWAY_HPA_MAX_REPLICAS` | `2` / `8` | Proxy HPA range. |
 | `GATEWAY_POOL_MAX_SIZE` | `64` | Maximum idle upstream connections retained per host. |

@@ -27,7 +27,7 @@ GATEWAY_IMAGE_REGISTRY := $(shell printf '%s\n' '$(GATEWAY_IMAGE)' | sed 's|/.*|
 GATEWAY_IMAGE_REPOSITORY := $(shell printf '%s\n' '$(GATEWAY_IMAGE)' | sed 's|^[^/]*/||; s/:[^/:]*$$//')
 GATEWAY_IMAGE_TAG := $(shell printf '%s\n' '$(GATEWAY_IMAGE)' | sed 's/^.*://')
 GATEWAY_IMAGE_PULL_POLICY ?= IfNotPresent
-GATEWAY_REPLICAS ?= 2
+GATEWAY_REPLICAS ?= 1
 GATEWAY_NOFILE_LIMIT ?= 131072
 GATEWAY_CPU_REQUEST ?= 500m
 GATEWAY_CPU_LIMIT ?= 4
@@ -165,7 +165,7 @@ help:
 		'  SKIP_SECRET=1                     Skip HF token secret check/update during deploy.' \
 		'  GATEWAY=0                         Skip inference-gateway resources during deploy.' \
 		'  INSTALL_GATEWAY=1                 Install/upgrade Gateway API, GAIE, and agentgateway first.' \
-		'  GATEWAY_REPLICAS=2                Minimum gateway deployment replica count.' \
+		'  GATEWAY_REPLICAS=1                Minimum gateway deployment replica count.' \
 		'  GATEWAY_NOFILE_LIMIT=131072       Gateway process RLIMIT_NOFILE soft limit.' \
 		'  EXPECTED_CONTEXT=$(EXPECTED_CONTEXT)  Required live-cluster context guard.' \
 		'  GROVE_TERMINATION_DELAY=15m       Maximum healthy-to-stuck gang recovery delay.' \
