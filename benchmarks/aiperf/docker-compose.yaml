@@ -1,0 +1,22 @@
+services:
+  aiperf:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: daedalus-dynamo-aiperf:0.11.0
+    init: true
+    user: "${AIPERF_UID:-65532}:${AIPERF_GID:-65532}"
+    environment:
+      ENDPOINT_URL: "${ENDPOINT_URL:-http://192.168.1.234:32359}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      TURNS: "${TURNS:-6}"
+      CONCURRENCY: "${CONCURRENCY:-4}"
+      DATASET_SESSIONS: "${DATASET_SESSIONS:-8}"
+      TOKENIZER: "${TOKENIZER:-auto}"
+      USE_SERVER_TOKEN_COUNT: "${USE_SERVER_TOKEN_COUNT:-0}"
+      STOP_ON_ERROR: "${STOP_ON_ERROR:-0}"
+      HF_HOME: /artifacts
+    env_file:
+      - ../../.env
+    volumes:
+      - ../../artifacts/aiperf:/artifacts

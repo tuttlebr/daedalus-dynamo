@@ -17,6 +17,7 @@ ignore.sh
 __pycache__/
 *.py[cod]
 /rendered*.yaml
+/artifacts/
 **/routing-workbench/target/
 routing-workbench/target/
 *.safetensors

@@ -1,0 +1,33 @@
+FROM ghcr.io/astral-sh/uv:0.10.4-python3.12-trixie-slim
+
+LABEL org.opencontainers.image.title="Daedalus Dynamo AIPerf client" \
+      org.opencontainers.image.description="Multi-turn prefix-reuse benchmark for inference-gateway models" \
+      org.opencontainers.image.version="0.11.0" \
+      io.daedalus.aiperf.source-commit="38687855e98044fcf12ee48c6794128f10b6780b"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_NO_CACHE=1 \
+    PATH="/opt/aiperf/.venv/bin:${PATH}" \
+    HOME=/tmp \
+    HF_HOME=/tmp/huggingface
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates coreutils curl jq \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/aiperf
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+COPY --chmod=0755 run-model-benchmarks.sh ./run-model-benchmarks.sh
+COPY agentic-code-config.json ./agentic-code-config.json
+
+RUN mkdir -p /artifacts /tmp/huggingface \
+    && chown -R 65532:65532 /artifacts /tmp/huggingface
+
+USER 65532:65532
+VOLUME ["/artifacts"]
+ENTRYPOINT ["/opt/aiperf/run-model-benchmarks.sh"]

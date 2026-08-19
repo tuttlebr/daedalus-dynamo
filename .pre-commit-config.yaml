@@ -20,7 +20,7 @@ repos:
         entry: scripts/pre-commit/check-shell.sh
         language: system
         pass_filenames: false
-        files: '(^|/)(deploy|test-endpoint|validate)\.sh$|(^|/)scripts/.*\.sh$|(^|/)routing-workbench/deploy\.sh$'
+        files: '(^|/)(deploy|test-endpoint|validate)\.sh$|(^|/)(scripts|benchmarks)/.*\.sh$|(^|/)routing-workbench/deploy\.sh$'
 
       - id: python-checks
         name: Python compile and optional lint checks

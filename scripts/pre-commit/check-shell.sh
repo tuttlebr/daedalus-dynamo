@@ -4,8 +4,13 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 source scripts/pre-commit/common.sh
 
+search_roots=("${EXAMPLES[@]}" scripts)
+if [[ -d benchmarks ]]; then
+  search_roots+=(benchmarks)
+fi
+
 mapfile -t scripts < <(
-  find "${EXAMPLES[@]}" scripts -type f -name '*.sh' 2> /dev/null | sort
+  find "${search_roots[@]}" -type f -name '*.sh' 2> /dev/null | sort
 )
 
 if [[ -f deploy.sh ]]; then

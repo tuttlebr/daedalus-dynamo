@@ -1,0 +1,54 @@
+{
+  "new_tokens_per_turn": {
+    "mean": 256,
+    "median": 256,
+    "min": 256,
+    "max": 256,
+    "bias": 1.0
+  },
+  "generation_length": {
+    "mean": 128,
+    "median": 128,
+    "min": 128,
+    "max": 128
+  },
+  "inter_turn_delay": {
+    "agentic_fraction": 0.8,
+    "agentic_delay": {
+      "mean": 250,
+      "median": 250,
+      "min": 250,
+      "max": 250
+    },
+    "human_delay": {
+      "mean": 1000,
+      "median": 1000,
+      "min": 1000,
+      "max": 1000
+    },
+    "max": 1000
+  },
+  "turns": {
+    "mean": 6,
+    "median": 6,
+    "min": 6,
+    "max": 6,
+    "allow_truncation": false
+  },
+  "max_prompt_tokens": 8192,
+  "block_size": 512,
+  "cache": {
+    "layer1_tokens": 1024,
+    "layer1_5_tokens": 512,
+    "layer2": {
+      "mean": 1024,
+      "median": 1024,
+      "min": 1024,
+      "max": 1024
+    },
+    "layer1_5_groups": {
+      "num_groups": 4,
+      "zipf_alpha": 0.8
+    }
+  }
+}
