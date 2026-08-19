@@ -302,6 +302,45 @@ refreshes the catalog. Chart-managed PVCs are annotated with
 `helm.sh/resource-policy: keep`, so model cache and Redis data claims remain
 after Helm uninstall.
 
+## Scheduling Recovery After Node Reboots
+
+Grove-managed model pods use gang scheduling. A GPU pod can enter the terminal
+`UnexpectedAdmissionError` phase when it is bound before the NVIDIA device
+plugin reports healthy devices during a reboot. Older Grove releases retain
+that failed pod, leaving the other pods in the gang `SchedulingGated` even
+after the cluster becomes healthy.
+
+Install the upstream gang-recovery fix, enable Grove health and priority
+safeguards, reduce the recovery gate from four hours to 15 minutes, and wait
+for all Dynamo pod gangs to recover:
+
+```bash
+make scheduling-resilience
+```
+
+The command is guarded to the expected Kubernetes context, upgrades Dynamo
+and Grove together to the compatible `1.4.0` / `v0.1.0-alpha.12-rc1` pair,
+reconciles Grove CRDs, and verifies the NVIDIA device plugin before making
+changes. It also applies the worker's existing `nvidia.com/gpu=true:NoSchedule`
+toleration as a reservation taint on GB10 nodes. Conflicting Deployment-owned
+GPU pods are moved to general GPU capacity so they cannot claim the GB10 while
+the model is recovering. After the device plugin is healthy, the command also
+removes terminal `UnexpectedAdmissionError` pod records owned by restartable
+controllers across the cluster. It preserves NATS and the externally managed
+KAI scheduler. Override the guard or recovery window only when needed:
+
+```bash
+EXPECTED_CONTEXT=kubernetes-admin@kubernetes \
+GROVE_TERMINATION_DELAY=15m \
+make scheduling-resilience
+```
+
+Run the same checks without changing the cluster:
+
+```bash
+make check-scheduling-resilience
+```
+
 ## Gateway Resilience
 
 `make install-gateway` builds and pushes the hardened image from

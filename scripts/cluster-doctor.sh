@@ -41,6 +41,8 @@ AGENTGATEWAY_NAMESPACE="${AGENTGATEWAY_NAMESPACE:-agentgateway-system}"
 MIN_GATEWAY_REPLICAS="${MIN_GATEWAY_REPLICAS:-2}"
 MIN_NOFILE_LIMIT="${MIN_NOFILE_LIMIT:-131072}"
 GATEWAY_FD_METRICS_PORT="${GATEWAY_FD_METRICS_PORT:-9090}"
+GROVE_MIN_RECOVERY_VERSION="${GROVE_VERSION:-v0.1.0-alpha.12-rc1}"
+GROVE_TERMINATION_DELAY="${GROVE_TERMINATION_DELAY:-15m}"
 
 INTERCONNECT="${REPO_ROOT}/scripts/check_interconnect.py"
 PROBE_MANIFEST="${REPO_ROOT}/scripts/cluster-doctor-probe-pod.yaml"
@@ -317,7 +319,36 @@ check_workload_recovery() {
     return 0
   fi
 
-  local failed_pods not_ready
+  local failed_pods gated_pods not_ready grove_chart grove_version delays
+  if command -v helm >/dev/null 2>&1; then
+    grove_chart="$(
+      helm list -n grove-system -o json 2>/dev/null |
+        python3 -c 'import json,sys; print(next((x.get("chart", "") for x in json.load(sys.stdin) if x.get("name") == "grove"), ""))' \
+        2>/dev/null || true
+    )"
+    grove_version="${grove_chart#grove-charts-}"
+    if [[ -n "${grove_chart}" ]] &&
+      [[ "$(printf '%s\n%s\n' "${GROVE_MIN_RECOVERY_VERSION#v}" "${grove_version#v}" | sort -V | head -1)" == "${GROVE_MIN_RECOVERY_VERSION#v}" ]]; then
+      ok "recovery:grove-version" "${grove_version} includes gang recovery"
+    else
+      warn "recovery:grove-version" "${grove_version:-unknown} is older than ${GROVE_MIN_RECOVERY_VERSION}; run make scheduling-resilience"
+    fi
+  else
+    skip "recovery:grove-version" "helm is unavailable; cannot verify the Grove release"
+  fi
+
+  delays="$(
+    kq get podcliquesets.grove.io -n "${NAMESPACE}" \
+      -o jsonpath='{range .items[*]}{.metadata.name}{":"}{.spec.template.terminationDelay}{" "}{end}'
+  )"
+  if [[ -z "${delays// /}" ]]; then
+    skip "recovery:termination-delay" "no PodCliqueSets exist in ${NAMESPACE}"
+  elif grep -Eq ':(4h|4h0m0s)( |$)' <<<"${delays}"; then
+    warn "recovery:termination-delay" "four-hour recovery gate is active (${delays}); run make scheduling-resilience"
+  else
+    ok "recovery:termination-delay" "PodCliqueSet recovery delays: ${delays}"
+  fi
+
   failed_pods="$(
     kq get pods \
       -n "${NAMESPACE}" \
@@ -326,9 +357,33 @@ check_workload_recovery() {
       -o jsonpath='{range .items[*]}{.metadata.name}{":"}{.status.reason}{" "}{end}'
   )"
   if [[ -n "${failed_pods// /}" ]]; then
-    warn "recovery:failed-pods" "failed Grove/Dynamo pod(s): ${failed_pods}. Inspect failed pods and redeploy the affected model with make deploy-<model>."
+    warn "recovery:failed-pods" "failed Grove/Dynamo pod(s): ${failed_pods}. Run make scheduling-resilience."
   else
     ok "recovery:failed-pods" "no failed Grove/Dynamo pods"
+  fi
+
+  gated_pods="$(
+    kq get pods -n "${NAMESPACE}" \
+      -l 'app.kubernetes.io/managed-by=grove-operator,nvidia.com/dynamo-graph-deployment-name' \
+      -o json |
+      python3 -c '
+import json
+import sys
+
+for pod in json.load(sys.stdin)["items"]:
+    if any(
+        condition.get("type") == "PodScheduled"
+        and condition.get("status") == "False"
+        and condition.get("reason") == "SchedulingGated"
+        for condition in pod.get("status", {}).get("conditions", [])
+    ):
+        print(pod["metadata"]["name"], end=" ")
+'
+  )"
+  if [[ -n "${gated_pods// /}" ]]; then
+    warn "recovery:gated-pods" "SchedulingGated Grove pod(s): ${gated_pods}. Run make scheduling-resilience."
+  else
+    ok "recovery:gated-pods" "no SchedulingGated Grove/Dynamo pods"
   fi
 
   not_ready="$(

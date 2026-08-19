@@ -46,6 +46,11 @@ GATEWAY_FD_EXPORTER_IMAGE ?= python:3.12-alpine
 GATEWAY_FD_METRICS_PORT ?= 9090
 PROMETHEUS_RELEASE ?= kube-prometheus-stack
 MODEL_CATALOG_IMAGE ?= python:3.12-alpine
+EXPECTED_CONTEXT ?= kubernetes-admin@kubernetes
+GROVE_VERSION ?= v0.1.0-alpha.12-rc1
+DYNAMO_PLATFORM_VERSION ?= 1.4.0
+GROVE_TERMINATION_DELAY ?= 15m
+SCHEDULING_RECOVERY_TIMEOUT ?= 45m
 
 HELM ?= helm
 KUBECTL ?= kubectl
@@ -137,6 +142,8 @@ help:
 		'  make upgrade MODEL=qwen35b        Helm upgrade/install only.' \
 		'  make gateway MODEL=qwen35b        Apply inference-gateway resources and model route.' \
 		'  make gateway-image                 Build and push the hardened agentgateway image.' \
+		'  make scheduling-resilience         Upgrade Grove recovery and repair stuck pod gangs.' \
+		'  make check-scheduling-resilience   Read-only recovery/version check.' \
 		'  make render MODEL=qwen35b         Render the Helm manifests.' \
 		'  make lint MODEL=qwen35b           Lint the chart with the model values.' \
 		'  make uninstall MODEL=qwen35b      Helm uninstall the model release.' \
@@ -160,6 +167,9 @@ help:
 		'  INSTALL_GATEWAY=1                 Install/upgrade Gateway API, GAIE, and agentgateway first.' \
 		'  GATEWAY_REPLICAS=2                Minimum gateway deployment replica count.' \
 		'  GATEWAY_NOFILE_LIMIT=131072       Gateway process RLIMIT_NOFILE soft limit.' \
+		'  EXPECTED_CONTEXT=$(EXPECTED_CONTEXT)  Required live-cluster context guard.' \
+		'  GROVE_TERMINATION_DELAY=15m       Maximum healthy-to-stuck gang recovery delay.' \
+		'  DYNAMO_PLATFORM_VERSION=1.4.0     Minimum platform paired with the Grove release.' \
 		'  SKIP_GATEWAY_BUILD=1              Reuse an already built hardened gateway image.' \
 		'  SKIP_GATEWAY_PUSH=1               Reuse an already pushed hardened gateway image.' \
 		'  HF_TOKEN=<token>                  Create or update $(HF_TOKEN_SECRET).' \
@@ -456,6 +466,24 @@ doctor: check-kubectl
 
 validate-resilience: check-helm check-python
 	@scripts/validate-gateway-resilience.sh
+
+.PHONY: scheduling-resilience check-scheduling-resilience
+scheduling-resilience: check-kubectl check-helm check-python
+	@EXPECTED_CONTEXT="$(EXPECTED_CONTEXT)" \
+		NAMESPACE="$(NAMESPACE)" \
+		GROVE_VERSION="$(GROVE_VERSION)" \
+		DYNAMO_PLATFORM_VERSION="$(DYNAMO_PLATFORM_VERSION)" \
+		GROVE_TERMINATION_DELAY="$(GROVE_TERMINATION_DELAY)" \
+		SCHEDULING_RECOVERY_TIMEOUT="$(SCHEDULING_RECOVERY_TIMEOUT)" \
+		scripts/install-scheduling-resilience.sh
+
+check-scheduling-resilience: check-kubectl check-helm check-python
+	@EXPECTED_CONTEXT="$(EXPECTED_CONTEXT)" \
+		NAMESPACE="$(NAMESPACE)" \
+		GROVE_VERSION="$(GROVE_VERSION)" \
+		DYNAMO_PLATFORM_VERSION="$(DYNAMO_PLATFORM_VERSION)" \
+		GROVE_TERMINATION_DELAY="$(GROVE_TERMINATION_DELAY)" \
+		scripts/install-scheduling-resilience.sh --check
 
 .PHONY: lint-all deploy-all deploy-all-check deploy-all-images deploy-all-shared deploy-all-releases deploy-all-routes uninstall-all
 .PHONY: $(DEPLOY_ALL_RELEASE_TARGETS) $(DEPLOY_ALL_ROUTE_TARGETS)
