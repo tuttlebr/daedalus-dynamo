@@ -3,12 +3,37 @@ SHELL := /bin/bash
 
 CHART ?= charts/dynamo-model
 VALUES_DIR ?= values
-MODELS := $(sort $(basename $(notdir $(wildcard $(VALUES_DIR)/*.yaml))))
+MODEL_CONFIGS := $(sort $(wildcard $(VALUES_DIR)/*.yaml) $(wildcard $(VALUES_DIR)/*.yml))
+MODEL_ACTIONS := check-model build push image lint render template dry-run upgrade install deploy uninstall delete status history gateway gateway-route gateway-route-apply gateway-unroute planner-compat
+REQUESTED_ACTION := $(firstword $(MAKECMDGOALS))
 
-MODEL ?= qwen35b
-MODEL_NAME := $(if $(filter nemotron omni,$(MODEL)),nemotron-omni,$(MODEL))
-MODEL_VALUES ?= $(VALUES_DIR)/$(MODEL_NAME).yaml
-RELEASE ?= $(MODEL_NAME)
+ifneq ($(filter $(REQUESTED_ACTION),$(MODEL_ACTIONS)),)
+ifneq ($(filter command line,$(origin MODEL) $(origin MODEL_VALUES)),)
+$(error MODEL and MODEL_VALUES are no longer supported; use: make $(REQUESTED_ACTION) <model-config.yaml>)
+endif
+ifneq ($(words $(MAKECMDGOALS)),2)
+$(error Usage: make $(REQUESTED_ACTION) <model-config.yaml>)
+endif
+override MODEL_CONFIG := $(word 2,$(MAKECMDGOALS))
+ifeq ($(filter %.yaml %.yml,$(MODEL_CONFIG)),)
+$(error Model config must end in .yaml or .yml: $(MODEL_CONFIG))
+endif
+ifeq ($(wildcard $(MODEL_CONFIG)),)
+$(error Model config does not exist: $(MODEL_CONFIG))
+endif
+override MODEL_STEM := $(basename $(notdir $(MODEL_CONFIG)))
+ifeq ($(strip $(MODEL_STEM)),)
+$(error Could not derive a release name from model config: $(MODEL_CONFIG))
+endif
+.PHONY: $(MODEL_CONFIG)
+$(MODEL_CONFIG):
+	@:
+else
+override MODEL_CONFIG :=
+override MODEL_STEM :=
+endif
+
+RELEASE ?= $(MODEL_STEM)
 
 NAMESPACE ?= daedalus-dynamo
 APP_LABEL_VALUE ?= daedalus-dynamo-demo
@@ -62,44 +87,19 @@ CONTEXT ?= .
 BASE_IMAGE ?= nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.3.1
 DOCKER_BUILD_ARGS ?=
 
-MODEL_IMAGE_FROM_VALUES := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*image:[[:space:]]*//p' "$(MODEL_VALUES)" 2>/dev/null | head -1 | tr -d '"')
-MODEL_DGD_FROM_VALUES := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*name:[[:space:]]*//p' "$(MODEL_VALUES)" 2>/dev/null | head -1 | tr -d '"')
-MODEL_ID_FROM_VALUES := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*id:[[:space:]]*//p' "$(MODEL_VALUES)" 2>/dev/null | head -1 | tr -d '"')
-MODEL_IMAGE_REPOSITORY := $(shell printf '%s\n' '$(MODEL_IMAGE_FROM_VALUES)' | sed 's/:[^/:]*$$//')
-MODEL_IMAGE_TAG := $(shell printf '%s\n' '$(MODEL_IMAGE_FROM_VALUES)' | sed 's/^.*://')
-MODEL_DGD ?= $(MODEL_DGD_FROM_VALUES)
-MODEL_ID ?= $(MODEL_ID_FROM_VALUES)
-MODEL_ROUTE_NAME ?= daedalus-dynamo-$(MODEL_NAME)
+MODEL_IMAGE_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*image:[[:space:]]*//p' "$(MODEL_CONFIG)" 2>/dev/null | head -1 | tr -d '"')
+MODEL_DGD_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*name:[[:space:]]*//p' "$(MODEL_CONFIG)" 2>/dev/null | head -1 | tr -d '"')
+MODEL_ID_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*id:[[:space:]]*//p' "$(MODEL_CONFIG)" 2>/dev/null | head -1 | tr -d '"')
+MODEL_IMAGE_REPOSITORY := $(shell printf '%s\n' '$(MODEL_IMAGE_FROM_CONFIG)' | sed 's/:[^/:]*$$//')
+MODEL_IMAGE_TAG := $(shell printf '%s\n' '$(MODEL_IMAGE_FROM_CONFIG)' | sed 's/^.*://')
+MODEL_DGD ?= $(MODEL_DGD_FROM_CONFIG)
+MODEL_ID ?= $(MODEL_ID_FROM_CONFIG)
+MODEL_ROUTE_NAME ?= daedalus-dynamo-$(MODEL_STEM)
 
 REGISTRY ?= daedalus.ddns.me:5050/btuttle
-IMAGE_WAS_SET := $(if $(filter undefined,$(origin IMAGE)),,1)
-IMAGE_REPOSITORY_WAS_SET := $(if $(filter undefined,$(origin IMAGE_REPOSITORY)),,1)
-IMAGE_TAG_WAS_SET := $(if $(filter undefined,$(origin IMAGE_TAG)),,1)
 IMAGE_REPOSITORY ?= $(if $(MODEL_IMAGE_REPOSITORY),$(MODEL_IMAGE_REPOSITORY),$(REGISTRY)/daedalus-dynamo-vllm-runtime)
 IMAGE_TAG ?= $(if $(MODEL_IMAGE_TAG),$(MODEL_IMAGE_TAG),latest)
 IMAGE ?= $(IMAGE_REPOSITORY):$(IMAGE_TAG)
-
-DEPLOY_ALL_IMAGE_GOALS := deploy-all-check deploy-all-images
-ifneq ($(filter $(DEPLOY_ALL_IMAGE_GOALS),$(MAKECMDGOALS)),)
-DEPLOY_ALL_IMAGES := $(sort $(shell \
-	for model in $(MODELS); do \
-		image="$$(sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*image:[[:space:]]*//p' "$(VALUES_DIR)/$$model.yaml" 2>/dev/null | head -1 | tr -d '"')"; \
-		repository="$$(printf '%s\n' "$$image" | sed 's/:[^/:]*$$//')"; \
-		tag="$$(printf '%s\n' "$$image" | sed 's/^.*://')"; \
-		if [ -n "$(IMAGE_WAS_SET)" ]; then \
-			resolved_image='$(IMAGE)'; \
-		else \
-			if [ -n "$(IMAGE_REPOSITORY_WAS_SET)" ]; then repository='$(IMAGE_REPOSITORY)'; fi; \
-			if [ -n "$(IMAGE_TAG_WAS_SET)" ]; then tag='$(IMAGE_TAG)'; fi; \
-			if [ -z "$$repository" ]; then repository='$(REGISTRY)/daedalus-dynamo-vllm-runtime'; fi; \
-			if [ -z "$$tag" ]; then tag=latest; fi; \
-			resolved_image="$$repository:$$tag"; \
-		fi; \
-		printf '%s\n' "$$resolved_image"; \
-	done))
-endif
-DEPLOY_ALL_RELEASE_TARGETS := $(addprefix deploy-all-release-,$(MODELS))
-DEPLOY_ALL_ROUTE_TARGETS := $(addprefix deploy-all-route-,$(MODELS))
 
 DEPLOYMENT_MODE ?=
 HELM_ARGS ?=
@@ -129,36 +129,33 @@ HELM_MODEL_ARGS := --set-string model.image=$(IMAGE) --set-string model.envFromS
 help:
 	@printf '%s\n' \
 		'Usage:' \
-		'  make <target> MODEL=<model>' \
-		'  make <target>-<model>' \
+		'  make <model-action> <model-config.yaml>' \
+		'  make <shared-action>' \
 		'' \
-		'Models:' \
-		'  $(MODELS)' \
+		'Checked-in model configs:' \
+		'  $(MODEL_CONFIGS)' \
 		'' \
-		'Common targets:' \
-		'  make build MODEL=qwen35b          Build the model runtime image.' \
-		'  make push MODEL=qwen35b           Push the model runtime image.' \
-		'  make deploy MODEL=qwen35b         Build, push, ensure HF token secret, then Helm upgrade/install.' \
-		'  make upgrade MODEL=qwen35b        Helm upgrade/install only.' \
-		'  make gateway MODEL=qwen35b        Apply inference-gateway resources and model route.' \
+		'Model actions:' \
+		'  make build values/qwen35b.yaml       Build the model runtime image.' \
+		'  make push values/qwen35b.yaml        Push the model runtime image.' \
+		'  make deploy values/qwen35b.yaml      Build, push, ensure HF token secret, then Helm upgrade/install.' \
+		'  make upgrade values/qwen35b.yaml     Helm upgrade/install only.' \
+		'  make gateway values/qwen35b.yaml     Apply inference-gateway resources and model route.' \
+		'  make render values/qwen35b.yaml      Render the Helm manifests.' \
+		'  make lint values/qwen35b.yaml        Lint the chart with the model values.' \
+		'  make uninstall values/qwen35b.yaml   Helm uninstall the model release.' \
+		'  make status values/qwen35b.yaml      Show Helm release status.' \
+		'' \
+		'Shared actions:' \
+		'  make models                        List checked-in model config paths.' \
 		'  make gateway-image                 Build and push the hardened agentgateway image.' \
 		'  make scheduling-resilience         Upgrade Grove recovery and repair stuck pod gangs.' \
 		'  make check-scheduling-resilience   Read-only recovery/version check.' \
-		'  make render MODEL=qwen35b         Render the Helm manifests.' \
-		'  make lint MODEL=qwen35b           Lint the chart with the model values.' \
-		'  make uninstall MODEL=qwen35b      Helm uninstall the model release.' \
-		'  make status MODEL=qwen35b         Show Helm release status.' \
-		'' \
-		'All-model targets:' \
-		'  make lint-all' \
-		'  make deploy-all' \
-		'  make -j5 deploy-all             Parallelize independent model releases and routes.' \
-		'  make uninstall-all' \
 		'' \
 		'Useful variables:' \
 		'  NAMESPACE=$(NAMESPACE)' \
-		'  RELEASE=$(RELEASE)' \
-		'  IMAGE=$(IMAGE)' \
+		'  RELEASE=<config filename stem>' \
+		'  IMAGE=<model.image from config>' \
 		'  DEPLOYMENT_MODE=direct|dgdr       Optional Helm override for model.deploymentMode.' \
 		'  TAKE_OWNERSHIP=1                  Pass --take-ownership to Helm 3.17+.' \
 		'  SKIP_BUILD=1 SKIP_PUSH=1          Skip image steps during deploy.' \
@@ -172,24 +169,21 @@ help:
 		'  DYNAMO_PLATFORM_VERSION=1.4.0     Minimum platform paired with the Grove release.' \
 		'  SKIP_GATEWAY_BUILD=1              Reuse an already built hardened gateway image.' \
 		'  SKIP_GATEWAY_PUSH=1               Reuse an already pushed hardened gateway image.' \
-		'  HF_TOKEN=<token>                  Create or update $(HF_TOKEN_SECRET).' \
-		'' \
-		'Model aliases:' \
-		'  MODEL=nemotron and MODEL=omni map to MODEL=nemotron-omni.'
+		'  HF_TOKEN=<token>                  Create or update $(HF_TOKEN_SECRET).'
 
 .PHONY: models
 models:
-	@printf '%s\n' $(MODELS)
+	@printf '%s\n' $(MODEL_CONFIGS)
 
 .PHONY: check-model
 check-model:
-	@test -f "$(MODEL_VALUES)" || { \
-		echo "ERROR: unknown MODEL=$(MODEL) (resolved to $(MODEL_NAME))."; \
-		echo "Available models: $(MODELS)"; \
+	@test -f "$(MODEL_CONFIG)" || { \
+		echo "ERROR: model config does not exist: $(MODEL_CONFIG)"; \
 		exit 2; \
 	}
-	@test -n "$(MODEL_DGD)" || { echo "ERROR: could not read model.name from $(MODEL_VALUES)."; exit 2; }
-	@test -n "$(MODEL_ID)" || { echo "ERROR: could not read model.id from $(MODEL_VALUES)."; exit 2; }
+	@test -n "$(MODEL_IMAGE_FROM_CONFIG)" || { echo "ERROR: could not read model.image from $(MODEL_CONFIG)."; exit 2; }
+	@test -n "$(MODEL_DGD)" || { echo "ERROR: could not read model.name from $(MODEL_CONFIG)."; exit 2; }
+	@test -n "$(MODEL_ID)" || { echo "ERROR: could not read model.id from $(MODEL_CONFIG)."; exit 2; }
 
 .PHONY: check-helm check-kubectl check-docker check-python
 check-helm:
@@ -206,7 +200,7 @@ check-python:
 
 .PHONY: build
 build: check-model check-docker
-	@echo "==> Building $(IMAGE) for $(MODEL_NAME)"
+	@echo "==> Building $(IMAGE) for $(MODEL_STEM)"
 	@build_args=(); \
 	if [[ -n "$(BASE_IMAGE)" ]]; then \
 		build_args+=(--build-arg "BASE_IMAGE=$(BASE_IMAGE)"); \
@@ -266,7 +260,7 @@ secret: namespace
 .PHONY: lint
 lint: check-model check-helm
 	@$(HELM) lint "$(CHART)" \
-		-f "$(MODEL_VALUES)" \
+		-f "$(MODEL_CONFIG)" \
 		$(HELM_MODEL_ARGS) \
 		$(HELM_ARGS) \
 		$(HELM_LINT_ARGS)
@@ -275,7 +269,7 @@ lint: check-model check-helm
 render template: check-model check-helm
 	@$(HELM) template "$(RELEASE)" "$(CHART)" \
 		--namespace "$(NAMESPACE)" \
-		-f "$(MODEL_VALUES)" \
+		-f "$(MODEL_CONFIG)" \
 		$(HELM_MODEL_ARGS) \
 		$(HELM_ARGS) \
 		$(HELM_TEMPLATE_ARGS)
@@ -285,7 +279,7 @@ dry-run: check-model check-helm
 	@$(HELM) upgrade --install "$(RELEASE)" "$(CHART)" \
 		--namespace "$(NAMESPACE)" \
 		$(CREATE_NAMESPACE_ARG) \
-		-f "$(MODEL_VALUES)" \
+		-f "$(MODEL_CONFIG)" \
 		$(HELM_MODEL_ARGS) \
 		$(TAKE_OWNERSHIP_ARG) \
 		--dry-run=client \
@@ -295,11 +289,11 @@ dry-run: check-model check-helm
 
 .PHONY: upgrade install
 upgrade install: check-model check-helm
-	@echo "==> Helm upgrade/install $(RELEASE) from $(MODEL_VALUES) into namespace $(NAMESPACE)"
+	@echo "==> Helm upgrade/install $(RELEASE) from $(MODEL_CONFIG) into namespace $(NAMESPACE)"
 	@$(HELM) upgrade --install "$(RELEASE)" "$(CHART)" \
 		--namespace "$(NAMESPACE)" \
 		$(CREATE_NAMESPACE_ARG) \
-		-f "$(MODEL_VALUES)" \
+		-f "$(MODEL_CONFIG)" \
 		$(HELM_MODEL_ARGS) \
 		$(TAKE_OWNERSHIP_ARG) \
 		$(HELM_ARGS) \
@@ -308,34 +302,34 @@ upgrade install: check-model check-helm
 .PHONY: deploy
 deploy: check-model
 	@if [[ ! "$(SKIP_BUILD)" =~ ^(1|true|yes)$$ ]]; then \
-		$(MAKE) --no-print-directory build MODEL="$(MODEL)"; \
+		$(MAKE) --no-print-directory build "$(MODEL_CONFIG)"; \
 	fi
 	@if [[ ! "$(SKIP_PUSH)" =~ ^(1|true|yes)$$ ]]; then \
-		$(MAKE) --no-print-directory push MODEL="$(MODEL)"; \
+		$(MAKE) --no-print-directory push "$(MODEL_CONFIG)"; \
 	fi
 	@if [[ ! "$(SKIP_SECRET)" =~ ^(1|true|yes)$$ ]]; then \
-		$(MAKE) --no-print-directory secret MODEL="$(MODEL)"; \
+		$(MAKE) --no-print-directory secret; \
 	fi
 	@if [[ "$(INSTALL_GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
-		$(MAKE) --no-print-directory install-gateway MODEL="$(MODEL)"; \
+		$(MAKE) --no-print-directory install-gateway; \
 	elif [[ "$(GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
-		$(MAKE) --no-print-directory gateway-base gateway-monitoring MODEL="$(MODEL)"; \
+		$(MAKE) --no-print-directory gateway-base gateway-monitoring; \
 	fi
-	@$(MAKE) --no-print-directory upgrade MODEL="$(MODEL)"
+	@$(MAKE) --no-print-directory upgrade "$(MODEL_CONFIG)"
 	@if [[ "$(PLANNER_COMPAT)" =~ ^(1|true|yes)$$ ]]; then \
-		$(MAKE) --no-print-directory planner-compat MODEL="$(MODEL)"; \
+		$(MAKE) --no-print-directory planner-compat "$(MODEL_CONFIG)"; \
 	fi
 	@if [[ "$(GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
-		$(MAKE) --no-print-directory gateway-route-apply MODEL="$(MODEL)"; \
-		$(MAKE) --no-print-directory gateway-catalog-apply MODEL="$(MODEL)"; \
+		$(MAKE) --no-print-directory gateway-route-apply "$(MODEL_CONFIG)"; \
+		$(MAKE) --no-print-directory gateway-catalog-apply; \
 	fi
 
 .PHONY: uninstall delete
 uninstall delete: check-model check-helm
 	@$(HELM) uninstall "$(RELEASE)" --namespace "$(NAMESPACE)" --ignore-not-found
 	@if [[ "$(GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
-		$(MAKE) --no-print-directory gateway-unroute MODEL="$(MODEL)"; \
-		$(MAKE) --no-print-directory gateway-catalog MODEL="$(MODEL)"; \
+		$(MAKE) --no-print-directory gateway-unroute "$(MODEL_CONFIG)"; \
+		$(MAKE) --no-print-directory gateway-catalog; \
 	fi
 
 .PHONY: status
@@ -360,12 +354,13 @@ install-gateway: check-kubectl check-helm check-python
 		$(MAKE) --no-print-directory push-gateway-image; \
 	fi
 	@AGENTGATEWAY_VERSION="$(AGENTGATEWAY_VERSION)" scripts/install-inference-gateway.sh
-	@$(MAKE) --no-print-directory gateway-base gateway-monitoring MODEL="$(MODEL)"
+	@$(MAKE) --no-print-directory gateway-base gateway-monitoring
 
 .PHONY: gateway gateway-base gateway-route gateway-route-apply gateway-unroute gateway-catalog gateway-catalog-apply gateway-monitoring
-gateway: gateway-base gateway-monitoring
-	@$(MAKE) --no-print-directory gateway-route-apply MODEL="$(MODEL)"
-	@$(MAKE) --no-print-directory gateway-catalog-apply MODEL="$(MODEL)"
+gateway: check-model
+	@$(MAKE) --no-print-directory gateway-base gateway-monitoring
+	@$(MAKE) --no-print-directory gateway-route-apply "$(MODEL_CONFIG)"
+	@$(MAKE) --no-print-directory gateway-catalog-apply
 
 gateway-base: namespace
 	@for crd in \
@@ -422,8 +417,9 @@ gateway-monitoring: namespace
 		echo "WARN: Prometheus Operator CRDs are absent; FD metrics Service remains available but ServiceMonitor/alerts were skipped."; \
 	fi
 
-gateway-route: gateway-base
-	@$(MAKE) --no-print-directory gateway-route-apply MODEL="$(MODEL)"
+gateway-route: check-model
+	@$(MAKE) --no-print-directory gateway-base
+	@$(MAKE) --no-print-directory gateway-route-apply "$(MODEL_CONFIG)"
 
 gateway-route-apply: check-model check-kubectl
 	@echo "==> Applying $(GATEWAY_NAME) route for $(MODEL_ID)"
@@ -439,7 +435,7 @@ gateway-unroute: check-model check-kubectl
 	@$(KUBECTL) delete httproute "$(MODEL_ROUTE_NAME)" -n "$(NAMESPACE)" --ignore-not-found
 
 gateway-catalog: namespace
-	@$(MAKE) --no-print-directory gateway-catalog-apply MODEL="$(MODEL)"
+	@$(MAKE) --no-print-directory gateway-catalog-apply
 
 gateway-catalog-apply: check-kubectl check-python
 	@echo "==> Refreshing model catalog from deployed model routes"
@@ -484,129 +480,3 @@ check-scheduling-resilience: check-kubectl check-helm check-python
 		DYNAMO_PLATFORM_VERSION="$(DYNAMO_PLATFORM_VERSION)" \
 		GROVE_TERMINATION_DELAY="$(GROVE_TERMINATION_DELAY)" \
 		scripts/install-scheduling-resilience.sh --check
-
-.PHONY: lint-all deploy-all deploy-all-check deploy-all-images deploy-all-shared deploy-all-releases deploy-all-routes uninstall-all
-.PHONY: $(DEPLOY_ALL_RELEASE_TARGETS) $(DEPLOY_ALL_ROUTE_TARGETS)
-lint-all:
-	@for model in $(MODELS); do \
-		echo "==> lint $$model"; \
-		$(MAKE) --no-print-directory lint MODEL="$$model"; \
-	done
-
-deploy-all:
-	@$(MAKE) --no-print-directory deploy-all-check
-	@$(MAKE) --no-print-directory deploy-all-images
-	@$(MAKE) --no-print-directory deploy-all-shared
-	@$(MAKE) --no-print-directory deploy-all-releases
-	@if [[ "$(GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
-		$(MAKE) --no-print-directory deploy-all-routes; \
-		$(MAKE) --no-print-directory gateway-catalog-apply; \
-	fi
-
-deploy-all-check:
-	@for model in $(MODELS); do \
-		$(MAKE) --no-print-directory check-model MODEL="$$model"; \
-	done
-	@test -n "$(strip $(DEPLOY_ALL_IMAGES))" || { echo "ERROR: no model images resolved."; exit 2; }
-	@$(MAKE) --no-print-directory check-helm
-	@if [[ ! "$(SKIP_BUILD)" =~ ^(1|true|yes)$$ ]] || [[ ! "$(SKIP_PUSH)" =~ ^(1|true|yes)$$ ]]; then \
-		$(MAKE) --no-print-directory check-docker; \
-	fi
-	@if [[ ! "$(SKIP_SECRET)" =~ ^(1|true|yes)$$ ]] || \
-		[[ "$(GATEWAY)" =~ ^(1|true|yes)$$ ]] || \
-		[[ "$(INSTALL_GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
-		$(MAKE) --no-print-directory check-kubectl; \
-	fi
-	@if [[ "$(GATEWAY)" =~ ^(1|true|yes)$$ ]] || [[ "$(INSTALL_GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
-		$(MAKE) --no-print-directory check-python; \
-	fi
-
-deploy-all-images:
-	@if [[ ! "$(SKIP_BUILD)" =~ ^(1|true|yes)$$ ]]; then \
-		echo "==> Building shared runtime image with tags: $(DEPLOY_ALL_IMAGES)"; \
-		build_args=(); \
-		if [[ -n "$(BASE_IMAGE)" ]]; then \
-			build_args+=(--build-arg "BASE_IMAGE=$(BASE_IMAGE)"); \
-		fi; \
-		image_args=(); \
-		for image in $(DEPLOY_ALL_IMAGES); do \
-			image_args+=(-t "$$image"); \
-		done; \
-		$(DOCKER) build "$${build_args[@]}" "$${image_args[@]}" $(DOCKER_BUILD_ARGS) -f "$(DOCKERFILE)" "$(CONTEXT)"; \
-	fi
-	@if [[ ! "$(SKIP_PUSH)" =~ ^(1|true|yes)$$ ]]; then \
-		for image in $(DEPLOY_ALL_IMAGES); do \
-			echo "==> Pushing $$image"; \
-			$(DOCKER) push "$$image"; \
-		done; \
-	fi
-
-deploy-all-shared:
-	@if [[ "$(INSTALL_GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
-		if [[ ! "$(SKIP_SECRET)" =~ ^(1|true|yes)$$ ]]; then \
-			$(MAKE) --no-print-directory secret MODEL="$(firstword $(MODELS))"; \
-		fi; \
-		$(MAKE) --no-print-directory install-gateway MODEL="$(firstword $(MODELS))"; \
-	elif [[ "$(GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
-		shared_targets=(gateway-base gateway-monitoring); \
-		if [[ ! "$(SKIP_SECRET)" =~ ^(1|true|yes)$$ ]]; then \
-			shared_targets=(secret "$${shared_targets[@]}"); \
-		fi; \
-		$(MAKE) --no-print-directory "$${shared_targets[@]}" MODEL="$(firstword $(MODELS))"; \
-	elif [[ ! "$(SKIP_SECRET)" =~ ^(1|true|yes)$$ ]]; then \
-		$(MAKE) --no-print-directory secret MODEL="$(firstword $(MODELS))"; \
-	fi
-
-deploy-all-releases: $(DEPLOY_ALL_RELEASE_TARGETS)
-
-$(DEPLOY_ALL_RELEASE_TARGETS): deploy-all-release-%:
-	@echo "==> deploy $*"
-	@$(MAKE) --no-print-directory upgrade MODEL="$*"
-	@if [[ "$(PLANNER_COMPAT)" =~ ^(1|true|yes)$$ ]]; then \
-		$(MAKE) --no-print-directory planner-compat MODEL="$*"; \
-	fi
-
-deploy-all-routes: $(DEPLOY_ALL_ROUTE_TARGETS)
-
-$(DEPLOY_ALL_ROUTE_TARGETS): deploy-all-route-%:
-	@$(MAKE) --no-print-directory gateway-route-apply MODEL="$*"
-
-uninstall-all:
-	@for model in $(MODELS); do \
-		echo "==> uninstall $$model"; \
-		$(MAKE) --no-print-directory uninstall MODEL="$$model"; \
-	done
-
-.PHONY: build-% push-% deploy-% upgrade-% install-% render-% template-% lint-% dry-run-% uninstall-% delete-% status-% history-% gateway-%
-build-%:
-	@$(MAKE) --no-print-directory build MODEL="$*"
-
-push-%:
-	@$(MAKE) --no-print-directory push MODEL="$*"
-
-deploy-%:
-	@$(MAKE) --no-print-directory deploy MODEL="$*"
-
-upgrade-% install-%:
-	@$(MAKE) --no-print-directory upgrade MODEL="$*"
-
-render-% template-%:
-	@$(MAKE) --no-print-directory render MODEL="$*"
-
-lint-%:
-	@$(MAKE) --no-print-directory lint MODEL="$*"
-
-dry-run-%:
-	@$(MAKE) --no-print-directory dry-run MODEL="$*"
-
-uninstall-% delete-%:
-	@$(MAKE) --no-print-directory uninstall MODEL="$*"
-
-status-%:
-	@$(MAKE) --no-print-directory status MODEL="$*"
-
-history-%:
-	@$(MAKE) --no-print-directory history MODEL="$*"
-
-gateway-%:
-	@$(MAKE) --no-print-directory gateway MODEL="$*"

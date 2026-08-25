@@ -44,9 +44,10 @@ fi
 PYTHONPYCACHEPREFIX="${tmp_dir}/pycache" \
   python3 -m unittest discover -s tests -p 'test_*.py'
 
-for model in values/*.yaml; do
-  model="$(basename "${model}" .yaml)"
-  make --no-print-directory lint MODEL="${model}" >/dev/null
+shopt -s nullglob
+model_configs=(values/*.yaml values/*.yml)
+for model_config in "${model_configs[@]}"; do
+  make --no-print-directory lint "${model_config}" >/dev/null
 done
 
 echo "Gateway resilience validation passed."

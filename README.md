@@ -3,20 +3,17 @@
 This repository deploys NVIDIA Dynamo model backends with one reusable Helm
 chart and model-specific values files. The root [`Makefile`](./Makefile) is the
 primary entrypoint for building images, rendering charts, deploying releases,
-and uninstalling releases by model.
+and uninstalling releases from model config paths.
 
-| Model target | Values file | Model | Runtime |
-| --- | --- | --- | --- |
-| `glm47flash` | `values/glm47flash.yaml` | `unsloth/GLM-4.7-Flash-NVFP4` | vLLM |
-| `nemotron-omni` | `values/nemotron-omni.yaml` | `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4` | vLLM |
-| `qwen35b` | `values/qwen35b.yaml` | `nvidia/Qwen3.6-35B-A3B-NVFP4` | vLLM |
-| `qwen27b` | `values/qwen27b.yaml` | `nvidia/Qwen3.6-27B-NVFP4` | vLLM |
-| `gemma431b` | `values/gemma431b.yaml` | `nvidia/Gemma-4-31B-IT-NVFP4` | vLLM |
-| `nemotronnano` | `values/nemotronnano.yaml` | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4` | vLLM |
-| `nemotron35lightning-gb10` | `values/nemotron35lightning-gb10.yaml` | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4` | TensorRT-LLM |
-
-`MODEL=nemotron` and `MODEL=omni` are accepted aliases for
-`MODEL=nemotron-omni`.
+| Model config | Model | Runtime |
+| --- | --- | --- |
+| `values/glm47flash.yaml` | `unsloth/GLM-4.7-Flash-NVFP4` | vLLM |
+| `values/nemotron-omni.yaml` | `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4` | vLLM |
+| `values/qwen35b.yaml` | `nvidia/Qwen3.6-35B-A3B-NVFP4` | vLLM |
+| `values/qwen27b.yaml` | `nvidia/Qwen3.6-27B-NVFP4` | vLLM |
+| `values/gemma431b.yaml` | `nvidia/Gemma-4-31B-IT-NVFP4` | vLLM |
+| `values/nemotronnano.yaml` | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-Reasoning-NVFP4` | vLLM |
+| `values/nemotron35lightning-gb10.yaml` | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4` | TensorRT-LLM |
 
 ## Prerequisites
 
@@ -89,7 +86,7 @@ published, reuse it with:
 SKIP_GATEWAY_BUILD=1 SKIP_GATEWAY_PUSH=1 make install-gateway
 ```
 
-`INSTALL_GATEWAY=1 make deploy-<model>` can combine this step with a model
+`INSTALL_GATEWAY=1 make deploy <model-config.yaml>` can combine this step with a model
 deployment, but the explicit first-time sequence makes cluster and registry
 failures easier to isolate.
 
@@ -110,23 +107,29 @@ catalog, and the selected model's HTTPRoute.
 
 ## Deploy A Model
 
-The default model is `qwen35b`:
+Every model action takes one relative or absolute `.yaml` or `.yml` config
+path. Paths containing whitespace are unsupported because GNU Make receives
+the config as a goal. There is no default model, model-name alias, or batch
+target; invoke each intended config explicitly:
 
 ```bash
-HF_TOKEN=<hugging-face-token> make deploy
+HF_TOKEN=<hugging-face-token> make deploy values/qwen35b.yaml
 ```
 
-Deploy a specific model either with `MODEL=` or a pattern target:
+The config filename stem is the default Helm release and model-route suffix.
+For a renamed or copied config that must retain an existing identity, pass
+`RELEASE=<release>` and, when needed, `MODEL_ROUTE_NAME=<route>` explicitly.
+
+Deploy another model by passing its config path:
 
 ```bash
-HF_TOKEN=<hugging-face-token> make deploy MODEL=qwen35b
-HF_TOKEN=<hugging-face-token> make deploy-glm47flash
-HF_TOKEN=<hugging-face-token> make deploy-qwen27b
-HF_TOKEN=<hugging-face-token> make deploy-gemma431b
-HF_TOKEN=<hugging-face-token> make deploy-nemotron
-HF_TOKEN=<hugging-face-token> make deploy-nemotronnano
+HF_TOKEN=<hugging-face-token> make deploy values/glm47flash.yaml
+HF_TOKEN=<hugging-face-token> make deploy values/qwen27b.yaml
+HF_TOKEN=<hugging-face-token> make deploy values/gemma431b.yaml
+HF_TOKEN=<hugging-face-token> make deploy values/nemotron-omni.yaml
+HF_TOKEN=<hugging-face-token> make deploy values/nemotronnano.yaml
 SKIP_BUILD=1 SKIP_PUSH=1 HF_TOKEN=<hugging-face-token> \
-  make deploy-nemotron35lightning-gb10
+  make deploy values/nemotron35lightning-gb10.yaml
 ```
 
 `make deploy` builds the image, pushes it, creates or reuses
@@ -135,7 +138,8 @@ SKIP_BUILD=1 SKIP_PUSH=1 HF_TOKEN=<hugging-face-token> \
 catalog. To deploy an already pushed image:
 
 ```bash
-SKIP_BUILD=1 SKIP_PUSH=1 HF_TOKEN=<hugging-face-token> make deploy-qwen35b
+SKIP_BUILD=1 SKIP_PUSH=1 HF_TOKEN=<hugging-face-token> \
+  make deploy values/qwen35b.yaml
 ```
 
 The explicit `make install-gateway` step must have succeeded at least once.
@@ -146,13 +150,14 @@ For an existing release whose resources were created outside Helm, use Helm
 3.17+ ownership adoption:
 
 ```bash
-TAKE_OWNERSHIP=1 SKIP_BUILD=1 SKIP_PUSH=1 HF_TOKEN=<hugging-face-token> make deploy-qwen35b
+TAKE_OWNERSHIP=1 SKIP_BUILD=1 SKIP_PUSH=1 HF_TOKEN=<hugging-face-token> \
+  make deploy values/qwen35b.yaml
 ```
 
 Check the release and endpoint after deployment:
 
 ```bash
-make status-qwen35b
+make status values/qwen35b.yaml
 kubectl get dgd,pods,httproute -n daedalus-dynamo
 kubectl get svc inference-gateway -n daedalus-dynamo
 curl --fail http://192.168.1.234:32359/v1/models
@@ -178,8 +183,8 @@ accepts `ENDPOINT_URL`, `MODEL_ID`, and `OPENAI_API_KEY` from the environment.
 
 ## Nemotron 3.5 Lightning GB10 Release
 
-The `nemotron35lightning-gb10` target adds initial single-node TensorRT-LLM
-support for
+The `values/nemotron35lightning-gb10.yaml` config adds initial single-node
+TensorRT-LLM support for
 [`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4`](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4).
 It adapts NVIDIA's experimental
 [one-GPU B200 MTP recipe](https://github.com/ai-dynamo/dynamo/blob/main/recipes/nemotron-3.5-lightning/trtllm/agg-b200-mtp/deploy.yaml)
@@ -210,8 +215,9 @@ kubectl get nodes -l 'nvidia.com/gpu.product=NVIDIA-GB10' \
   -o custom-columns='NAME:.metadata.name,ARCH:.status.nodeInfo.architecture,MEMORY:.status.allocatable.memory,GPUS:.status.allocatable.nvidia\.com/gpu'
 kubectl get storageclass
 kubectl get secret hf-token-secret -n daedalus-dynamo
-make lint-nemotron35lightning-gb10
-make render-nemotron35lightning-gb10 >/tmp/nemotron35lightning-gb10.yaml
+make lint values/nemotron35lightning-gb10.yaml
+make render values/nemotron35lightning-gb10.yaml \
+  >/tmp/nemotron35lightning-gb10.yaml
 kubectl apply --dry-run=server -n daedalus-dynamo \
   -f /tmp/nemotron35lightning-gb10.yaml
 ```
@@ -220,7 +226,8 @@ The release uses NVIDIA's published runtime directly. Skip the repository's
 vLLM image build and push steps:
 
 ```bash
-SKIP_BUILD=1 SKIP_PUSH=1 make deploy-nemotron35lightning-gb10
+SKIP_BUILD=1 SKIP_PUSH=1 \
+  make deploy values/nemotron35lightning-gb10.yaml
 ```
 
 If `hf-token-secret` does not exist, provide `HF_TOKEN` on that invocation so
@@ -229,7 +236,7 @@ verify the release, cache downloader, worker placement, model catalog, and one
 response:
 
 ```bash
-make status-nemotron35lightning-gb10
+make status values/nemotron35lightning-gb10.yaml
 kubectl get dgd,pods,pvc,httproute -n daedalus-dynamo -o wide
 kubectl logs -n daedalus-dynamo \
   -l 'nvidia.com/dynamo-component=ModelExpress,nvidia.com/dynamo-graph-deployment-name=nemotron-35-lightning-trtllm-gb10' \
@@ -251,10 +258,10 @@ still fails. For example:
 
 ```bash
 HELM_ARGS='--set worker.trtllm.engineConfig.max_batch_size=4' \
-  make upgrade-nemotron35lightning-gb10
+  make upgrade values/nemotron35lightning-gb10.yaml
 
 HELM_ARGS='--set worker.trtllm.engineConfig.max_batch_size=1 --set worker.trtllm.engineConfig.max_num_tokens=16384' \
-  make upgrade-nemotron35lightning-gb10
+  make upgrade values/nemotron35lightning-gb10.yaml
 ```
 
 The chart writes these capacity values to the TensorRT-LLM engine file and CLI
@@ -278,24 +285,21 @@ as performance-qualified yet.
 ```bash
 make models
 make install-gateway
-make lint-qwen35b
-make render-qwen35b
-make dry-run-qwen35b
-make gateway-qwen35b
-make upgrade-qwen35b
-make status-qwen35b
-make uninstall-qwen35b
-make lint-all
-make deploy-all
-make uninstall-all
+make lint values/qwen35b.yaml
+make render values/qwen35b.yaml
+make dry-run values/qwen35b.yaml
+make gateway values/qwen35b.yaml
+make upgrade values/qwen35b.yaml
+make status values/qwen35b.yaml
+make uninstall values/qwen35b.yaml
 ```
 
 `make upgrade` runs only Helm. `make deploy` is the full image plus Helm flow.
-Use `make upgrade-<model>` for chart-only changes that leave the model identity,
-route, secret, and gateway unchanged. When `model.name`, `model.id`, the
-namespace, or gateway settings change, use the full deploy path with
-`SKIP_BUILD=1 SKIP_PUSH=1`; it also refreshes the HTTPRoute and `/v1/models`
-catalog.
+Use `make upgrade <model-config.yaml>` for chart-only changes that leave the
+model identity, route, secret, and gateway unchanged. When `model.name`,
+`model.id`, the namespace, or gateway settings change, use the full deploy
+path with `SKIP_BUILD=1 SKIP_PUSH=1`; it also refreshes the HTTPRoute and
+`/v1/models` catalog.
 
 `make uninstall` removes the Helm release, deletes that model's HTTPRoute, and
 refreshes the catalog. Chart-managed PVCs are annotated with
@@ -396,18 +400,21 @@ published runtime directly; deploy those with `SKIP_BUILD=1 SKIP_PUSH=1`.
 Build and push the shared runtime once, then deploy without rebuilding:
 
 ```bash
-make build-glm47flash
-make push-glm47flash
-SKIP_BUILD=1 SKIP_PUSH=1 HF_TOKEN=<hugging-face-token> make deploy-glm47flash
+make build values/glm47flash.yaml
+make push values/glm47flash.yaml
+SKIP_BUILD=1 SKIP_PUSH=1 HF_TOKEN=<hugging-face-token> \
+  make deploy values/glm47flash.yaml
 ```
 
 Override the resulting image tag or the Dockerfile's nightly base image when
 needed:
 
 ```bash
-IMAGE_TAG=test make build-qwen35b
-IMAGE=registry.example.com/dynamo/qwen35b:test make deploy-qwen35b
-BASE_IMAGE=nvcr.io/nvidia/ai-dynamo/vllm-runtime-nightly:latest make build-qwen35b
+IMAGE_TAG=test make build values/qwen35b.yaml
+IMAGE=registry.example.com/dynamo/qwen35b:test \
+  make deploy values/qwen35b.yaml
+BASE_IMAGE=nvcr.io/nvidia/ai-dynamo/vllm-runtime-nightly:latest \
+  make build values/qwen35b.yaml
 ```
 
 ## Helm Values
@@ -430,33 +437,35 @@ Helm overrides that do not yet belong in a checked-in values file.
 Render direct DGD mode, which is the checked-in default:
 
 ```bash
-make render-qwen35b
+make render values/qwen35b.yaml
 ```
 
 Render the DGDR source object instead:
 
 ```bash
-DEPLOYMENT_MODE=dgdr make render-qwen35b
+DEPLOYMENT_MODE=dgdr make render values/qwen35b.yaml
 ```
 
 Pass arbitrary Helm overrides through `HELM_ARGS`:
 
 ```bash
 HELM_ARGS='--set planner.advisory=true --set planner.maxGpuBudget=2' \
-  SKIP_BUILD=1 SKIP_PUSH=1 HF_TOKEN=<hugging-face-token> make deploy-qwen35b
+  SKIP_BUILD=1 SKIP_PUSH=1 HF_TOKEN=<hugging-face-token> \
+  make deploy values/qwen35b.yaml
 ```
 
 Validate configuration before applying it:
 
 ```bash
-make lint-qwen35b
-make dry-run-qwen35b
+make lint values/qwen35b.yaml
+make dry-run values/qwen35b.yaml
 ```
 
 To add a model, copy an existing file under `values/`, change at least
 `model.name`, `model.id`, `model.image`, and the worker arguments, then run
-`make lint MODEL=<new-file-basename>`. The Makefile discovers values files
-automatically; no per-model deployment script is needed.
+`make lint values/<new-file>.yaml`. The `models` target discovers checked-in
+values files automatically; no per-model deployment target or script is
+needed.
 
 The `nemotron35lightning-gb10` specification uses the official
 multi-architecture TensorRT-LLM recipe image. See
@@ -468,8 +477,8 @@ Useful Makefile variables:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `MODEL` | `qwen35b` | Model values file basename. |
-| `RELEASE` | selected model | Helm release name. |
+| `RELEASE` | model config filename stem | Helm release name. |
+| `MODEL_ROUTE_NAME` | `daedalus-dynamo-<config filename stem>` | HTTPRoute resource name. |
 | `NAMESPACE` | `daedalus-dynamo` | Kubernetes namespace. |
 | `IMAGE` | selected `model.image` | Full runtime image reference. |
 | `IMAGE_TAG` | tag from selected `model.image` | Runtime image tag override. |
@@ -503,9 +512,9 @@ or Kubernetes YAML branches.
 Recommended checks:
 
 ```bash
-make lint-all
+make lint values/qwen35b.yaml
 make validate-resilience
-make render-qwen35b | kubectl apply --dry-run=client -f -
+make render values/qwen35b.yaml | kubectl apply --dry-run=client -f -
 ```
 
 ## Security

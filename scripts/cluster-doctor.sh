@@ -29,7 +29,7 @@ WORKER_TP="${WORKER_TP:-2}"
 SERVING_MODE="${SERVING_MODE:-agg}"
 TRANSPORT_PROFILE="${TRANSPORT_PROFILE:-tcp}"
 MIN_GPU_MEMORY_MIB="${MIN_GPU_MEMORY_MIB:-40959}"
-DOCTOR_ENV_BACKEND="${DOCTOR_ENV_BACKEND:-qwen35b}"
+DOCTOR_MODEL_CONFIG="${DOCTOR_MODEL_CONFIG:-values/qwen35b.yaml}"
 DOCTOR_PROBE_IMAGE="${DOCTOR_PROBE_IMAGE:-nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.3.1}"
 DOCTOR_RUN_NODE_PROBE="${DOCTOR_RUN_NODE_PROBE:-auto}" # auto | job | off
 DOCTOR_PROBE_NODE_SELECTOR="${DOCTOR_PROBE_NODE_SELECTOR:-nvidia.com/gpu.present=true}"
@@ -392,7 +392,7 @@ for pod in json.load(sys.stdin)["items"]:
       tr '\n' ' '
   )"
   if [[ -n "${not_ready// /}" ]]; then
-    warn "recovery:dgd-ready" "not-ready DGD(s): ${not_ready}. Inspect the DGD and redeploy the affected model with make deploy-<model>."
+    warn "recovery:dgd-ready" "not-ready DGD(s): ${not_ready}. Inspect the DGD and redeploy it with make deploy <model-config.yaml>."
   else
     ok "recovery:dgd-ready" "all live DGDs report Ready=True"
   fi
@@ -546,18 +546,18 @@ check_transport_env() {
   [[ -f "${INTERCONNECT}" ]] || { skip "transport:env" "scripts/check_interconnect.py not found"; return 0; }
   local tmp out verdict
   tmp="$(mktemp)"
-  if make --no-print-directory -C "${REPO_ROOT}" render MODEL="${DOCTOR_ENV_BACKEND}" >"${tmp}" 2>/dev/null; then
+  if make --no-print-directory -C "${REPO_ROOT}" render "${DOCTOR_MODEL_CONFIG}" >"${tmp}" 2>/dev/null; then
     out="$(python3 "${INTERCONNECT}" env "${tmp}" 2>/dev/null || true)"
     verdict="$(printf '%s' "${out}" | sed -n 's/.*"verdict": *"\(.*\)".*/\1/p' | head -1)"
     if printf '%s' "${verdict}" | grep -q 'no transport gaps'; then
-      ok "transport:env" "rendered ${DOCTOR_ENV_BACKEND} manifest: ${verdict}"
+      ok "transport:env" "rendered ${DOCTOR_MODEL_CONFIG} manifest: ${verdict}"
     elif [[ -n "${verdict}" ]]; then
       warn "transport:env" "${verdict}. Expected for TRANSPORT_PROFILE=tcp; set TRANSPORT_PROFILE=rdma for disaggregated serving."
     else
       skip "transport:env" "could not evaluate transport env from the rendered manifest"
     fi
   else
-    skip "transport:env" "could not render ${DOCTOR_ENV_BACKEND} for the env scan"
+    skip "transport:env" "could not render ${DOCTOR_MODEL_CONFIG} for the env scan"
   fi
   rm -f "${tmp}"
   return 0
