@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import re
+import shlex
 import subprocess
 import unittest
 from pathlib import Path
@@ -12,8 +14,16 @@ ROOT = Path(__file__).resolve().parents[1]
 CHART = ROOT / "charts" / "dynamo-model"
 MODEL_VALUES = sorted((ROOT / "values").glob("*.yaml"))
 SHARED_RUNTIME_IMAGE = (
-    "daedalus.ddns.me:5050/btuttle/daedalus-dynamo-vllm-runtime:"
-    "20260717-5930e58"
+    "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1"
+)
+GB10_RUNTIME_IMAGE = "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1"
+NEMOTRON35_LIGHTNING_RUNTIME_IMAGE = (
+    "nvcr.io/nvidia/ai-dynamo/vllm-runtime:"
+    "1.5.0-nemotron-3.5-lightning-dev.1"
+)
+MUSE_GLIMMER_RUNTIME_IMAGE = (
+    "nvcr.io/nvidia/ai-dynamo/vllm-runtime:"
+    "1.5.0-deepseek-v4-pro-0813-dev.1"
 )
 
 
@@ -48,13 +58,22 @@ def render(
 
 
 class ModelChartRenderTests(unittest.TestCase):
-    def test_all_vllm_models_share_the_source_built_runtime(self) -> None:
+    def test_vllm_models_use_platform_compatible_runtime(self) -> None:
         for values_file in MODEL_VALUES:
             with self.subTest(model=values_file.stem):
                 values = yaml.safe_load(values_file.read_text())
                 if values["model"].get("backendFramework", "vllm") != "vllm":
                     continue
-                self.assertEqual(values["model"]["image"], SHARED_RUNTIME_IMAGE)
+                if values_file.name == "qwen35-122b-gb10.yaml":
+                    expected_image = GB10_RUNTIME_IMAGE
+                elif values_file.name == "nemotron35lightning-l40s.yaml":
+                    expected_image = NEMOTRON35_LIGHTNING_RUNTIME_IMAGE
+                elif values_file.name == "muse-glimmer-l40s.yaml":
+                    expected_image = MUSE_GLIMMER_RUNTIME_IMAGE
+                else:
+                    expected_image = SHARED_RUNTIME_IMAGE
+                self.assertEqual(values["model"]["image"], expected_image)
+                self.assertEqual(values["model"]["imagePullPolicy"], "IfNotPresent")
 
     def test_direct_dgd_uses_alpha_services_schema(self) -> None:
         for values_file in MODEL_VALUES:
@@ -89,6 +108,7 @@ class ModelChartRenderTests(unittest.TestCase):
                 request = requests[0]
                 override = request["spec"]["overrides"]["dgd"]
                 self.assertEqual(request["apiVersion"], "nvidia.com/v1beta1")
+                self.assertEqual(request["spec"]["workload"]["concurrency"], 3)
                 self.assertEqual(override["apiVersion"], "nvidia.com/v1alpha1")
                 self.assertIsInstance(override["spec"].get("services"), dict)
                 self.assertTrue(override["spec"]["services"])
@@ -109,7 +129,8 @@ class ModelChartRenderTests(unittest.TestCase):
         self.assertFalse(planner_config["enable_throughput_scaling"])
         self.assertEqual(planner_config["decode_scale_up_kv_rate"], 0.25)
         self.assertEqual(planner_config["decode_scale_down_kv_rate"], 0.05)
-        self.assertEqual(planner_config["min_endpoint"], 2)
+        self.assertEqual(planner_config["min_endpoint"], 1)
+        self.assertEqual(planner_config["max_gpu_budget"], 2)
         self.assertGreaterEqual(
             planner_config["max_gpu_budget"], planner_config["min_endpoint"]
         )
@@ -180,6 +201,71 @@ class ModelChartRenderTests(unittest.TestCase):
         self.assertIn("--router-mode kv \\\n", script)
         self.assertIn("--router-min-initial-workers 1 \\\n", script)
 
+    def test_frontend_extra_args_preserve_literal_argv_tokens(self) -> None:
+        template_path = "/templates/a template's $(literal).jinja"
+        documents = render(
+            ROOT / "values" / "gemma431b.yaml",
+            set_strings={
+                "frontend.extraArgs[0]": "--chat-template",
+                "frontend.extraArgs[1]": template_path,
+            },
+        )
+        deployment = next(
+            document
+            for document in documents
+            if document["kind"] == "DynamoGraphDeployment"
+        )
+        frontend = deployment["spec"]["services"]["Frontend"]
+        script = frontend["extraPodSpec"]["mainContainer"]["args"][0]
+        command = script.split("exec python3 -m dynamo.frontend", 1)[1]
+        argv = shlex.split(command.replace("\\\n", ""))
+        self.assertEqual(argv[argv.index("--chat-template") + 1], template_path)
+        # All user-supplied text remains single-quoted, including substitution
+        # syntax; embedded apostrophes temporarily use a double-quoted literal.
+        self.assertIn("'\"'\"'", command)
+        self.assertIn(" $(literal).jinja'", command)
+        subprocess.run(["bash", "-n"], input=script, text=True, check=True)
+
+    def test_muse_glimmer_starts_one_l40s_worker_with_frontend_parser_fallback(self) -> None:
+        documents = render(ROOT / "values" / "muse-glimmer-l40s.yaml")
+        deployment = next(
+            document
+            for document in documents
+            if document["kind"] == "DynamoGraphDeployment"
+        )
+        services = deployment["spec"]["services"]
+        self.assertNotIn("Planner", services)
+        worker = services["VllmWorker"]
+        self.assertEqual(worker["replicas"], 1)
+        self.assertEqual(worker["resources"]["limits"]["gpu"], "1")
+        self.assertFalse(worker["scalingAdapter"]["enabled"])
+        self.assertEqual(
+            worker["extraPodSpec"]["nodeSelector"]["nvidia.com/gpu.product"],
+            "NVIDIA-L40S",
+        )
+        container = worker["extraPodSpec"]["mainContainer"]
+        self.assertEqual(container["image"], MUSE_GLIMMER_RUNTIME_IMAGE)
+        script = container["args"][0]
+        self.assertIn("--tensor-parallel-size 1", script)
+        self.assertIn("--max-model-len 131072", script)
+        self.assertIn("--kv-cache-dtype auto", script)
+        self.assertIn("--linear-backend auto", script)
+        self.assertNotIn("--quantization modelopt_fp4", script)
+        self.assertNotIn("--dyn-tool-call-parser", script)
+        frontend_script = services["Frontend"]["extraPodSpec"]["mainContainer"][
+            "args"
+        ][0]
+        command = frontend_script.split("exec python3 -m dynamo.frontend", 1)[1]
+        argv = shlex.split(command.replace("\\\n", ""))
+        for flag, value in (
+            ("--router-min-initial-workers", "1"),
+            ("--dyn-chat-processor", "vllm"),
+            ("--tool-call-parser", "muse_glimmer"),
+            ("--reasoning-parser", "muse_glimmer"),
+        ):
+            self.assertEqual(argv[argv.index(flag) + 1], value)
+        self.assertIn("--enable-auto-tool-choice", argv)
+
     def test_modelexpress_resets_only_registry_metadata_before_download(self) -> None:
         documents = render(ROOT / "values" / "gemma431b.yaml")
         deployment = next(
@@ -211,7 +297,7 @@ class ModelChartRenderTests(unittest.TestCase):
             worker_script,
         )
 
-    def test_qwen35_uses_native_modelopt_support_in_vllm_025(self) -> None:
+    def test_qwen35_uses_native_modelopt_support_in_vllm_023(self) -> None:
         documents = render(ROOT / "values" / "qwen35b.yaml")
         deployment = next(
             document
@@ -225,6 +311,182 @@ class ModelChartRenderTests(unittest.TestCase):
         self.assertIn("--quantization modelopt", worker_script)
         self.assertNotIn('expected_version = "0.22.0"', worker_script)
         self.assertNotIn("Applying vLLM 0.22.0", worker_script)
+
+    def test_qwen35_122b_gb10_uses_arm64_profile_with_model_context(self) -> None:
+        documents = render(ROOT / "values" / "qwen35-122b-gb10.yaml")
+        deployment = next(
+            document
+            for document in documents
+            if document["kind"] == "DynamoGraphDeployment"
+        )
+        services = deployment["spec"]["services"]
+        worker = services["VllmWorker"]
+        main_container = worker["extraPodSpec"]["mainContainer"]
+        worker_script = main_container["args"][0]
+        worker_env = {
+            item["name"]: item["value"] for item in main_container["env"]
+        }
+
+        self.assertEqual(
+            worker_env["MODEL_NAME"], "nvidia/Qwen3.5-122B-A10B-NVFP4"
+        )
+        self.assertEqual(main_container["image"], GB10_RUNTIME_IMAGE)
+        self.assertEqual(worker["replicas"], 1)
+        self.assertFalse(worker["scalingAdapter"]["enabled"])
+        self.assertEqual(
+            worker["extraPodSpec"]["nodeSelector"],
+            {"nvidia.com/gpu.product": "NVIDIA-GB10"},
+        )
+        self.assertNotIn("affinity", worker["extraPodSpec"])
+        self.assertEqual(worker["resources"]["requests"]["memory"], "96Gi")
+        self.assertNotIn("Planner", services)
+
+        self.assertEqual(worker_env["VLLM_NVFP4_GEMM_BACKEND"], "marlin")
+        self.assertEqual(worker_env["VLLM_USE_FLASHINFER_MOE_FP4"], "0")
+        self.assertEqual(worker_env["VLLM_SSM_CONV_STATE_LAYOUT"], "DS")
+        self.assertIn("--quantization modelopt_fp4", worker_script)
+        self.assertIn("--moe-backend marlin", worker_script)
+        self.assertIn("--language-model-only", worker_script)
+        self.assertNotIn("--max-model-len", worker_script)
+        self.assertIn("--max-num-seqs 4", worker_script)
+        self.assertIn("--max-num-batched-tokens 4096", worker_script)
+        self.assertIn("--kv-cache-dtype fp8", worker_script)
+        self.assertIn("--mamba-ssm-cache-dtype float16", worker_script)
+        self.assertIn("--no-disable-hybrid-kv-cache-manager", worker_script)
+        self.assertNotIn("--speculative-config", worker_script)
+
+    def test_cluster_sized_shared_resources_and_planner(self) -> None:
+        documents = render(ROOT / "values" / "gemma431b.yaml")
+        deployment = next(
+            document
+            for document in documents
+            if document["kind"] == "DynamoGraphDeployment"
+        )
+        services = deployment["spec"]["services"]
+
+        self.assertEqual(services["Frontend"]["replicas"], 1)
+
+        frontend_resources = services["Frontend"]["extraPodSpec"]["mainContainer"][
+            "resources"
+        ]
+        self.assertEqual(
+            frontend_resources["requests"]["memory"],
+            "512Mi",
+        )
+        self.assertEqual(frontend_resources["requests"]["cpu"], "500m")
+        modelexpress_resources = services["ModelExpress"]["extraPodSpec"][
+            "mainContainer"
+        ]["resources"]
+        self.assertEqual(
+            modelexpress_resources["requests"]["memory"],
+            "1536Mi",
+        )
+        worker = services["VllmWorker"]
+        self.assertEqual(worker["resources"]["requests"]["cpu"], "2")
+        self.assertEqual(worker["resources"]["requests"]["memory"], "8Gi")
+        self.assertEqual(worker["sharedMemory"]["size"], "16Gi")
+
+        redis = next(
+            document
+            for document in documents
+            if document["kind"] == "Deployment"
+            and document["metadata"]["name"] == "gemma431b-redis"
+        )
+        redis_container = redis["spec"]["template"]["spec"]["containers"][0]
+        self.assertEqual(redis_container["imagePullPolicy"], "IfNotPresent")
+        self.assertEqual(
+            redis_container["resources"]["requests"]["memory"], "64Mi"
+        )
+
+        planner_container = services["Planner"]["extraPodSpec"]["mainContainer"]
+        self.assertEqual(
+            planner_container["image"],
+            "nvcr.io/nvidia/ai-dynamo/dynamo-planner:1.4.0",
+        )
+        self.assertEqual(
+            planner_container["command"], ["python3", "-m", "dynamo.planner"]
+        )
+        self.assertEqual(
+            planner_container["resources"]["requests"]["memory"], "384Mi"
+        )
+
+        disruption_budgets = {
+            document["metadata"]["name"]: document
+            for document in documents
+            if document["kind"] == "PodDisruptionBudget"
+        }
+        self.assertEqual(
+            set(disruption_budgets),
+            {
+                "gemma-4-31b-it-vllm-agg-frontend",
+                "gemma-4-31b-it-vllm-agg-worker",
+                "gemma431b-redis",
+            },
+        )
+        for disruption_budget in disruption_budgets.values():
+            self.assertEqual(disruption_budget["spec"]["minAvailable"], 1)
+
+    def test_every_profile_admits_three_active_agent_turns(self) -> None:
+        for values_file in MODEL_VALUES:
+            with self.subTest(model=values_file.stem):
+                documents = render(values_file)
+                deployment = next(
+                    document
+                    for document in documents
+                    if document["kind"] == "DynamoGraphDeployment"
+                )
+                services = deployment["spec"]["services"]
+                self.assertEqual(services["Frontend"]["replicas"], 1)
+
+                worker_name = next(
+                    name for name in ("VllmWorker", "TrtllmWorker") if name in services
+                )
+                disruption_budget_selectors = [
+                    document["spec"]["selector"]["matchLabels"]
+                    for document in documents
+                    if document["kind"] == "PodDisruptionBudget"
+                ]
+                self.assertIn(
+                    {
+                        "nvidia.com/dynamo-graph-deployment-name": deployment[
+                            "metadata"
+                        ]["name"],
+                        "nvidia.com/dynamo-component": "Frontend",
+                    },
+                    disruption_budget_selectors,
+                )
+                self.assertIn(
+                    {
+                        "nvidia.com/dynamo-graph-deployment-name": deployment[
+                            "metadata"
+                        ]["name"],
+                        "nvidia.com/dynamo-component": worker_name,
+                    },
+                    disruption_budget_selectors,
+                )
+                worker_script = services[worker_name]["extraPodSpec"][
+                    "mainContainer"
+                ]["args"][0]
+                if worker_name == "VllmWorker":
+                    max_num_seqs = re.search(r"--max-num-seqs (\d+)", worker_script)
+                    self.assertIsNotNone(max_num_seqs)
+                    self.assertGreaterEqual(int(max_num_seqs.group(1)), 3)
+                else:
+                    max_batch_size = re.search(
+                        r"^max_batch_size: (\d+)$", worker_script, re.MULTILINE
+                    )
+                    self.assertIsNotNone(max_batch_size)
+                    self.assertGreaterEqual(int(max_batch_size.group(1)), 3)
+
+                if "Planner" in services:
+                    planner_args = services["Planner"]["extraPodSpec"][
+                        "mainContainer"
+                    ]["args"]
+                    planner_config = json.loads(
+                        planner_args[planner_args.index("--config") + 1]
+                    )
+                    self.assertEqual(planner_config["min_endpoint"], 1)
+                    self.assertEqual(planner_config["max_gpu_budget"], 2)
 
     def test_nemotron35lightning_gb10_uses_trtllm_and_modelexpress(self) -> None:
         documents = render(
@@ -269,7 +531,48 @@ class ModelChartRenderTests(unittest.TestCase):
         )
         self.assertIn("Waiting for ModelExpress", worker_script)
 
-    def test_glm47flash_uses_vllm_flags_and_l40s_safe_baseline(self) -> None:
+    def test_nemotron35lightning_l40s_uses_full_context_marlin_profile(
+        self,
+    ) -> None:
+        documents = render(
+            ROOT / "values" / "nemotron35lightning-l40s.yaml"
+        )
+        deployment = next(
+            document
+            for document in documents
+            if document["kind"] == "DynamoGraphDeployment"
+        )
+        services = deployment["spec"]["services"]
+        worker = services["VllmWorker"]
+        main_container = worker["extraPodSpec"]["mainContainer"]
+        worker_script = main_container["args"][0]
+
+        self.assertEqual(deployment["spec"]["backendFramework"], "vllm")
+        self.assertEqual(main_container["image"], NEMOTRON35_LIGHTNING_RUNTIME_IMAGE)
+        self.assertEqual(worker["replicas"], 1)
+        self.assertTrue(worker["scalingAdapter"]["enabled"])
+        self.assertEqual(worker["resources"]["requests"]["gpu"], "1")
+        self.assertEqual(
+            worker["extraPodSpec"]["nodeSelector"],
+            {"nvidia.com/gpu.product": "NVIDIA-L40S"},
+        )
+        self.assertIn("--tensor-parallel-size 1", worker_script)
+        self.assertIn("--max-model-len 1048576", worker_script)
+        self.assertIn("--max-num-seqs 4", worker_script)
+        self.assertIn("--quantization modelopt_fp4", worker_script)
+        self.assertIn("--moe-backend marlin", worker_script)
+        self.assertIn("--mamba-ssm-cache-dtype float16", worker_script)
+
+        planner_args = services["Planner"]["extraPodSpec"]["mainContainer"][
+            "args"
+        ]
+        planner_config = json.loads(
+            planner_args[planner_args.index("--config") + 1]
+        )
+        self.assertEqual(planner_config["min_endpoint"], 1)
+        self.assertEqual(planner_config["max_gpu_budget"], 2)
+
+    def test_glm47flash_uses_vllm_flags_and_model_context(self) -> None:
         documents = render(ROOT / "values" / "glm47flash.yaml")
         deployment = next(
             document
@@ -292,7 +595,7 @@ class ModelChartRenderTests(unittest.TestCase):
         )
         self.assertIn("--dyn-tool-call-parser glm47", worker_script)
         self.assertIn("--dyn-reasoning-parser glm45", worker_script)
-        self.assertIn("--max-model-len 32768", worker_script)
+        self.assertNotIn("--max-model-len", worker_script)
         self.assertNotIn("--frontend-decoding", worker_script)
         self.assertNotIn("--trust-remote-code", worker_script)
         self.assertNotIn("--speculative-config", worker_script)
@@ -303,6 +606,51 @@ class ModelChartRenderTests(unittest.TestCase):
         self.assertNotIn("--moe-backend marlin", worker_script)
         self.assertNotIn("--quantization modelopt", worker_script)
         self.assertNotIn("--kv-cache-dtype fp8", worker_script)
+
+    def test_poolside_uses_sanitized_managed_chat_template(self) -> None:
+        documents = render(ROOT / "values" / "poolside21nvfp4.yaml")
+        config_map = next(
+            document
+            for document in documents
+            if document["kind"] == "ConfigMap"
+            and document["metadata"]["name"]
+            == "poolside21-vllm-agg-custom-jinja-template"
+        )
+        template = config_map["data"]["chat-template.jinja"]
+
+        self.assertNotIn("{% generation %}", template)
+        self.assertNotIn("{% endgeneration %}", template)
+        self.assertNotIn("{%- generation -%}", template)
+        self.assertNotIn("{%- endgeneration -%}", template)
+        self.assertIn("{%- if add_generation_prompt -%}", template)
+        self.assertIn("{{- \"<assistant>\" -}}", template)
+
+        deployment = next(
+            document
+            for document in documents
+            if document["kind"] == "DynamoGraphDeployment"
+        )
+        worker = deployment["spec"]["services"]["VllmWorker"]
+        pod_spec = worker["extraPodSpec"]
+        self.assertEqual(
+            pod_spec["volumes"][0]["configMap"]["name"],
+            "poolside21-vllm-agg-custom-jinja-template",
+        )
+        main_container = pod_spec["mainContainer"]
+        self.assertEqual(
+            main_container["volumeMounts"][0],
+            {
+                "name": "custom-jinja-template",
+                "mountPath": "/etc/dynamo/laguna-chat-template.jinja",
+                "subPath": "chat-template.jinja",
+                "readOnly": True,
+            },
+        )
+        worker_script = main_container["args"][0]
+        self.assertIn("--custom-jinja-template \\", worker_script)
+        self.assertIn(
+            "/etc/dynamo/laguna-chat-template.jinja \\", worker_script
+        )
 
 
 if __name__ == "__main__":

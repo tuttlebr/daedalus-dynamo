@@ -101,4 +101,21 @@ spec:
         - name: redis-data
           persistentVolumeClaim:
             claimName: {{ .Values.redis.dataPvcName | quote }}
+{{- if .Values.redis.podDisruptionBudget.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ .Values.redis.name | quote }}
+  labels:
+    {{- include "dynamo-model.redisSelectorLabels" . | nindent 4 }}
+    {{- if .Values.app.partOf }}
+    app.kubernetes.io/part-of: {{ .Values.app.partOf | quote }}
+    {{- end }}
+spec:
+  minAvailable: {{ .Values.redis.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "dynamo-model.redisSelectorLabels" . | nindent 6 }}
+{{- end }}
 {{- end }}

@@ -1,0 +1,5 @@
+# Requests include headroom above the observed September 2026 usage.
+resources:
+  requests:
+    cpu: 50m
+    memory: 192Mi

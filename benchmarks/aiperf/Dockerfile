@@ -23,6 +23,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 COPY --chmod=0755 run-model-benchmarks.sh ./run-model-benchmarks.sh
+COPY --chmod=0755 run-kubernetes-container.sh ./run-kubernetes-container.sh
 COPY agentic-code-config.json ./agentic-code-config.json
 
 RUN mkdir -p /artifacts /tmp/huggingface \

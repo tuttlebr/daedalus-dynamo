@@ -9,13 +9,15 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 AIPERF_BIN="${AIPERF_BIN:-aiperf}"
 AGENTIC_CONFIG="${AGENTIC_CONFIG:-${SCRIPT_DIR}/agentic-code-config.json}"
 ENDPOINT_URL="${ENDPOINT_URL:-http://192.168.1.234:32359}"
+GPU_TELEMETRY="${GPU_TELEMETRY-192.168.1.235:32400/metrics}"
 ARTIFACTS_DIR="${ARTIFACTS_DIR:-/artifacts}"
 RUN_ID="${RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
 MODELS="${MODELS:-}"
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 TURNS="${TURNS:-6}"
 DATASET_SESSIONS="${DATASET_SESSIONS:-8}"
-CONCURRENCY="${CONCURRENCY:-4}"
+CONCURRENCY="${CONCURRENCY:-3}"
+export AIPERF_METRICS_USAGE_PCT_DIFF_THRESHOLD="${AIPERF_METRICS_USAGE_PCT_DIFF_THRESHOLD:-10}"
 REQUEST_TIMEOUT_SECONDS="${REQUEST_TIMEOUT_SECONDS:-300}"
 MODEL_TIMEOUT_SECONDS="${MODEL_TIMEOUT_SECONDS:-900}"
 SYNTHESIS_TIMEOUT_SECONDS="${SYNTHESIS_TIMEOUT_SECONDS:-120}"
@@ -23,9 +25,10 @@ DISCOVERY_TIMEOUT_SECONDS="${DISCOVERY_TIMEOUT_SECONDS:-10}"
 RANDOM_SEED="${RANDOM_SEED:-42}"
 TOKENIZER="${TOKENIZER:-auto}"
 EXTRA_INPUTS_JSON="${EXTRA_INPUTS_JSON:-{\"temperature\":0}}"
-USE_SERVER_TOKEN_COUNT="${USE_SERVER_TOKEN_COUNT:-0}"
+USE_SERVER_TOKEN_COUNT="${USE_SERVER_TOKEN_COUNT:-1}"
 USE_LEGACY_MAX_TOKENS="${USE_LEGACY_MAX_TOKENS:-1}"
 STOP_ON_ERROR="${STOP_ON_ERROR:-0}"
+CLIENT_VANTAGE="${CLIENT_VANTAGE:-AIPerf container}"
 
 dry_run=0
 list_models=0
@@ -43,12 +46,14 @@ IDs from /v1/models unless MODELS is a comma-separated override.
 
 Important environment variables:
   ENDPOINT_URL              Gateway base URL (default: http://192.168.1.234:32359)
+  GPU_TELEMETRY             DCGM endpoint (default: 192.168.1.235:32400/metrics);
+                            set empty to disable GPU telemetry collection
   OPENAI_API_KEY            Optional bearer token; never written to artifacts
   MODELS                    Optional comma-separated model IDs
   ARTIFACTS_DIR             Artifact root (default: /artifacts)
   TURNS                     Turns in each generated session (default: 6)
   DATASET_SESSIONS          Frozen agent sessions to generate (default: 8)
-  CONCURRENCY               In-flight request cap (default: 4)
+  CONCURRENCY               In-flight request cap (default: 3)
   TOKENIZER                 AIPerf tokenizer; auto uses each model ID (default: auto)
   USE_SERVER_TOKEN_COUNT    Set to 1 only after validating gateway usage fields
   STOP_ON_ERROR             Set to 1 to stop after the first failed model
@@ -160,6 +165,7 @@ require_positive_integer SYNTHESIS_TIMEOUT_SECONDS "${SYNTHESIS_TIMEOUT_SECONDS}
 require_positive_integer RANDOM_SEED "${RANDOM_SEED}"
 require_positive_number REQUEST_TIMEOUT_SECONDS "${REQUEST_TIMEOUT_SECONDS}"
 require_positive_number DISCOVERY_TIMEOUT_SECONDS "${DISCOVERY_TIMEOUT_SECONDS}"
+require_positive_number AIPERF_METRICS_USAGE_PCT_DIFF_THRESHOLD "${AIPERF_METRICS_USAGE_PCT_DIFF_THRESHOLD}"
 require_boolean USE_SERVER_TOKEN_COUNT "${USE_SERVER_TOKEN_COUNT}"
 require_boolean USE_LEGACY_MAX_TOKENS "${USE_LEGACY_MAX_TOKENS}"
 require_boolean STOP_ON_ERROR "${STOP_ON_ERROR}"
@@ -297,6 +303,8 @@ else
     --arg dataset_sha256 "${dataset_sha256}" \
     --arg config_sha256 "${config_sha256}" \
     --arg tokenizer "${TOKENIZER}" \
+    --arg client_vantage "${CLIENT_VANTAGE}" \
+    --arg gpu_telemetry "${GPU_TELEMETRY}" \
     --argjson models "${models_json}" \
     --argjson dataset_sessions "${DATASET_SESSIONS}" \
     --argjson turns "${TURNS}" \
@@ -313,7 +321,7 @@ else
       endpoint: {
         base_url: $endpoint_url,
         discovery_url: $models_url,
-        client_vantage: "AIPerf container"
+        client_vantage: $client_vantage
       },
       aiperf: {
         version: $aiperf_version,
@@ -344,6 +352,7 @@ else
       },
       observability: {
         model_revision: "unknown",
+        gpu_telemetry: (if $gpu_telemetry == "" then null else $gpu_telemetry end),
         hardware: "unknown",
         replicas: "unknown",
         autoscaling_state: "unknown",
@@ -355,6 +364,7 @@ else
 fi
 
 log "Endpoint: ${aiperf_url}"
+log "GPU telemetry: ${GPU_TELEMETRY:-disabled}"
 log "Models (${#models[@]}):"
 printf '  %s\n' "${models[@]}"
 log "Workload: ${DATASET_SESSIONS} sessions, ${TURNS} turns/session, $((DATASET_SESSIONS * TURNS)) requests/model"
@@ -391,8 +401,12 @@ for model in "${models[@]}"; do
     --export-level records
     --ui none
     --no-auto-plot
-    --no-server-metrics
   )
+  if [[ -n "${GPU_TELEMETRY}" ]]; then
+    profile_cmd+=(--gpu-telemetry "${GPU_TELEMETRY}")
+  else
+    profile_cmd+=(--no-gpu-telemetry)
+  fi
   if (( USE_LEGACY_MAX_TOKENS == 1 )); then
     profile_cmd+=(--use-legacy-max-tokens)
   fi

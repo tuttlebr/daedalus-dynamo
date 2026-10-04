@@ -1,0 +1,108 @@
+model:
+  name: nemotron-35-lightning-vllm-l40s
+  id: nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0-nemotron-3.5-lightning-dev.1
+  imagePullPolicy: IfNotPresent
+  backendFramework: vllm
+  deploymentMode: direct
+
+frontend:
+  replicas: 1
+
+worker:
+  # One TP1 worker targets one 48 GiB L40S. With a second available L40S,
+  # Planner can add another independent worker without changing this profile.
+  replicas: 1
+  scalingAdapter:
+    enabled: true
+  gpu: "1"
+  memoryRequest: 48Gi
+  sharedMemorySize: 16Gi
+  nodeSelector:
+    nvidia.com/gpu.product: NVIDIA-L40S
+  workingDir: /workspace/
+  startupProbe:
+    path: /live
+    periodSeconds: 30
+    timeoutSeconds: 20
+    failureThreshold: 120
+  extraEnv:
+    - name: HF_HOME
+      value: /model/.model-express
+    - name: HF_HUB_OFFLINE
+      value: "1"
+    - name: HF_MODULES_CACHE
+      value: /tmp/hf_modules
+    - name: TRITON_CACHE_DIR
+      value: /tmp/.triton-cache
+    - name: VLLM_CONFIG_ROOT
+      value: /tmp/vllm-config
+    - name: VLLM_CACHE_ROOT
+      value: /tmp/vllm-cache
+    - name: NCCL_IB_DISABLE
+      value: "1"
+    - name: PYTHONHASHSEED
+      value: "0"
+  vllmArgs:
+    - --served-model-name "${MODEL_NAME}"
+    - --trust-remote-code
+    # L40S is Ada/SM89, so use the checkpoint's W4A16 Marlin path rather than
+    # a native Blackwell NVFP4 kernel.
+    - --quantization modelopt_fp4
+    - --moe-backend marlin
+    - --tensor-parallel-size 1
+    - --pipeline-parallel-size 1
+    - --data-parallel-size 1
+    - --gpu-memory-utilization 0.90
+    # Preserve the model's complete advertised 1M-token context window. Keep
+    # request concurrency small so one full-length request retains KV headroom.
+    - --max-model-len 1048576
+    - --max-num-seqs 4
+    - --max-num-batched-tokens 8192
+    - --enable-chunked-prefill
+    - --async-scheduling
+    - --enable-prefix-caching
+    - --kv-cache-dtype fp8
+    - --mamba-backend flashinfer
+    - --mamba-ssm-cache-dtype float16
+    - --mamba-cache-mode align
+    - --enable-mamba-cache-stochastic-rounding
+    - --mamba-cache-philox-rounds 5
+    - --dyn-tool-call-parser nemotron_nano
+    - --dyn-reasoning-parser nemotron_nano
+    - --reasoning-parser nemotron_v3
+
+# The scaling adapter owns worker replica count after deployment. One endpoint
+# is the warm floor; the second L40S is used only when Planner scales out.
+planner:
+  optimizationTarget: load
+  enableThroughputScaling: false
+  enableLoadScaling: true
+  preDeploymentSweepingMode: none
+  loadAdjustmentIntervalSeconds: 5
+  minEndpoint: 1
+  maxGpuBudget: 2
+  decodeScaleUpKvRate: 0.25
+  decodeScaleDownKvRate: 0.05
+  advisory: false
+
+modelCache:
+  name: nemotron35lightning-l40s-model-cache
+  create: true
+  storage: 64Gi
+  accessModes:
+    - ReadWriteMany
+  mountPath: /model
+  cachePath: /model/.model-express/cache
+  storageClassName: ""
+
+redis:
+  enabled: true
+  name: nemotron35lightning-l40s-redis
+  dataPvcName: nemotron35lightning-l40s-redis-data
+  image: redis:7-alpine
+  imagePullPolicy: IfNotPresent
+  storage: 8Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-fast

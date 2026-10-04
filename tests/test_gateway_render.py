@@ -29,7 +29,7 @@ class GatewayRenderTests(unittest.TestCase):
             for document in documents
         }
         params = by_kind_name[("AgentgatewayParameters", "inference-gateway-params")]["spec"]
-        self.assertEqual(params["image"]["tag"], "v1.3.1")
+        self.assertEqual(params["image"]["tag"], "v1.4.1")
         self.assertEqual(
             next(item["value"] for item in params["env"] if item["name"] == "AGENTGATEWAY_NOFILE_LIMIT"),
             "131072",

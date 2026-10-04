@@ -7,6 +7,7 @@ source scripts/pre-commit/common.sh
 mapfile -t files < <(
   {
     find scripts -maxdepth 1 -type f -name '*.py'
+    find benchmarks -type f -name '*.py' 2> /dev/null
     find tests -maxdepth 1 -type f -name '*.py'
   } | sort -u
 )

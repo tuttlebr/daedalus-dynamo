@@ -1,0 +1,30 @@
+nats:
+  container:
+    merge:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+  reloader:
+    merge:
+      resources:
+        requests:
+          cpu: 25m
+          memory: 32Mi
+  config:
+    jetstream:
+      fileStore:
+        pvc:
+          storageClassName: local-fast
+  podTemplate:
+    merge:
+      spec:
+        nodeSelector:
+          kubernetes.io/hostname: daedalus-03
+dynamo-operator:
+  controllerManager:
+    manager:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 384Mi

@@ -44,7 +44,7 @@ INSTALL_GATEWAY ?= 0
 GATEWAY_REQUEST_TIMEOUT ?= 300s
 GATEWAY_PORT ?= 32359
 GATEWAY_NODE_PORT ?= 32359
-AGENTGATEWAY_VERSION ?= v1.3.1
+AGENTGATEWAY_VERSION ?= v1.4.1
 AGENTGATEWAY_IMAGE ?= cr.agentgateway.dev/agentgateway:$(AGENTGATEWAY_VERSION)
 GATEWAY_DOCKERFILE ?= Dockerfile.agentgateway
 GATEWAY_IMAGE ?= daedalus.ddns.me:5050/btuttle/daedalus-agentgateway:$(AGENTGATEWAY_VERSION)
@@ -52,11 +52,11 @@ GATEWAY_IMAGE_REGISTRY := $(shell printf '%s\n' '$(GATEWAY_IMAGE)' | sed 's|/.*|
 GATEWAY_IMAGE_REPOSITORY := $(shell printf '%s\n' '$(GATEWAY_IMAGE)' | sed 's|^[^/]*/||; s/:[^/:]*$$//')
 GATEWAY_IMAGE_TAG := $(shell printf '%s\n' '$(GATEWAY_IMAGE)' | sed 's/^.*://')
 GATEWAY_IMAGE_PULL_POLICY ?= IfNotPresent
-GATEWAY_REPLICAS ?= 1
+GATEWAY_REPLICAS ?= 2
 GATEWAY_NOFILE_LIMIT ?= 131072
-GATEWAY_CPU_REQUEST ?= 500m
+GATEWAY_CPU_REQUEST ?= 485m
 GATEWAY_CPU_LIMIT ?= 4
-GATEWAY_MEMORY_REQUEST ?= 512Mi
+GATEWAY_MEMORY_REQUEST ?= 256Mi
 GATEWAY_MEMORY_LIMIT ?= 2Gi
 GATEWAY_HPA_MIN_REPLICAS ?= 2
 GATEWAY_HPA_MAX_REPLICAS ?= 8
@@ -84,7 +84,7 @@ PYTHON ?= python3
 
 DOCKERFILE ?= Dockerfile
 CONTEXT ?= .
-BASE_IMAGE ?= nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.3.1
+BASE_IMAGE ?= nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1
 DOCKER_BUILD_ARGS ?=
 
 MODEL_IMAGE_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*image:[[:space:]]*//p' "$(MODEL_CONFIG)" 2>/dev/null | head -1 | tr -d '"')
@@ -117,6 +117,81 @@ SKIP_GATEWAY_BUILD ?= 0
 SKIP_GATEWAY_PUSH ?= 0
 PLANNER_COMPAT ?= 0
 DIST_DIR ?= dist
+AIPERF_VERSION ?= 0.11.0
+AIPERF_IMAGE ?= $(REGISTRY)/daedalus-dynamo-aiperf:$(AIPERF_VERSION)
+AIPERF_IMAGE_PULL_POLICY ?= Always
+AIPERF_IMAGE_PULL_SECRET ?=
+AIPERF_API_KEY_SECRET ?=
+AIPERF_API_KEY_SECRET_KEY ?= OPENAI_API_KEY
+AIPERF_ENDPOINT_URL ?= http://$(GATEWAY_NAME).$(NAMESPACE).svc.cluster.local:$(GATEWAY_PORT)
+AIPERF_RESULTS_DIR ?= artifacts/aiperf
+AIPERF_RUN_ID ?= $(shell date -u +%Y%m%dT%H%M%SZ)
+AIPERF_MODELS ?=
+AIPERF_TURNS ?= 6
+AIPERF_DATASET_SESSIONS ?= 8
+AIPERF_CONCURRENCY ?= 3
+AIPERF_REQUEST_TIMEOUT_SECONDS ?= 300
+AIPERF_MODEL_TIMEOUT_SECONDS ?= 900
+AIPERF_SYNTHESIS_TIMEOUT_SECONDS ?= 120
+AIPERF_DISCOVERY_TIMEOUT_SECONDS ?= 10
+AIPERF_RANDOM_SEED ?= 42
+AIPERF_TOKENIZER ?= auto
+AIPERF_USE_SERVER_TOKEN_COUNT ?= 0
+AIPERF_USE_LEGACY_MAX_TOKENS ?= 1
+AIPERF_STOP_ON_ERROR ?= 0
+AIPERF_ACTIVE_DEADLINE_SECONDS ?= 14400
+AIPERF_POLL_SECONDS ?= 5
+AIPERF_KEEP_JOB ?= 0
+AIPERF_SKIP_BUILD ?= 0
+AIPERF_SKIP_PUSH ?= 0
+AIPERF_CPU_REQUEST ?= 1
+AIPERF_CPU_LIMIT ?= 4
+AIPERF_MEMORY_REQUEST ?= 2Gi
+AIPERF_MEMORY_LIMIT ?= 8Gi
+AIPERF_EPHEMERAL_STORAGE_REQUEST ?= 2Gi
+AIPERF_EPHEMERAL_STORAGE_LIMIT ?= 24Gi
+AIPERF_ARTIFACTS_SIZE_LIMIT ?= 16Gi
+AIPERF_TEMP_SIZE_LIMIT ?= 8Gi
+
+AIPERF_JOB_ENV = \
+	KUBECTL="$(KUBECTL)" \
+	PYTHON="$(PYTHON)" \
+	EXPECTED_CONTEXT="$(EXPECTED_CONTEXT)" \
+	NAMESPACE="$(NAMESPACE)" \
+	GATEWAY_NAME="$(GATEWAY_NAME)" \
+	GATEWAY_PORT="$(GATEWAY_PORT)" \
+	AIPERF_IMAGE="$(AIPERF_IMAGE)" \
+	AIPERF_IMAGE_PULL_POLICY="$(AIPERF_IMAGE_PULL_POLICY)" \
+	AIPERF_IMAGE_PULL_SECRET="$(AIPERF_IMAGE_PULL_SECRET)" \
+	AIPERF_API_KEY_SECRET="$(AIPERF_API_KEY_SECRET)" \
+	AIPERF_API_KEY_SECRET_KEY="$(AIPERF_API_KEY_SECRET_KEY)" \
+	AIPERF_ENDPOINT_URL="$(AIPERF_ENDPOINT_URL)" \
+	AIPERF_RESULTS_DIR="$(AIPERF_RESULTS_DIR)" \
+	AIPERF_RUN_ID="$(AIPERF_RUN_ID)" \
+	AIPERF_MODELS="$(AIPERF_MODELS)" \
+	AIPERF_TURNS="$(AIPERF_TURNS)" \
+	AIPERF_DATASET_SESSIONS="$(AIPERF_DATASET_SESSIONS)" \
+	AIPERF_CONCURRENCY="$(AIPERF_CONCURRENCY)" \
+	AIPERF_REQUEST_TIMEOUT_SECONDS="$(AIPERF_REQUEST_TIMEOUT_SECONDS)" \
+	AIPERF_MODEL_TIMEOUT_SECONDS="$(AIPERF_MODEL_TIMEOUT_SECONDS)" \
+	AIPERF_SYNTHESIS_TIMEOUT_SECONDS="$(AIPERF_SYNTHESIS_TIMEOUT_SECONDS)" \
+	AIPERF_DISCOVERY_TIMEOUT_SECONDS="$(AIPERF_DISCOVERY_TIMEOUT_SECONDS)" \
+	AIPERF_RANDOM_SEED="$(AIPERF_RANDOM_SEED)" \
+	AIPERF_TOKENIZER="$(AIPERF_TOKENIZER)" \
+	AIPERF_USE_SERVER_TOKEN_COUNT="$(AIPERF_USE_SERVER_TOKEN_COUNT)" \
+	AIPERF_USE_LEGACY_MAX_TOKENS="$(AIPERF_USE_LEGACY_MAX_TOKENS)" \
+	AIPERF_STOP_ON_ERROR="$(AIPERF_STOP_ON_ERROR)" \
+	AIPERF_ACTIVE_DEADLINE_SECONDS="$(AIPERF_ACTIVE_DEADLINE_SECONDS)" \
+	AIPERF_POLL_SECONDS="$(AIPERF_POLL_SECONDS)" \
+	AIPERF_KEEP_JOB="$(AIPERF_KEEP_JOB)" \
+	AIPERF_CPU_REQUEST="$(AIPERF_CPU_REQUEST)" \
+	AIPERF_CPU_LIMIT="$(AIPERF_CPU_LIMIT)" \
+	AIPERF_MEMORY_REQUEST="$(AIPERF_MEMORY_REQUEST)" \
+	AIPERF_MEMORY_LIMIT="$(AIPERF_MEMORY_LIMIT)" \
+	AIPERF_EPHEMERAL_STORAGE_REQUEST="$(AIPERF_EPHEMERAL_STORAGE_REQUEST)" \
+	AIPERF_EPHEMERAL_STORAGE_LIMIT="$(AIPERF_EPHEMERAL_STORAGE_LIMIT)" \
+	AIPERF_ARTIFACTS_SIZE_LIMIT="$(AIPERF_ARTIFACTS_SIZE_LIMIT)" \
+	AIPERF_TEMP_SIZE_LIMIT="$(AIPERF_TEMP_SIZE_LIMIT)"
 
 TAKE_OWNERSHIP_ARG := $(if $(filter 1 true yes,$(TAKE_OWNERSHIP)),--take-ownership,)
 CREATE_NAMESPACE_ARG := $(if $(filter 1 true yes,$(CREATE_NAMESPACE)),--create-namespace,)
@@ -149,6 +224,8 @@ help:
 		'Shared actions:' \
 		'  make models                        List checked-in model config paths.' \
 		'  make gateway-image                 Build and push the hardened agentgateway image.' \
+		'  make benchmark-agentic             Evaluate every gateway model with the agentic AIPerf workload.' \
+		'  make benchmark-agentic-render      Render the benchmark Job without creating it.' \
 		'  make scheduling-resilience         Upgrade Grove recovery and repair stuck pod gangs.' \
 		'  make check-scheduling-resilience   Read-only recovery/version check.' \
 		'' \
@@ -162,13 +239,17 @@ help:
 		'  SKIP_SECRET=1                     Skip HF token secret check/update during deploy.' \
 		'  GATEWAY=0                         Skip inference-gateway resources during deploy.' \
 		'  INSTALL_GATEWAY=1                 Install/upgrade Gateway API, GAIE, and agentgateway first.' \
-		'  GATEWAY_REPLICAS=1                Minimum gateway deployment replica count.' \
+		'  GATEWAY_REPLICAS=2                Minimum gateway deployment replica count.' \
 		'  GATEWAY_NOFILE_LIMIT=131072       Gateway process RLIMIT_NOFILE soft limit.' \
 		'  EXPECTED_CONTEXT=$(EXPECTED_CONTEXT)  Required live-cluster context guard.' \
 		'  GROVE_TERMINATION_DELAY=15m       Maximum healthy-to-stuck gang recovery delay.' \
 		'  DYNAMO_PLATFORM_VERSION=1.4.0     Minimum platform paired with the Grove release.' \
 		'  SKIP_GATEWAY_BUILD=1              Reuse an already built hardened gateway image.' \
 		'  SKIP_GATEWAY_PUSH=1               Reuse an already pushed hardened gateway image.' \
+		'  AIPERF_IMAGE=$(AIPERF_IMAGE)  Benchmark client image built and pushed by default.' \
+		'  AIPERF_SKIP_BUILD=1 AIPERF_SKIP_PUSH=1  Reuse a published benchmark client image.' \
+		'  AIPERF_RESULTS_DIR=$(AIPERF_RESULTS_DIR)  Repo-local benchmark result root.' \
+		'  AIPERF_ACTIVE_DEADLINE_SECONDS=$(AIPERF_ACTIVE_DEADLINE_SECONDS)  Whole-Job runtime ceiling.' \
 		'  HF_TOKEN=<token>                  Create or update $(HF_TOKEN_SECRET).'
 
 .PHONY: models
@@ -209,8 +290,12 @@ build: check-model check-docker
 
 .PHONY: push
 push: check-model check-docker
-	@echo "==> Pushing $(IMAGE)"
-	@$(DOCKER) push "$(IMAGE)"
+	@if [[ "$(IMAGE)" == nvcr.io* ]]; then \
+		echo "==> Skipping push for upstream image $(IMAGE)"; \
+	else \
+		echo "==> Pushing $(IMAGE)"; \
+		$(DOCKER) push "$(IMAGE)"; \
+	fi
 
 .PHONY: image
 image: build push
@@ -225,10 +310,51 @@ build-gateway-image: check-docker
 		"$(CONTEXT)"
 
 push-gateway-image: check-docker
-	@echo "==> Pushing hardened gateway image $(GATEWAY_IMAGE)"
-	@$(DOCKER) push "$(GATEWAY_IMAGE)"
+	@if [[ "$(GATEWAY_IMAGE)" == nvcr.io* ]]; then \
+		echo "==> Skipping push for upstream image $(GATEWAY_IMAGE)"; \
+	else \
+		echo "==> Pushing hardened gateway image $(GATEWAY_IMAGE)"; \
+		$(DOCKER) push "$(GATEWAY_IMAGE)"; \
+	fi
 
 gateway-image: build-gateway-image push-gateway-image
+
+.PHONY: build-aiperf-image push-aiperf-image aiperf-image
+build-aiperf-image: check-docker
+	@echo "==> Building pinned AIPerf client image $(AIPERF_IMAGE)"
+	@$(DOCKER) build \
+		-t "$(AIPERF_IMAGE)" \
+		-f benchmarks/aiperf/Dockerfile \
+		benchmarks/aiperf
+
+push-aiperf-image: check-docker
+	@echo "==> Pushing pinned AIPerf client image $(AIPERF_IMAGE)"
+	@$(DOCKER) push "$(AIPERF_IMAGE)"
+
+aiperf-image: build-aiperf-image push-aiperf-image
+
+.PHONY: benchmark-agentic-render benchmark-agentic-preflight benchmark-agentic
+benchmark-agentic-render: check-python
+	@$(AIPERF_JOB_ENV) \
+		"$(PYTHON)" benchmarks/aiperf/render-kubernetes-job.py
+
+benchmark-agentic-preflight: check-kubectl check-python
+	@$(AIPERF_JOB_ENV) \
+		benchmarks/aiperf/run-kubernetes-job.sh --preflight
+
+benchmark-agentic: benchmark-agentic-preflight
+	@if [[ ! "$(AIPERF_SKIP_BUILD)" =~ ^(1|true|yes)$$ ]]; then \
+		$(MAKE) --no-print-directory build-aiperf-image; \
+	else \
+		echo "==> Reusing benchmark image without a local build: $(AIPERF_IMAGE)"; \
+	fi
+	@if [[ ! "$(AIPERF_SKIP_PUSH)" =~ ^(1|true|yes)$$ ]]; then \
+		$(MAKE) --no-print-directory push-aiperf-image; \
+	else \
+		echo "==> Reusing already published benchmark image: $(AIPERF_IMAGE)"; \
+	fi
+	@$(AIPERF_JOB_ENV) \
+		benchmarks/aiperf/run-kubernetes-job.sh
 
 .PHONY: namespace
 namespace: check-kubectl
@@ -453,7 +579,7 @@ gateway-catalog-apply: check-kubectl check-python
 
 .PHONY: planner-compat
 planner-compat: check-model check-kubectl
-	@echo "==> Planner namespace compatibility is handled by Helm via planner.workerNamespaceCompat=legacy."
+	@echo "==> Planner namespace compatibility is handled by Helm via planner.workerNamespaceCompat (default: off)."
 	@echo "==> No live DGD annotation patch is applied; operator-owned worker hash annotations are left untouched."
 
 .PHONY: doctor validate-resilience

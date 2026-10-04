@@ -3,4 +3,4 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-vllm-runtime:20260717-5930e58
+    image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1

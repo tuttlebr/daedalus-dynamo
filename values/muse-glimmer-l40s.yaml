@@ -1,0 +1,152 @@
+# L40S throughput/agentic baseline; benchmark TTFT/ITL before qualification.
+# Sources checked 2026-09-17:
+# https://huggingface.co/nvidia/Muse-Glimmer-30B-NVFP4
+# https://github.com/vllm-project/vllm/blob/v0.28.0/vllm/model_executor/layers/quantization/modelopt.py
+# https://github.com/ai-dynamo/dynamo/releases/tag/v1.5.0-deepseek-v4-pro-0813-dev.1
+model:
+  name: muse-glimmer-vllm-l40s
+  id: nvidia/Muse-Glimmer-30B-NVFP4
+  # Published multi-arch preview with vLLM 0.28.0, which introduced Muse.
+  # The shared stable Dynamo 1.4.x image carries vLLM 0.26.0 and is too old.
+  # This tag names its release target; the runtime also contains Muse support.
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0-deepseek-v4-pro-0813-dev.1
+  imagePullPolicy: IfNotPresent
+  backendFramework: vllm
+  deploymentMode: direct
+
+frontend:
+  replicas: 1
+  nodeSelector:
+    kubernetes.io/arch: amd64
+  routerMode: kv
+  minInitialWorkers: 1
+  # Dynamo's native parser registry in this image lacks Muse's ATEM/channel
+  # format. Use the vLLM frontend processor for /v1/chat/completions, keeping
+  # KV routing and the packaged chat template. Responses/Anthropic parsing
+  # is not qualified by this fallback. These flags belong on the FRONTEND.
+  extraArgs:
+    - --dyn-chat-processor
+    - vllm
+    - --enable-auto-tool-choice
+    - --tool-call-parser
+    - muse_glimmer
+    - --reasoning-parser
+    - muse_glimmer
+    - --trust-remote-code
+  # Python/vLLM preprocessing needs more CPU and RAM than the Rust default.
+  resources:
+    requests:
+      cpu: "1"
+      # 2.34 GiB measured peak plus the enabled 4 GiB MM cache,
+      # with about 25% headroom for image preprocessing and runtime growth.
+      memory: 8Gi
+    limits:
+      cpu: "4"
+      memory: 8Gi
+
+modelexpress:
+  resources:
+    requests:
+      cpu: 100m
+      # Full checkpoint download peaked at 686 MiB, including page cache.
+      memory: 1Gi
+
+worker:
+  # The 24.7 GB checkpoint fits one L40S. Start with one TP1 worker;
+  # an additional replica can use a second L40S independently.
+  replicas: 1
+  scalingAdapter:
+    enabled: false
+  gpu: "1"
+  cpuRequest: "4"
+  # 5.51 GiB cold-start working set plus the enabled 4 GiB receiver cache,
+  # with about 25% headroom. Checkpoint page cache can burst and be reclaimed.
+  memoryRequest: 12Gi
+  sharedMemorySize: 16Gi
+  nodeSelector:
+    kubernetes.io/arch: amd64
+    nvidia.com/gpu.product: NVIDIA-L40S
+  workingDir: /workspace/
+  startupProbe:
+    path: /live
+    periodSeconds: 30
+    timeoutSeconds: 20
+    failureThreshold: 120
+  extraEnv:
+    - name: HF_HOME
+      value: /model/.model-express
+    - name: HF_HUB_OFFLINE
+      value: "1"
+    - name: HF_MODULES_CACHE
+      value: /tmp/hf_modules
+    - name: TRITON_CACHE_DIR
+      value: /tmp/.triton-cache
+    - name: VLLM_CONFIG_ROOT
+      value: /tmp/vllm-config
+    - name: VLLM_CACHE_ROOT
+      value: /tmp/vllm-cache
+    - name: NCCL_IB_DISABLE
+      value: "1"
+    - name: PYTHONHASHSEED
+      value: "0"
+  vllmArgs:
+    - --served-model-name "${MODEL_NAME}"
+    - --trust-remote-code
+    - --enable-multimodal
+    - --dtype bfloat16
+    # Auto-detect ModelOpt MIXED_PRECISION: W4A16 NVFP4 + FP8 + BF16.
+    # With linear-backend=auto, vLLM selects Marlin for W4A16 on Ada/SM89
+    # and selects FP8 kernels separately. Preserve the per-layer assignment.
+    - --linear-backend auto
+    - --tensor-parallel-size 1
+    - --pipeline-parallel-size 1
+    - --data-parallel-size 1
+    - --gpu-memory-utilization 0.90
+    - --max-model-len 131072
+    # Four sequences per GPU admit the three-active-turn workload with
+    # bounded prefill chunks to protect ongoing decode latency.
+    - --max-num-seqs 4
+    - --max-num-batched-tokens 4096
+    - --enable-chunked-prefill
+    - --async-scheduling
+    - --enable-prefix-caching
+    - --prefix-caching-hash-algo sha256
+    # NVIDIA validated unquantized KV; GQA and sliding-window attention keep
+    # its footprint small. Retain BF16 KV instead of adding another lossy step.
+    - --kv-cache-dtype auto
+    # Bound vision warmup/cache reservations while allowing screenshot pairs.
+    - --limit-mm-per-prompt '{"image":2,"video":0}'
+    # Preserve EOS [200001, 200008]; 200007 closes a channel, not the turn.
+    - --generation-config auto
+
+# Start with one warm worker; no autoscaler owns this profile's replica count.
+planner:
+  enabled: false
+  minEndpoint: 1
+  maxGpuBudget: 2
+
+modelCache:
+  name: muse-glimmer-l40s-model-cache
+  create: true
+  storage: 64Gi
+  accessModes:
+    - ReadWriteMany
+  mountPath: /model
+  cachePath: /model/.model-express/cache
+  storageClassName: nfs-client
+
+redis:
+  enabled: true
+  name: muse-glimmer-l40s-redis
+  dataPvcName: muse-glimmer-l40s-redis-data
+  image: redis:7-alpine
+  imagePullPolicy: IfNotPresent
+  storage: 8Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-fast
+
+# Request defaults recommended by NVIDIA: temperature=1.0, top_p=0.95,
+# top_k=64, and high reasoning (the packaged template's default strength).
+# ModelExpress downloads this public checkpoint into the shared cache; the
+# chart still expects its usual hf-token-secret in the deployment namespace.

@@ -10,13 +10,14 @@ GATEWAY_PORT="${GATEWAY_PORT:-32359}"
 GATEWAY_NODE_PORT="${GATEWAY_NODE_PORT:-32359}"
 GATEWAY_IMAGE_REGISTRY="${GATEWAY_IMAGE_REGISTRY:-daedalus.ddns.me:5050}"
 GATEWAY_IMAGE_REPOSITORY="${GATEWAY_IMAGE_REPOSITORY:-btuttle/daedalus-agentgateway}"
-GATEWAY_IMAGE_TAG="${GATEWAY_IMAGE_TAG:-v1.3.1}"
+GATEWAY_IMAGE_TAG="${GATEWAY_IMAGE_TAG:-v1.4.1}"
 GATEWAY_IMAGE_PULL_POLICY="${GATEWAY_IMAGE_PULL_POLICY:-IfNotPresent}"
-GATEWAY_REPLICAS="${GATEWAY_REPLICAS:-1}"
+GATEWAY_REPLICAS="${GATEWAY_REPLICAS:-2}"
 GATEWAY_NOFILE_LIMIT="${GATEWAY_NOFILE_LIMIT:-131072}"
-GATEWAY_CPU_REQUEST="${GATEWAY_CPU_REQUEST:-500m}"
+# With the 25m fd-metrics sidecar, retain the 510m total used by the CPU HPA.
+GATEWAY_CPU_REQUEST="${GATEWAY_CPU_REQUEST:-485m}"
 GATEWAY_CPU_LIMIT="${GATEWAY_CPU_LIMIT:-4}"
-GATEWAY_MEMORY_REQUEST="${GATEWAY_MEMORY_REQUEST:-512Mi}"
+GATEWAY_MEMORY_REQUEST="${GATEWAY_MEMORY_REQUEST:-256Mi}"
 GATEWAY_MEMORY_LIMIT="${GATEWAY_MEMORY_LIMIT:-2Gi}"
 GATEWAY_HPA_MIN_REPLICAS="${GATEWAY_HPA_MIN_REPLICAS:-2}"
 GATEWAY_HPA_MAX_REPLICAS="${GATEWAY_HPA_MAX_REPLICAS:-8}"
@@ -100,6 +101,8 @@ spec:
             daedalus-dynamo/fd-metrics-sha256: "${fd_metrics_hash}"
             sidecar.istio.io/inject: "false"
         spec:
+          nodeSelector:
+            kubernetes.io/arch: amd64
           shareProcessNamespace: true
           topologySpreadConstraints:
             - maxSkew: 1
@@ -155,7 +158,7 @@ spec:
                 failureThreshold: 3
               resources:
                 requests:
-                  cpu: 10m
+                  cpu: 25m
                   memory: 32Mi
                 limits:
                   cpu: 100m
@@ -466,6 +469,10 @@ spec:
         - name: model-catalog
           image: ${MODEL_CATALOG_IMAGE}
           imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
           ports:
             - name: http
               containerPort: 8000

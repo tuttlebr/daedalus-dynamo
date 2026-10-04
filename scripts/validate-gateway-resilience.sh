@@ -13,7 +13,7 @@ trap cleanup EXIT
 
 docker build \
   --quiet \
-  --build-arg AGENTGATEWAY_IMAGE=cr.agentgateway.dev/agentgateway:v1.3.1 \
+  --build-arg AGENTGATEWAY_IMAGE=cr.agentgateway.dev/agentgateway:v1.4.1 \
   -t "${test_image}" \
   -f Dockerfile.agentgateway \
   . >/dev/null

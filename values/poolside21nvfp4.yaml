@@ -1,0 +1,138 @@
+model:
+  name: poolside21-vllm-agg
+  id: poolside/Laguna-S-2.1-NVFP4
+  # Dynamo 1.4.1 carries vLLM 0.26.0 and publishes an ARM64 runtime. Laguna
+  # requires vLLM 0.25.0 or newer, while Spark's Grace CPU requires ARM64.
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1
+  imagePullPolicy: IfNotPresent
+  backendFramework: vllm
+  deploymentMode: direct
+
+frontend:
+  replicas: 1
+
+worker:
+  applyVllmModelOptLmHeadPatch: false
+  replicas: 1
+  scalingAdapter:
+    enabled: false
+  gpu: "1"
+  # The NVFP4 weights are roughly 71 GB. Reserve enough unified memory for the
+  # checkpoint, vLLM, KV cache, and bounded first-start kernel compilation,
+  # while leaving headroom on Spark's 128 GB system.
+  memoryRequest: 96Gi
+  sharedMemorySize: 16Gi
+  nodeSelector:
+    nvidia.com/gpu.product: NVIDIA-GB10
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+  workingDir: /workspace/
+  securityContext:
+    runAsUser: 0
+    capabilities:
+      add:
+        - IPC_LOCK
+        - SYS_RESOURCE
+  # The managed copy comes from Hub snapshot 826aacdf6d8b2699d4e367def6f17c83b06044c2.
+  # It differs only by removing Minijinja-incompatible generation wrappers.
+  customJinjaTemplate:
+    enabled: true
+    sourceFile: files/laguna-chat-template.jinja
+    mountPath: /etc/dynamo/laguna-chat-template.jinja
+  # Poolside reports about 15 minutes for the first Spark start. Allow up to an
+  # hour for model-cache validation, NVFP4 kernel JIT, and CUDA graph capture.
+  startupProbe:
+    path: /live
+    periodSeconds: 30
+    timeoutSeconds: 20
+    failureThreshold: 120
+  extraEnv:
+    # FlashInfer's NVFP4 JIT needs Spark's architecture spelling. Keep compile
+    # fan-out bounded: Poolside warns an uncapped cold JIT can exhaust all
+    # unified memory on a 128 GB Spark.
+    - name: CUTE_DSL_ARCH
+      value: sm_121a
+    - name: MAX_JOBS
+      value: "4"
+    - name: VLLM_WORKER_MULTIPROC_METHOD
+      value: spawn
+    - name: TRITON_CACHE_DIR
+      value: /tmp/.triton-cache
+    - name: VLLM_CONFIG_ROOT
+      value: /tmp/vllm-config
+    - name: VLLM_CACHE_ROOT
+      value: /tmp/vllm-cache
+    - name: HF_MODULES_CACHE
+      value: /tmp/hf_modules
+    - name: NCCL_IB_DISABLE
+      value: "1"
+    - name: PYTHONHASHSEED
+      value: "0"
+  vllmArgs:
+    - --served-model-name "${MODEL_NAME}"
+    - --frontend-decoding
+    - --trust-remote-code
+    - --custom-jinja-template
+    - /etc/dynamo/laguna-chat-template.jinja
+    # Laguna emits the same XML tool envelope as GLM-4.7 and uses think tags.
+    # Dynamo does not yet register poolside_v1 natively, so use its matching
+    # built-in parsers and retain vLLM's exact parser for reasoning-aware
+    # structured output.
+    - --dyn-tool-call-parser glm47
+    - --dyn-reasoning-parser glm45
+    - --reasoning-parser poolside_v1
+    - --dyn-default-thinking-mode enabled
+    - --tensor-parallel-size 1
+    - --pipeline-parallel-size 1
+    - --data-parallel-size 1
+    # Poolside's validated Spark recipe uses 0.85 and a 256K context ceiling.
+    # Quantization and the FlashInferCutlass MoE backend are auto-detected from
+    # the checkpoint; do not force a Qwen-specific ModelOpt or Marlin backend.
+    - --gpu-memory-utilization 0.90
+    - --max-model-len 200000
+    # Preserve the repository's three-active-turn contract with a conservative
+    # first-boot sequence limit and bounded chunked prefill.
+    - --max-num-seqs 4
+    # Audited 2026-08-26 against the frozen agentic-code proxy: 2048 did not
+    # reproduce an ITL win and regressed clean-run ITL tails; retain 4096.
+    - --max-num-batched-tokens 4096
+    - --enable-chunked-prefill
+    - --scheduling-policy priority
+    - --enable-prefix-caching
+    - --prefix-caching-hash-algo sha256
+    - --kv-cache-dtype fp8
+    # DFlash is intentionally deferred until the base worker passes a live
+    # smoke test; it needs a second checkpoint and a separate cache contract.
+
+# One DGX Spark exposes one GB10, so autoscaling cannot add another local
+# worker. Keep the durable endpoint floor at exactly one aggregate worker.
+planner:
+  enabled: false
+  minEndpoint: 1
+  maxGpuBudget: 1
+
+# The Hub repository is about 99.7 GB. A 128 GiB claim fits the initial
+# snapshot plus cache metadata without relying on the Spark's root filesystem.
+modelCache:
+  name: poolside21nvfp4-gb10-model-cache
+  create: true
+  storage: 128Gi
+  accessModes:
+    - ReadWriteMany
+  mountPath: /model
+  cachePath: /model/.model-express/cache
+  storageClassName: ""
+
+redis:
+  enabled: true
+  name: poolside21nvfp4-gb10-redis
+  dataPvcName: poolside21nvfp4-gb10-redis-data
+  image: redis:7-alpine
+  imagePullPolicy: IfNotPresent
+  storage: 128Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-fast

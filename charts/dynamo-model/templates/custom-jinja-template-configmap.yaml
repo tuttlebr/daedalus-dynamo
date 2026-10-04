@@ -1,0 +1,13 @@
+{{- if .Values.worker.customJinjaTemplate.enabled }}
+{{- $sourceFile := required "worker.customJinjaTemplate.sourceFile is required when enabled" .Values.worker.customJinjaTemplate.sourceFile }}
+{{- $template := required (printf "worker.customJinjaTemplate.sourceFile %q is empty or missing from the chart" $sourceFile) (.Files.Get $sourceFile) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dynamo-model.customJinjaTemplateConfigMapName" . | quote }}
+  labels:
+    {{- include "dynamo-model.labels" . | nindent 4 }}
+data:
+  chat-template.jinja: |-
+    {{- $template | nindent 4 }}
+{{- end }}

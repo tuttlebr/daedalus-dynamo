@@ -1,15 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "type": "object",
-  "required": ["model", "modelCache", "redis", "frontend", "worker", "planner"],
+  "required": ["model", "modelCache", "redis", "frontend", "worker", "planner", "availability"],
   "properties": {
     "model": {
       "type": "object",
-      "required": ["name", "id", "image", "deploymentMode"],
+      "required": ["name", "id", "image", "imagePullPolicy", "backendFramework", "deploymentMode"],
       "properties": {
         "name": { "type": "string", "minLength": 1 },
         "id": { "type": "string", "minLength": 1 },
         "image": { "type": "string", "minLength": 1 },
+        "imagePullPolicy": { "$ref": "#/definitions/imagePullPolicy" },
         "backendFramework": { "type": "string", "enum": ["vllm", "sglang", "trtllm"] },
         "deploymentMode": { "type": "string", "enum": ["direct", "dgdr"] },
         "envFromSecret": { "type": "string", "minLength": 1 }
@@ -19,6 +20,36 @@
       "type": "object",
       "properties": {
         "enabled": { "type": "boolean" },
+        "image": { "type": "string", "minLength": 1 },
+        "imagePullPolicy": { "$ref": "#/definitions/imagePullPolicy" },
+        "maxGpuBudget": { "type": "integer", "minimum": 1 },
+        "minEndpoint": { "type": "integer", "minimum": 0 },
+        "resources": { "$ref": "#/definitions/resourceRequirements" },
+        "dgdr": {
+          "type": "object",
+          "required": ["workload", "hardware"],
+          "properties": {
+            "workload": {
+              "type": "object",
+              "required": ["isl", "osl", "concurrency"],
+              "properties": {
+                "isl": { "type": "integer", "minimum": 1 },
+                "osl": { "type": "integer", "minimum": 1 },
+                "concurrency": { "type": "integer", "minimum": 1, "maximum": 3 }
+              }
+            },
+            "hardware": {
+              "type": "object",
+              "required": ["gpuSku", "totalGpus", "numGpusPerNode", "vramMb"],
+              "properties": {
+                "gpuSku": { "type": "string", "minLength": 1 },
+                "totalGpus": { "type": "integer", "minimum": 1 },
+                "numGpusPerNode": { "type": "integer", "minimum": 1 },
+                "vramMb": { "type": "integer", "minimum": 1 }
+              }
+            }
+          }
+        },
         "workerNamespaceCompat": { "type": "string", "enum": ["legacy", "hashed", "off"] },
         "compatHook": {
           "type": "object",
@@ -33,8 +64,25 @@
     "modelexpress": {
       "type": "object",
       "properties": {
+        "imagePullPolicy": { "$ref": "#/definitions/imagePullPolicy" },
+        "resources": { "$ref": "#/definitions/resourceRequirements" },
         "resetRegistryOnStart": { "type": "boolean" },
         "waitForCacheReady": { "type": "boolean" }
+      }
+    },
+    "redis": {
+      "type": "object",
+      "properties": {
+        "imagePullPolicy": { "$ref": "#/definitions/imagePullPolicy" },
+        "resources": { "$ref": "#/definitions/resourceRequirements" },
+        "podDisruptionBudget": {
+          "type": "object",
+          "required": ["enabled", "minAvailable"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "minAvailable": { "type": "integer", "minimum": 1 }
+          }
+        }
       }
     },
     "worker": {
@@ -50,8 +98,11 @@
           "type": "object",
           "additionalProperties": { "type": "string" }
         },
+        "cpuRequest": { "type": "string", "minLength": 1 },
+        "cpuLimit": { "type": "string" },
         "memoryRequest": { "type": "string" },
         "memoryLimit": { "type": "string" },
+        "sharedMemorySize": { "$ref": "#/definitions/quantity" },
         "workingDir": { "type": "string" },
         "scalingAdapter": {
           "type": "object",
@@ -77,6 +128,15 @@
         "securityContext": { "type": "object" },
         "applyVllmModelOptLmHeadPatch": {
           "type": "boolean"
+        },
+        "customJinjaTemplate": {
+          "type": "object",
+          "required": ["enabled", "sourceFile", "mountPath"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "sourceFile": { "type": "string" },
+            "mountPath": { "type": "string" }
+          }
         },
         "nofileLimit": {
           "type": "string",
@@ -113,14 +173,57 @@
     "frontend": {
       "type": "object",
       "properties": {
+        "replicas": { "type": "integer", "minimum": 1 },
+        "extraArgs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "resources": { "$ref": "#/definitions/resourceRequirements" },
         "nofileLimit": {
           "type": "string",
           "pattern": "^[1-9][0-9]{4,}$"
         }
       }
+    },
+    "availability": {
+      "type": "object",
+      "required": ["podDisruptionBudgets"],
+      "properties": {
+        "podDisruptionBudgets": {
+          "type": "object",
+          "required": ["enabled", "frontendMinAvailable", "workerMinAvailable"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "frontendMinAvailable": { "type": "integer", "minimum": 1 },
+            "workerMinAvailable": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
     }
   },
   "definitions": {
+    "imagePullPolicy": {
+      "type": "string",
+      "enum": ["Always", "IfNotPresent", "Never"]
+    },
+    "quantity": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "number", "minimum": 0 }
+      ]
+    },
+    "resourceList": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/quantity" }
+    },
+    "resourceRequirements": {
+      "type": "object",
+      "required": ["requests", "limits"],
+      "properties": {
+        "requests": { "$ref": "#/definitions/resourceList" },
+        "limits": { "$ref": "#/definitions/resourceList" }
+      }
+    },
     "gpuMemoryBoundary": {
       "description": "A GPU memory boundary in MiB; an empty string disables the boundary.",
       "oneOf": [

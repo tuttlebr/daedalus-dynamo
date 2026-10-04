@@ -16,6 +16,10 @@ app.kubernetes.io/part-of: {{ .Values.app.partOf | quote }}
 app.kubernetes.io/name: {{ required "redis.name is required" .Values.redis.name | quote }}
 {{- end -}}
 
+{{- define "dynamo-model.customJinjaTemplateConfigMapName" -}}
+{{- printf "%s-custom-jinja-template" (include "dynamo-model.name" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
 {{- define "dynamo-model.plannerLegacyNamespacePatch" -}}
 import runpy
 from dynamo.planner.connectors.kubernetes import KubernetesConnector

@@ -35,6 +35,8 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 1800
             failureThreshold: 60
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
           env:
             - name: HF_HUB_CACHE
               value: {{ .Values.modelCache.cachePath | quote }}
@@ -75,6 +77,9 @@ spec:
               --active-decode-blocks-threshold "None" \
               --active-prefill-tokens-threshold "None" \
               --active-prefill-tokens-threshold-frac "None" \
+              {{- range .Values.frontend.extraArgs }}
+              {{ . | replace "'" "'\"'\"'" | squote }} \
+              {{- end }}
               --router-track-output-blocks
     {{- if .Values.modelexpress.enabled }}
     ModelExpress:
@@ -102,6 +107,8 @@ spec:
         mainContainer:
           image: {{ .Values.modelexpress.image | quote }}
           imagePullPolicy: {{ .Values.modelexpress.imagePullPolicy }}
+          resources:
+            {{- toYaml .Values.modelexpress.resources | nindent 12 }}
           env:
             - name: MODEL_EXPRESS_SERVER_PORT
               value: {{ .Values.modelexpress.port | quote }}
@@ -269,11 +276,17 @@ spec:
       resources:
         limits:
           gpu: {{ .Values.worker.gpu | quote }}
+          {{- if .Values.worker.cpuLimit }}
+          cpu: {{ .Values.worker.cpuLimit | quote }}
+          {{- end }}
           {{- if .Values.worker.memoryLimit }}
           memory: {{ .Values.worker.memoryLimit | quote }}
           {{- end }}
         requests:
           gpu: {{ .Values.worker.gpu | quote }}
+          {{- if .Values.worker.cpuRequest }}
+          cpu: {{ .Values.worker.cpuRequest | quote }}
+          {{- end }}
           {{- if .Values.worker.memoryRequest }}
           memory: {{ .Values.worker.memoryRequest | quote }}
           {{- end }}
@@ -297,6 +310,15 @@ spec:
       sharedMemory:
         size: {{ .Values.worker.sharedMemorySize | quote }}
       extraPodSpec:
+        {{- if .Values.worker.customJinjaTemplate.enabled }}
+        volumes:
+          - name: custom-jinja-template
+            configMap:
+              name: {{ include "dynamo-model.customJinjaTemplateConfigMapName" . | quote }}
+              items:
+                - key: chat-template.jinja
+                  path: chat-template.jinja
+        {{- end }}
         {{- with .Values.worker.nodeSelector }}
         nodeSelector:
           {{- toYaml . | nindent 10 }}
@@ -324,6 +346,13 @@ spec:
         mainContainer:
           image: {{ .Values.model.image | quote }}
           imagePullPolicy: {{ .Values.model.imagePullPolicy }}
+          {{- if .Values.worker.customJinjaTemplate.enabled }}
+          volumeMounts:
+            - name: custom-jinja-template
+              mountPath: {{ required "worker.customJinjaTemplate.mountPath is required when enabled" .Values.worker.customJinjaTemplate.mountPath | quote }}
+              subPath: chat-template.jinja
+              readOnly: true
+          {{- end }}
           {{- if .Values.worker.workingDir }}
           workingDir: {{ .Values.worker.workingDir | quote }}
           {{- end }}

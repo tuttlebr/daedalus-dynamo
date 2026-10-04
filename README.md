@@ -10,7 +10,7 @@ and uninstalling releases from model config paths.
 | `values/glm47flash.yaml` | `unsloth/GLM-4.7-Flash-NVFP4` | vLLM |
 | `values/nemotron-omni.yaml` | `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4` | vLLM |
 | `values/qwen35b.yaml` | `nvidia/Qwen3.6-35B-A3B-NVFP4` | vLLM |
-| `values/qwen27b.yaml` | `nvidia/Qwen3.6-27B-NVFP4` | vLLM |
+| `values/qwen27b.yaml` | `Qwen/Qwen3.8-27B-FP8` | vLLM |
 | `values/gemma431b.yaml` | `nvidia/Gemma-4-31B-IT-NVFP4` | vLLM |
 | `values/nemotronnano.yaml` | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-Reasoning-NVFP4` | vLLM |
 | `values/nemotron35lightning-gb10.yaml` | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4` | TensorRT-LLM |
@@ -59,8 +59,8 @@ in the shell for later `make` commands because every gateway apply reconciles
 the image stored in `AgentgatewayParameters`:
 
 ```bash
-export GATEWAY_IMAGE=registry.example.com/daedalus/agentgateway:v1.3.1
-export IMAGE=registry.example.com/daedalus/dynamo-vllm-runtime:1.3.0
+export GATEWAY_IMAGE=registry.example.com/daedalus/agentgateway:v1.4.1
+export IMAGE=registry.example.com/daedalus/dynamo-vllm-runtime:1.4.1
 docker login registry.example.com
 ```
 
@@ -101,7 +101,9 @@ make doctor
 
 The Helm model chart owns model-local resources: model cache PVC, Redis, direct
 `DynamoGraphDeployment` or `DynamoGraphDeploymentRequest`, Planner runtime
-compatibility settings, and optional PodMonitor. The Makefile deploy flow also
+compatibility settings, PodDisruptionBudgets, and optional PodMonitor. Each
+values file is an independently selected alternative; the sizing does not
+assume that every model is deployed together. The Makefile deploy flow also
 applies the shared `inference-gateway`, model-header policy, `/v1/models`
 catalog, and the selected model's HTTPRoute.
 
@@ -306,6 +308,46 @@ refreshes the catalog. Chart-managed PVCs are annotated with
 `helm.sh/resource-policy: keep`, so model cache and Redis data claims remain
 after Helm uninstall.
 
+## Agentic Gateway Performance Evaluation
+
+Run the pinned multi-turn AIPerf workload against every model currently
+advertised by the in-cluster gateway:
+
+```bash
+make benchmark-agentic-render
+make benchmark-agentic
+```
+
+The render target is local and read-only. The live target verifies
+`EXPECTED_CONTEXT`, builds and pushes `AIPERF_IMAGE`, then creates one
+non-retrying Job in `NAMESPACE`. The Job discovers models from
+`http://inference-gateway.<namespace>.svc.cluster.local:32359/v1/models`; the
+model list is not derived from checked-in values files.
+
+When the benchmark completes or fails, its container waits for the target to
+copy its run into
+`artifacts/aiperf/<run-id>/workload/`. The adjacent `kubernetes/` directory
+retains the submitted Job, runtime Job and Pod records, logs, repository state,
+and workload checksums. The Job is deleted only after the workload artifacts
+are local; it is retained until its deadline when copying fails. The ephemeral
+evidence can be lost if the deadline expires or the pod is evicted. `artifacts/` is ignored by Git so
+benchmark evidence remains available for local review without entering a
+commit.
+
+Reuse an image that is already available to the cluster with:
+
+```bash
+AIPERF_SKIP_BUILD=1 AIPERF_SKIP_PUSH=1 \
+  AIPERF_IMAGE=registry.example.com/daedalus/aiperf:0.11.0 \
+  make benchmark-agentic
+```
+
+The default workload is eight six-turn agentic sessions at concurrency three,
+or 48 requests per advertised model. It is live load, and its results describe
+client-observed performance for that frozen workload only. See
+[`benchmarks/aiperf/README.md`](./benchmarks/aiperf/README.md) for workload,
+artifact, authentication, and interpretation details.
+
 ## Scheduling Recovery After Node Reboots
 
 Grove-managed model pods use gang scheduling. A GPU pod can enter the terminal
@@ -325,11 +367,13 @@ make scheduling-resilience
 The command is guarded to the expected Kubernetes context, upgrades Dynamo
 and Grove together to the compatible `1.4.0` / `v0.1.0-alpha.12-rc1` pair,
 reconciles Grove CRDs, and verifies the NVIDIA device plugin before making
-changes. It also applies the worker's existing `nvidia.com/gpu=true:NoSchedule`
-toleration as a reservation taint on GB10 nodes. Conflicting Deployment-owned
-GPU pods are moved to general GPU capacity so they cannot claim the GB10 while
-the model is recovering. After the device plugin is healthy, the command also
-removes terminal `UnexpectedAdmissionError` pod records owned by restartable
+changes. When a GPU worker explicitly selects the GB10 product label, it also
+applies the worker's existing `nvidia.com/gpu=true:NoSchedule` toleration as a
+reservation taint on GB10 nodes. Conflicting Deployment-owned GPU pods are
+moved to general GPU capacity so they cannot claim the GB10 while the model is
+recovering. Workloads that use general GPU affinity instead skip that optional
+reservation step. After the device plugin is healthy, the command also removes
+terminal `UnexpectedAdmissionError` pod records owned by restartable
 controllers across the cluster. It preserves NATS and the externally managed
 KAI scheduler. Override the guard or recovery window only when needed:
 
@@ -422,6 +466,11 @@ BASE_IMAGE=nvcr.io/nvidia/ai-dynamo/vllm-runtime-nightly:latest \
 Model-specific settings live in [`values/`](./values). Shared defaults live in
 [`charts/dynamo-model/values.yaml`](./charts/dynamo-model/values.yaml).
 
+The model files are independent deployment alternatives, not a bundle to run
+simultaneously. The vLLM alternatives target the L40S pool and cap Planner at
+the two GPUs currently left available by the retriever workloads. The GB10
+alternative is pinned to its single product-labeled GPU and does not autoscale.
+
 Configuration is resolved in this order:
 
 1. Shared chart defaults in `charts/dynamo-model/values.yaml`.
@@ -489,8 +538,8 @@ Useful Makefile variables:
 | `SKIP_SECRET` | `0` | Skip HF token secret check/update during `make deploy`. |
 | `GATEWAY` | `1` | Apply shared inference gateway resources, model route, and model catalog during `make deploy`. |
 | `INSTALL_GATEWAY` | `0` | Install or upgrade Gateway API, GAIE, and agentgateway before applying gateway resources. |
-| `GATEWAY_IMAGE` | internal `daedalus-agentgateway:v1.3.1` | Hardened agentgateway image built by `make gateway-image`. |
-| `GATEWAY_REPLICAS` | `1` | Static proxy replica floor before HPA reconciliation. |
+| `GATEWAY_IMAGE` | internal `daedalus-agentgateway:v1.4.1` | Hardened agentgateway image built by `make gateway-image`. |
+| `GATEWAY_REPLICAS` | `2` | Static proxy replica floor, aligned with the HPA minimum. |
 | `GATEWAY_NOFILE_LIMIT` | `131072` | Verified proxy `RLIMIT_NOFILE` soft limit. |
 | `GATEWAY_HPA_MIN_REPLICAS` / `GATEWAY_HPA_MAX_REPLICAS` | `2` / `8` | Proxy HPA range. |
 | `GATEWAY_POOL_MAX_SIZE` | `64` | Maximum idle upstream connections retained per host. |
@@ -498,9 +547,10 @@ Useful Makefile variables:
 | `HF_TOKEN_SECRET` | `hf-token-secret` | Secret referenced by Dynamo services. |
 | `HELM_ARGS` | unset | Extra args for lint, render, dry-run, and upgrade. |
 
-`planner.workerNamespaceCompat=legacy` is the chart default. It keeps Planner
-forward-pass metric discovery on the base worker namespace used by the current
-operator/runtime stack. Set it to `hashed` only when the worker runtime actually
+`planner.workerNamespaceCompat=off` is the chart default for the installed
+Planner 1.4.0 stack, which performs normal Grove worker namespace discovery.
+Use `legacy` only with an older stack that requires the chart's base-namespace
+compatibility wrapper. Set `hashed` only when the worker runtime actually
 publishes metadata under the DGD worker-hash namespace.
 
 ## Developer Notes

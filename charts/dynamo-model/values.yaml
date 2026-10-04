@@ -5,7 +5,7 @@ model:
   name: example-vllm-agg
   id: nvidia/example-model
   image: example.com/dynamo-model:latest
-  imagePullPolicy: Always
+  imagePullPolicy: IfNotPresent
   backendFramework: vllm
   deploymentMode: direct
   envFromSecret: hf-token-secret
@@ -25,31 +25,42 @@ redis:
   name: dynamo-redis
   dataPvcName: dynamo-redis-data
   image: redis:7-alpine
-  imagePullPolicy: Always
+  imagePullPolicy: IfNotPresent
   storage: 256Gi
   accessModes:
-    - ReadWriteMany
-  storageClassName: ""
+    - ReadWriteOnce
+  storageClassName: local-fast
   resources:
     requests:
-      cpu: 500m
-      memory: 2Gi
+      cpu: 50m
+      memory: 64Mi
     limits:
-      cpu: "1"
-      memory: 4Gi
+      cpu: 500m
+      memory: 256Mi
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
 
 modelexpress:
   enabled: true
   image: nvcr.io/nvidia/ai-dynamo/modelexpress-server:0.4.1
-  imagePullPolicy: Always
+  imagePullPolicy: IfNotPresent
   port: 8000
   logLevel: info
   metadataBackend: redis
   downloadStrategy: server-only
   resetRegistryOnStart: true
   waitForCacheReady: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 1536Mi
+    limits:
+      cpu: "2"
+      memory: 4Gi
 
 frontend:
+  # Start each model release with one CPU-only frontend.
   replicas: 1
   # Optional Kubernetes nodeSelector for the CPU-only frontend. This is useful
   # when the shared runtime image should reuse layers on a model worker node.
@@ -63,6 +74,16 @@ frontend:
   queuePolicy: wspt
   routerMode: kv
   minInitialWorkers: 1
+  # Additional frontend CLI arguments for direct deployments. Each list item
+  # is one literal argv token, including values that contain spaces or JSON.
+  extraArgs: []
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
 
 worker:
   componentName: VllmWorker
@@ -70,13 +91,15 @@ worker:
   scalingAdapter:
     enabled: true
   gpu: "1"
-  memoryRequest: ""
+  cpuRequest: "2"
+  cpuLimit: ""
+  memoryRequest: 8Gi
   memoryLimit: ""
   httpBodyLimitMb: "400"
   requestPlane: tcp
   eventPlane: zmq
   nofileLimit: "131072"
-  sharedMemorySize: 64Gi
+  sharedMemorySize: 16Gi
   ucxNetDevices: eth0
   ucxTls: tcp,cuda_copy,cuda_ipc
   nodeGpuMemoryGt: "40959"
@@ -95,6 +118,10 @@ worker:
   # Temporary vLLM 0.22.0 backport of upstream PR #42124. Enable only for
   # ModelOpt checkpoints whose separately quantized lm_head needs that fix.
   applyVllmModelOptLmHeadPatch: false
+  customJinjaTemplate:
+    enabled: false
+    sourceFile: ""
+    mountPath: ""
   extraEnv: []
   vllmArgs:
     - --served-model-name "${MODEL_NAME}"
@@ -116,8 +143,8 @@ worker:
 
 planner:
   enabled: true
-  image: nvcr.io/nvidia/ai-dynamo/dynamo-planner:1.3.0
-  imagePullPolicy: Always
+  image: nvcr.io/nvidia/ai-dynamo/dynamo-planner:1.4.0
+  imagePullPolicy: IfNotPresent
   environment: kubernetes
   mode: agg
   optimizationTarget: load
@@ -127,7 +154,7 @@ planner:
   throughputAdjustmentIntervalSeconds: 120
   loadAdjustmentIntervalSeconds: 5
   throughputMetricsSource: frontend
-  maxGpuBudget: 4
+  maxGpuBudget: 2
   minEndpoint: 1
   ttftMs: 1500.0
   itlMs: 75.0
@@ -137,21 +164,23 @@ planner:
   prometheusEndpoint: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
   prometheusPort: "0"
   eventPlane: zmq
-  workerNamespaceCompat: legacy
+  workerNamespaceCompat: "off"
   resources:
     requests:
-      cpu: 500m
-      memory: 1Gi
+      cpu: 100m
+      memory: 384Mi
     limits:
-      cpu: "2"
-      memory: 4Gi
+      cpu: "1"
+      memory: 1Gi
   dgdr:
     searchStrategy: thorough
     autoApply: true
     workload:
+      # Planning proxy only. ISL/OSL require a representative trace before a
+      # DGDR result can be treated as performance-qualified.
       isl: 4096
       osl: 512
-      concurrency: 2
+      concurrency: 3
     hardware:
       gpuSku: l40s
       totalGpus: 4
@@ -170,3 +199,9 @@ metrics:
     namespace: dynamo-system
     partOf: daedalus-dynamo-demo
     interval: 5s
+
+availability:
+  podDisruptionBudgets:
+    enabled: true
+    frontendMinAvailable: 1
+    workerMinAvailable: 1

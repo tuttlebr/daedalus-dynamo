@@ -18,6 +18,8 @@ __pycache__/
 *.py[cod]
 /rendered*.yaml
 /artifacts/
+/runs/*
+!/runs/.gitkeep
 **/routing-workbench/target/
 routing-workbench/target/
 *.safetensors

@@ -1,0 +1,27 @@
+{{- if .Values.availability.podDisruptionBudgets.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ printf "%s-frontend" (include "dynamo-model.name" .) | trunc 63 | trimSuffix "-" | quote }}
+  labels:
+    {{- include "dynamo-model.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.availability.podDisruptionBudgets.frontendMinAvailable }}
+  selector:
+    matchLabels:
+      nvidia.com/dynamo-graph-deployment-name: {{ include "dynamo-model.name" . | quote }}
+      nvidia.com/dynamo-component: Frontend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ printf "%s-worker" (include "dynamo-model.name" .) | trunc 63 | trimSuffix "-" | quote }}
+  labels:
+    {{- include "dynamo-model.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.availability.podDisruptionBudgets.workerMinAvailable }}
+  selector:
+    matchLabels:
+      nvidia.com/dynamo-graph-deployment-name: {{ include "dynamo-model.name" . | quote }}
+      nvidia.com/dynamo-component: {{ .Values.worker.componentName | quote }}
+{{- end }}

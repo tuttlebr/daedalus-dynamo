@@ -1,0 +1,16 @@
+{
+  "spec": {
+    "template": {
+      "spec": {
+        "initContainers": [
+          {
+            "name": "crd-installer",
+            "resources": {
+              "requests": {"cpu": "100m", "memory": "128Mi"}
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,4 +1,4 @@
-ARG BASE_IMAGE="nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.3.1"
+ARG BASE_IMAGE="nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1"
 
 FROM ${BASE_IMAGE}
 USER root

@@ -13,13 +13,63 @@ The frozen workload models an agentic conversation with four prefix layers:
    before sending the next user turn.
 
 The default run replays eight sessions with the generator's bounded agentic
-inter-turn schedule, a concurrency cap of four, and exactly 48 requests per
+inter-turn schedule, a concurrency cap of three, and exactly 48 requests per
 model. Every session sends `X-Dynamo-Session-ID`, and its HTTP connection is
 reused across turns. The generator uses AIPerf 0.11.0's fixed 512-token
 Mooncake block size so the generated hash IDs and trace loader reconstruct the
 same shared prompt blocks. AIPerf 0.11.0 rejects block-size overrides for file
 datasets, so the runner fails early if a custom agentic config uses any other
 block size.
+
+## Run as a Kubernetes Job
+
+From the repository root, inspect the exact Job without changing the cluster:
+
+```bash
+make benchmark-agentic-render
+```
+
+Run the all-model evaluation in the configured `NAMESPACE`:
+
+```bash
+make benchmark-agentic
+```
+
+The Make target checks `EXPECTED_CONTEXT` and the in-cluster gateway Service
+before building or sending traffic. It builds and pushes the pinned client
+image, creates a Job with `backoffLimit: 0`, and uses the Service FQDN rather
+than host DNS. The Job uses ephemeral storage. When the benchmark exits, its
+container stays running while the target copies the run back to:
+
+```text
+artifacts/aiperf/<run-id>/
+├── workload/       # AIPerf dataset, manifest, per-model records, and summary
+└── kubernetes/     # submitted/runtime objects, logs, checksums, orchestration summary
+```
+
+The Job is deleted only after `workload/run-manifest.json` is local. A failed
+benchmark still copies its available evidence and returns a nonzero Make exit.
+After copying, the target releases the container with its benchmark exit code.
+If copying fails, the Job stays available for manual recovery until its active
+deadline. A deadline, eviction, or node loss can destroy the ephemeral evidence.
+Set
+`AIPERF_KEEP_JOB=1` to retain it after a successful copy.
+
+By default, `make benchmark-agentic` builds and pushes `AIPERF_IMAGE`. Reuse an
+already published image with `AIPERF_SKIP_BUILD=1 AIPERF_SKIP_PUSH=1`. Private
+gateway credentials can be referenced without rendering their value:
+
+```bash
+AIPERF_API_KEY_SECRET=gateway-benchmark-key \
+  make benchmark-agentic
+```
+
+The Secret must contain `OPENAI_API_KEY`, or set
+`AIPERF_API_KEY_SECRET_KEY` to another key. Useful bounded-workload overrides
+include `AIPERF_TURNS`, `AIPERF_DATASET_SESSIONS`, `AIPERF_CONCURRENCY`,
+`AIPERF_MODEL_TIMEOUT_SECONDS`, and `AIPERF_ACTIVE_DEADLINE_SECONDS`.
+`AIPERF_MODELS` remains available for a deliberate focused run; leave it empty
+to evaluate every model returned by `/v1/models`.
 
 ## Build and inspect
 
@@ -93,6 +143,12 @@ DATASET_SESSIONS=16 TURNS=8 CONCURRENCY=8 \
   docker compose -f benchmarks/aiperf/docker-compose.yaml run --rm aiperf
 ```
 
+The checked-in default concurrency of three models the current maximum of one
+active turn from each of the two people and the autonomous bot. A higher value
+is a deliberate stress test, not an SLA-representative run. The eight generated
+sessions and their token shape remain a recipe proxy until replaced by a
+Daedalus trace.
+
 Set `MODELS` to a comma-separated list for a focused run. Discovery remains the
 default because it is the only way to cover every model currently advertised by
 the gateway.
@@ -103,6 +159,37 @@ but avoids the output-length drift produced by AIPerf's generic `builtin`
 tokenizer. Set `TOKENIZER=builtin` only as an approximate offline fallback. Set
 `USE_SERVER_TOKEN_COUNT=1` only after confirming that all gateway responses
 contain consistent usage fields.
+
+## GPU telemetry
+
+Each model profile passes `--gpu-telemetry 192.168.1.235:32400/metrics` by
+default. Set `GPU_TELEMETRY` to another DCGM exporter endpoint, or set it to an
+empty string to pass `--no-gpu-telemetry` and disable collection entirely:
+
+```bash
+GPU_TELEMETRY=192.168.1.235:9400/metrics ./benchmarks/aiperf/run-model-benchmarks.sh
+GPU_TELEMETRY= ./benchmarks/aiperf/run-model-benchmarks.sh
+```
+
+Compose forwards the same variable. Rebuild the image after changing the
+script, which is copied into the image during the build:
+
+```bash
+docker compose -f benchmarks/aiperf/docker-compose.yaml build aiperf
+GPU_TELEMETRY= docker compose -f benchmarks/aiperf/docker-compose.yaml run --rm aiperf
+```
+
+The runner records the configured endpoint in `run-manifest.json` (null when
+disabled). AIPerf writes collected samples to each model's
+`gpu_telemetry_export.jsonl` and summaries under `telemetry_data` in
+`profile_export_aiperf.json`. The runner uses `--ui none`, so there is no live
+telemetry dashboard.
+
+The default NodePort Service load-balances across DCGM exporter pods; its node
+IP does not select that node's GPUs. A scrape can therefore capture another
+workload's GPU. Check the exported `hostname` and `pod_name` before attributing
+telemetry to the benchmarked model, and use a dedicated exporter endpoint when
+measuring a specific worker.
 
 ## Dynamo KV-cache telemetry
 

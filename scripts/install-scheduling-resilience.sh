@@ -14,10 +14,16 @@ GROVE_NAMESPACE="${GROVE_NAMESPACE:-grove-system}"
 GROVE_RELEASE="${GROVE_RELEASE:-grove}"
 GROVE_MIN_VERSION="${GROVE_VERSION:-v0.1.0-alpha.12-rc1}"
 GROVE_CHART="${GROVE_CHART:-oci://ghcr.io/ai-dynamo/grove/grove-charts}"
+GROVE_RESOURCE_VALUES="${GROVE_RESOURCE_VALUES:-config/grove-resources.yaml}"
+GROVE_INIT_RESOURCE_PATCH="${GROVE_INIT_RESOURCE_PATCH:-config/grove-init-resources.patch.json}"
 DYNAMO_PLATFORM_NAMESPACE="${DYNAMO_PLATFORM_NAMESPACE:-dynamo-system}"
 DYNAMO_PLATFORM_RELEASE="${DYNAMO_PLATFORM_RELEASE:-dynamo-platform}"
 DYNAMO_PLATFORM_MIN_VERSION="${DYNAMO_PLATFORM_VERSION:-1.4.0}"
 DYNAMO_PLATFORM_CHART_BASE_URL="${DYNAMO_PLATFORM_CHART_BASE_URL:-https://helm.ngc.nvidia.com/nvidia/ai-dynamo/charts}"
+PLATFORM_STORAGE_VALUES="${PLATFORM_STORAGE_VALUES:-config/dynamo-platform-storage.yaml}"
+PLATFORM_INIT_RESOURCE_PATCH="${PLATFORM_INIT_RESOURCE_PATCH:-config/dynamo-platform-init-resources.patch.json}"
+LWS_NAMESPACE="${LWS_NAMESPACE:-lws-system}"
+LWS_RESOURCE_PATCH="${LWS_RESOURCE_PATCH:-config/lws-resources.patch.json}"
 GROVE_TERMINATION_DELAY="${GROVE_TERMINATION_DELAY:-15m}"
 HELM_TIMEOUT="${HELM_TIMEOUT:-15m}"
 RECOVERY_TIMEOUT="${SCHEDULING_RECOVERY_TIMEOUT:-45m}"
@@ -80,6 +86,43 @@ else:
 version_at_least() {
   local current="${1#v}" minimum="${2#v}"
   [[ "$(printf '%s\n%s\n' "${minimum}" "${current}" | sort -V | head -1)" == "${minimum}" ]]
+}
+
+apply_deployment_resource_patch() {
+  local namespace="$1" deployment="$2" patch_file="$3" patch
+  # These upstream installers do not expose the affected resources as values.
+  # Validate names before a strategic patch can accidentally append a container.
+  patch="$(
+    "${KUBECTL}" --context "${EXPECTED_CONTEXT}" get deployment "${deployment}" \
+      --namespace "${namespace}" --output json |
+      "${PYTHON}" -c '
+import json
+import sys
+
+current = json.load(sys.stdin)
+with open(sys.argv[1], encoding="utf-8") as patch_file:
+    patch = json.load(patch_file)
+pod = current["spec"]["template"]["spec"]
+for group in ("containers", "initContainers"):
+    existing = {container["name"] for container in pod.get(group, [])}
+    for container in patch["spec"]["template"]["spec"].get(group, []):
+        name = container["name"]
+        if name not in existing:
+            raise SystemExit(
+                f"refusing resource patch: {group} {name} is absent"
+            )
+patch["metadata"] = {"resourceVersion": current["metadata"]["resourceVersion"]}
+print(json.dumps(patch))
+' "${patch_file}"
+  )"
+  echo "==> Applying resource requests to ${namespace}/${deployment}"
+  "${KUBECTL}" --context "${EXPECTED_CONTEXT}" patch deployment "${deployment}" \
+    --namespace "${namespace}" --type=strategic --patch "${patch}" \
+    --dry-run=server --output name >/dev/null
+  "${KUBECTL}" --context "${EXPECTED_CONTEXT}" patch deployment "${deployment}" \
+    --namespace "${namespace}" --type=strategic --patch "${patch}"
+  "${KUBECTL}" --context "${EXPECTED_CONTEXT}" rollout status "deployment/${deployment}" \
+    --namespace "${namespace}" --timeout="${HELM_TIMEOUT}"
 }
 
 prepare_grove_topology_crd_migration() {
@@ -208,9 +251,6 @@ for pod in json.load(sys.stdin)["items"]:
     )
     if not tolerates:
         missing.append(name)
-if not matched:
-    print(f"ERROR: no GPU worker selects nvidia.com/gpu.product={product}", file=sys.stderr)
-    raise SystemExit(1)
 if missing:
     print(
         "ERROR: dedicated GPU worker(s) lack the reservation toleration: "
@@ -326,6 +366,10 @@ resolve_conflicting_deployments() {
 reserve_dedicated_gpu_nodes() {
   local worker_pods node_lines node_csv deployments namespace deployment
   worker_pods="$(verify_dedicated_worker_tolerations)"
+  if [[ -z "${worker_pods}" ]]; then
+    echo "==> No GPU worker selects nvidia.com/gpu.product=${DEDICATED_GPU_PRODUCT}; skipping dedicated-node reservation"
+    return 0
+  fi
   node_lines="$(dedicated_gpu_nodes)"
   if [[ -z "${node_lines}" ]]; then
     echo "ERROR: no node exposes nvidia.com/gpu.product=${DEDICATED_GPU_PRODUCT}." >&2
@@ -610,6 +654,20 @@ wait_for_recovery() {
 for command in "${KUBECTL}" "${HELM}" "${CURL}" "${PYTHON}" realpath sort; do
   require_command "${command}"
 done
+if [[ ! -f "${PLATFORM_STORAGE_VALUES}" ]]; then
+  echo "ERROR: Dynamo platform storage values not found: ${PLATFORM_STORAGE_VALUES}" >&2
+  exit 2
+fi
+if [[ ! -f "${GROVE_RESOURCE_VALUES}" ]]; then
+  echo "ERROR: Grove resource values not found: ${GROVE_RESOURCE_VALUES}" >&2
+  exit 2
+fi
+for patch_file in "${GROVE_INIT_RESOURCE_PATCH}" "${PLATFORM_INIT_RESOURCE_PATCH}" "${LWS_RESOURCE_PATCH}"; do
+  if [[ ! -f "${patch_file}" ]]; then
+    echo "ERROR: controller resource patch not found: ${patch_file}" >&2
+    exit 2
+  fi
+done
 
 current_context="$("${KUBECTL}" config current-context)"
 if [[ "${current_context}" != "${EXPECTED_CONTEXT}" ]]; then
@@ -646,8 +704,12 @@ if [[ "${MODE}" == "check" ]]; then
     --namespace "${GROVE_NAMESPACE}" --timeout=30s >/dev/null
   "${KUBECTL}" rollout status deployment/dynamo-platform-dynamo-operator-controller-manager \
     --namespace "${DYNAMO_PLATFORM_NAMESPACE}" --timeout=30s >/dev/null
-  verify_dedicated_worker_tolerations >/dev/null
-  dedicated_gpu_taints_ready >/dev/null
+  dedicated_workers="$(verify_dedicated_worker_tolerations)"
+  if [[ -n "${dedicated_workers}" ]]; then
+    dedicated_gpu_taints_ready >/dev/null
+  else
+    echo "==> Dedicated ${DEDICATED_GPU_PRODUCT} reservation is not used by the current workload"
+  fi
   stale="$(stale_grove_pods)"
   if [[ -n "${stale}" ]]; then
     echo "ERROR: pod(s) still carry pre-upgrade Grove template hashes:" >&2
@@ -704,6 +766,7 @@ grove_args=(
   --namespace "${GROVE_NAMESPACE}"
   --version "${target_grove_version}"
   --reset-then-reuse-values
+  --values "${GROVE_RESOURCE_VALUES}"
   --set crdInstaller.enabled=true
   --set priorityClass.enabled=true
   --set config.server.healthProbes.enable=true
@@ -713,6 +776,7 @@ platform_args=(
   upgrade "${DYNAMO_PLATFORM_RELEASE}" "${platform_chart}"
   --namespace "${DYNAMO_PLATFORM_NAMESPACE}"
   --reset-then-reuse-values
+  --values "${PLATFORM_STORAGE_VALUES}"
   --set global.grove.enabled=true
   --set global.kai-scheduler.enabled=true
   --set global.nats.install=true
@@ -730,14 +794,21 @@ reserve_dedicated_gpu_nodes
 echo "==> Upgrading Grove to ${target_grove_version} with CRD reconciliation, priority, and health probes"
 "${HELM}" "${grove_args[@]}" \
   --atomic --cleanup-on-fail --wait --timeout "${HELM_TIMEOUT}"
-"${KUBECTL}" rollout status deployment/grove-operator \
-  --namespace "${GROVE_NAMESPACE}" --timeout="${HELM_TIMEOUT}"
+apply_deployment_resource_patch "${GROVE_NAMESPACE}" grove-operator "${GROVE_INIT_RESOURCE_PATCH}"
 
 echo "==> Upgrading Dynamo to ${target_platform_version} and setting Grove termination delay ${GROVE_TERMINATION_DELAY}"
 "${HELM}" "${platform_args[@]}" \
   --atomic --cleanup-on-fail --wait --timeout "${HELM_TIMEOUT}"
-"${KUBECTL}" rollout status deployment/dynamo-platform-dynamo-operator-controller-manager \
-  --namespace "${DYNAMO_PLATFORM_NAMESPACE}" --timeout="${HELM_TIMEOUT}"
+apply_deployment_resource_patch "${DYNAMO_PLATFORM_NAMESPACE}" \
+  dynamo-platform-dynamo-operator-controller-manager "${PLATFORM_INIT_RESOURCE_PATCH}"
+
+# LWS can be installed separately from the platform chart. Preserve its local
+# requests and architecture placement whenever this maintenance path runs.
+lws_deployment="$("${KUBECTL}" --context "${EXPECTED_CONTEXT}" get deployment lws-controller-manager \
+  --namespace "${LWS_NAMESPACE}" --ignore-not-found --output name)"
+if [[ -n "${lws_deployment}" ]]; then
+  apply_deployment_resource_patch "${LWS_NAMESPACE}" lws-controller-manager "${LWS_RESOURCE_PATCH}"
+fi
 
 recycle_stale_grove_pods
 cleanup_terminal_admission_pods

@@ -1,0 +1,134 @@
+model:
+  name: qwen35-122b-vllm-agg-gb10
+  id: nvidia/Qwen3.5-122B-A10B-NVFP4
+  # The repository's source-built vLLM image is amd64-only. Use NVIDIA's
+  # multi-architecture Dynamo image so this profile can run on Spark's ARM64
+  # Grace CPU while retaining the Dynamo worker entrypoint.
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1
+  imagePullPolicy: IfNotPresent
+  backendFramework: vllm
+  deploymentMode: direct
+
+frontend:
+  replicas: 1
+
+worker:
+  applyVllmModelOptLmHeadPatch: false
+  replicas: 1
+  scalingAdapter:
+    enabled: false
+  gpu: "1"
+  # The checkpoint contains about 77.7 GiB of tensor data. Request enough host
+  # memory for unified-memory residency and runtime state without consuming all
+  # 121.5 GiB allocatable on the Spark node.
+  memoryRequest: 96Gi
+  sharedMemorySize: 16Gi
+  nodeSelector:
+    nvidia.com/gpu.product: NVIDIA-GB10
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+  workingDir: /workspace/
+  securityContext:
+    runAsUser: 0
+    capabilities:
+      add:
+        - IPC_LOCK
+        - SYS_RESOURCE
+  startupProbe:
+    path: /live
+    periodSeconds: 30
+    timeoutSeconds: 20
+    failureThreshold: 120
+  extraEnv:
+    # Runtime 1.4.1 reports these legacy hints as unknown; the effective
+    # NVFP4 MoE backend is selected by the authoritative CLI argument below.
+    - name: VLLM_NVFP4_GEMM_BACKEND
+      value: marlin
+    - name: VLLM_USE_FLASHINFER_MOE_FP4
+      value: "0"
+    - name: VLLM_FLASHINFER_ALLREDUCE_BACKEND
+      value: trtllm
+    - name: VLLM_ALLREDUCE_USE_SYMM_MEM
+      value: "0"
+    # Qwen3.5 alternates DeltaNet state-space and full-attention layers.
+    - name: VLLM_SSM_CONV_STATE_LAYOUT
+      value: DS
+    - name: VLLM_ALLOW_CHUNKED_LOCAL_ATTN_WITH_HYBRID_KV_CACHE
+      value: "1"
+    - name: VLLM_WORKER_MULTIPROC_METHOD
+      value: spawn
+    - name: TRITON_CACHE_DIR
+      value: /tmp/.triton-cache
+    - name: VLLM_CONFIG_ROOT
+      value: /tmp/vllm-config
+    - name: VLLM_CACHE_ROOT
+      value: /tmp/vllm-cache
+    - name: HF_MODULES_CACHE
+      value: /tmp/hf_modules
+    - name: NCCL_IB_DISABLE
+      value: "1"
+    - name: PYTHONHASHSEED
+      value: "0"
+  vllmArgs:
+    - --quantization modelopt_fp4
+    - --served-model-name "${MODEL_NAME}"
+    # AIPerf retained Marlin: auto-selected FlashInfer CUTLASS regressed ITL.
+    - --moe-backend marlin
+    # Text-only mode skips the 0.84 GiB vision tower and enables vLLM's fused
+    # Qwen3.5 text attention path. Vision inputs are intentionally unsupported.
+    - --language-model-only
+    - --frontend-decoding
+    - --trust-remote-code
+    - --dyn-tool-call-parser qwen3_coder
+    - --dyn-reasoning-parser qwen3
+    - --tensor-parallel-size 1
+    - --pipeline-parallel-size 1
+    - --data-parallel-size 1
+    - --gpu-memory-utilization 0.90
+    # Four active sequences preserve the repository's three-turn concurrency
+    # contract while keeping a conservative first-boot ceiling on one GB10.
+    - --max-num-seqs 4
+    - --max-num-batched-tokens 4096
+    - --enable-chunked-prefill
+    - --scheduling-policy priority
+    - --enable-prefix-caching
+    - --prefix-caching-hash-algo sha256
+    - --block-size 64
+    - --kv-cache-dtype fp8
+    - --mamba-ssm-cache-dtype float16
+    - --no-disable-hybrid-kv-cache-manager
+    # Do not enable MTP for the initial profile. The upstream Qwen3.5 recipe
+    # documents hybrid-cache correctness and crash risks under concurrent
+    # prefix-cache traffic; establish a clean baseline before testing it.
+
+# One Spark exposes one GB10, so autoscaling cannot add another local worker.
+planner:
+  enabled: false
+  minEndpoint: 1
+  maxGpuBudget: 1
+
+# The Hub repository is about 83.5 GB. A 128 GiB PVC leaves room for cache
+# metadata and a replacement snapshot without relying on a nearly-full claim.
+modelCache:
+  name: qwen35-122b-gb10-model-cache
+  create: true
+  storage: 128Gi
+  accessModes:
+    - ReadWriteMany
+  mountPath: /model
+  cachePath: /model/.model-express/cache
+  storageClassName: ""
+
+redis:
+  enabled: true
+  name: qwen35-122b-gb10-redis
+  dataPvcName: qwen35-122b-gb10-redis-data
+  image: redis:7-alpine
+  imagePullPolicy: IfNotPresent
+  storage: 128Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-fast

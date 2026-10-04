@@ -1,10 +1,13 @@
 model:
   name: glm-47-flash-vllm-agg
   id: unsloth/GLM-4.7-Flash-NVFP4
-  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-vllm-runtime:20260717-5930e58
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1
+  imagePullPolicy: IfNotPresent
+  backendFramework: vllm
   deploymentMode: direct
 
 worker:
+  replicas: 1
   # L40S nodes advertise 46068 MiB; the A30 advertises 24576 MiB.
   nodeGpuMemoryGt: "40959"
   extraEnv:
@@ -26,13 +29,12 @@ worker:
     - --scheduling-policy priority
     - --enable-prefix-caching
     - --prefix-caching-hash-algo sha256
-    # Start conservatively on SM89. Enable vLLM MTP only after baseline health.
-    - --max-model-len 32768
 
 # The shared worker/frontend image is about 20 GB. Keep the frontend on
 # an L40S node so it can reuse that shared image without exhausting the smaller
 # ephemeral-storage pool on daedalus-01.
 frontend:
+  replicas: 1
   nodeSelector:
     nvidia.com/gpu.product: NVIDIA-L40S
 
@@ -49,7 +51,7 @@ planner:
   preDeploymentSweepingMode: none
   loadAdjustmentIntervalSeconds: 5
   minEndpoint: 1
-  maxGpuBudget: 4
+  maxGpuBudget: 2
   decodeScaleUpKvRate: 0.25
   decodeScaleDownKvRate: 0.05
   advisory: false
@@ -69,15 +71,8 @@ redis:
   name: glm47flash-redis
   dataPvcName: glm47flash-redis-data
   image: redis:7-alpine
-  imagePullPolicy: Always
+  imagePullPolicy: IfNotPresent
   storage: 64Gi
   accessModes:
-    - ReadWriteMany
-  storageClassName: ""
-  resources:
-    requests:
-      cpu: 500m
-      memory: 2Gi
-    limits:
-      cpu: "1"
-      memory: 4Gi
+    - ReadWriteOnce
+  storageClassName: local-fast

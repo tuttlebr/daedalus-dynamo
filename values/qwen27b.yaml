@@ -1,10 +1,22 @@
 model:
   name: qwen36-27b-vllm-agg
-  id: nvidia/Qwen3.6-27B-NVFP4
-  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-vllm-runtime:20260717-5930e58
+  id: Qwen/Qwen3.8-27B-FP8
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1
+  imagePullPolicy: IfNotPresent
+  backendFramework: vllm
   deploymentMode: direct
 
+frontend:
+  replicas: 1
+
 worker:
+  # The Daedalus agent proxy favored one fixed TP2 endpoint over two TP1
+  # endpoints on fresh latency tails and throughput. Keep PodClique at one
+  # worker and allocate both L40S devices to that worker.
+  replicas: 1
+  scalingAdapter:
+    enabled: false
+  gpu: "2"
   extraEnv:
     - name: DYN_VLLM_EMBEDDING_TRANSFER_MODE
       value: local
@@ -14,7 +26,7 @@ worker:
       value: "1"
   vllmArgs:
     - --load-format mx
-    - --quantization modelopt
+    - --quantization fp8
     - --served-model-name "${MODEL_NAME}"
     - --enable-multimodal
     - --frontend-decoding
@@ -23,7 +35,7 @@ worker:
     - --trust-remote-code
     - --dyn-tool-call-parser qwen3_coder
     - --dyn-reasoning-parser qwen3
-    - --tensor-parallel-size 1
+    - --tensor-parallel-size 2
     - --pipeline-parallel-size 1
     - --data-parallel-size 1
     - --gpu-memory-utilization 0.90
@@ -39,8 +51,8 @@ worker:
 # above its fixed 40% KV threshold. This model's observed frontend backlog is
 # much smaller, so use the tunable load policy as a latency guardrail instead.
 # The two KV thresholds are percentages (not fractions): 0.25 means 0.25%.
-# On an existing DGD, establish this floor through its scaling adapter; the
-# adapter owns live worker replicas after the DGD has been created.
+# This deployment is intentionally fixed-capacity; advisory mode observes the
+# load policy without mutating the single TP2 PodClique worker count.
 planner:
   optimizationTarget: load
   enableThroughputScaling: false
@@ -48,10 +60,10 @@ planner:
   preDeploymentSweepingMode: none
   loadAdjustmentIntervalSeconds: 5
   minEndpoint: 1
-  maxGpuBudget: 4
+  maxGpuBudget: 2
   decodeScaleUpKvRate: 0.25
   decodeScaleDownKvRate: 0.05
-  advisory: false
+  advisory: true
 
 modelCache:
   name: qwen27b-model-cache
@@ -68,15 +80,8 @@ redis:
   name: qwen27b-redis
   dataPvcName: qwen27b-redis-data
   image: redis:7-alpine
-  imagePullPolicy: Always
+  imagePullPolicy: IfNotPresent
   storage: 64Gi
   accessModes:
-    - ReadWriteMany
-  storageClassName: ""
-  resources:
-    requests:
-      cpu: 500m
-      memory: 2Gi
-    limits:
-      cpu: "1"
-      memory: 4Gi
+    - ReadWriteOnce
+  storageClassName: local-fast

@@ -1,10 +1,16 @@
 model:
   name: nemotron-omni-vllm-agg
   id: nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4
-  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-vllm-runtime:20260717-5930e58
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1
+  imagePullPolicy: IfNotPresent
+  backendFramework: vllm
   deploymentMode: direct
 
+frontend:
+  replicas: 1
+
 worker:
+  replicas: 1
   extraEnv:
     - name: DYN_VLLM_EMBEDDING_TRANSFER_MODE
       value: local
@@ -44,7 +50,7 @@ planner:
   preDeploymentSweepingMode: none
   loadAdjustmentIntervalSeconds: 5
   minEndpoint: 1
-  maxGpuBudget: 4
+  maxGpuBudget: 2
   decodeScaleUpKvRate: 0.25
   decodeScaleDownKvRate: 0.05
   advisory: false
@@ -64,15 +70,8 @@ redis:
   name: nemotron-omni-redis
   dataPvcName: nemotron-omni-redis-data
   image: redis:7-alpine
-  imagePullPolicy: Always
+  imagePullPolicy: IfNotPresent
   storage: 64Gi
   accessModes:
-    - ReadWriteMany
-  storageClassName: ""
-  resources:
-    requests:
-      cpu: 500m
-      memory: 2Gi
-    limits:
-      cpu: "1"
-      memory: 4Gi
+    - ReadWriteOnce
+  storageClassName: local-fast
