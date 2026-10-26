@@ -81,17 +81,18 @@ planner:
   minEndpoint: 1
   maxGpuBudget: 1
 
-# All three model-cache consumers stay on the same A30 node before binding.
-# The chart retains these independent PVCs on uninstall.
+# local-fast excludes node04. Use a separate NFS cache without changing any
+# StorageClass or either retained claim from the initial storage-only attempt.
+# All model-cache consumers still stay on node04; both claims survive uninstall.
 modelCache:
-  name: qwen36-35b-int4-a30-model-cache
+  name: qwen36-35b-int4-a30-nfs-model-cache
   create: true
   storage: 64Gi
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteMany
   mountPath: /model
   cachePath: /model/.model-express/cache
-  storageClassName: local-fast
+  storageClassName: nfs-client
 
 redis:
   enabled: true

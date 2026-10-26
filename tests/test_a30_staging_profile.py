@@ -24,7 +24,7 @@ class A30StagingProfileTests(unittest.TestCase):
                 {"kubernetes.io/hostname": "daedalus-04"},
             )
             self.assertIn(
-                {"name": "qwen36-35b-int4-a30-model-cache", "mountPoint": "/model"},
+                {"name": "qwen36-35b-int4-a30-nfs-model-cache", "mountPoint": "/model"},
                 service["volumeMounts"],
             )
         worker = services["VllmWorker"]
@@ -76,6 +76,15 @@ class A30StagingProfileTests(unittest.TestCase):
         for claim in claims:
             self.assertTrue(claim["metadata"]["name"].startswith("qwen36-35b-int4-a30-"))
             self.assertEqual(claim["metadata"]["annotations"]["helm.sh/resource-policy"], "keep")
+        claim_specs = {c["metadata"]["name"]: c["spec"] for c in claims}
+        cache = claim_specs["qwen36-35b-int4-a30-nfs-model-cache"]
+        self.assertEqual(cache["storageClassName"], "nfs-client")
+        self.assertEqual(cache["accessModes"], ["ReadWriteMany"])
+        self.assertEqual(cache["resources"]["requests"]["storage"], "64Gi")
+        redis = claim_specs["qwen36-35b-int4-a30-redis-data"]
+        self.assertEqual(redis["storageClassName"], "local-fast")
+        self.assertEqual(redis["accessModes"], ["ReadWriteOnce"])
+        self.assertEqual(redis["resources"]["requests"]["storage"], "1Gi")
         for document in documents:
             self.assertNotIn(document["kind"], {"Ingress", "HTTPRoute", "Gateway"})
             if document["kind"] == "Service":
