@@ -17,6 +17,10 @@ SHARED_RUNTIME_IMAGE = (
     "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1"
 )
 GB10_RUNTIME_IMAGE = "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1"
+QWEN38_GB10_RUNTIME_IMAGE = (
+    "daedalus.ddns.me:5050/btuttle/daedalus-dynamo-qwen38-gb10:"
+    "1.5.1-vllm0.31.0-2"
+)
 NEMOTRON35_BOLT_RUNTIME_IMAGE = (
     "daedalus.ddns.me:5050/btuttle/daedalus-dynamo-nemotron35bolt-gb10:"
     "1.6.0dev20261019-vllm77154ca-mamba-prefill-20261026-2"
@@ -70,6 +74,8 @@ class ModelChartRenderTests(unittest.TestCase):
                     continue
                 if values_file.name == "qwen35-122b-gb10.yaml":
                     expected_image = GB10_RUNTIME_IMAGE
+                elif values_file.name == "qwen38-flash-next-gb10.yaml":
+                    expected_image = QWEN38_GB10_RUNTIME_IMAGE
                 elif values_file.name == "nemotron35bolt-gb10.yaml":
                     expected_image = NEMOTRON35_BOLT_RUNTIME_IMAGE
                 elif values_file.name == "nemotron35lightning-l40s.yaml":
@@ -361,6 +367,38 @@ class ModelChartRenderTests(unittest.TestCase):
         self.assertIn("--no-disable-hybrid-kv-cache-manager", worker_script)
         self.assertNotIn("--speculative-config", worker_script)
 
+    def test_qwen38_gb10_keeps_all_local_cache_consumers_on_spark(self) -> None:
+        documents = render(ROOT / "values" / "qwen38-flash-next-gb10.yaml")
+        deployment = next(d for d in documents if d["kind"] == "DynamoGraphDeployment")
+        services = deployment["spec"]["services"]
+        self.assertNotIn("Planner", services)
+        for name in ("Frontend", "ModelExpress", "VllmWorker"):
+            with self.subTest(component=name):
+                self.assertEqual(services[name]["extraPodSpec"]["nodeSelector"],
+                                 {"nvidia.com/gpu.product": "NVIDIA-GB10"})
+                self.assertIn({"key": "nvidia.com/gpu", "operator": "Equal",
+                               "value": "true", "effect": "NoSchedule"},
+                              services[name]["extraPodSpec"]["tolerations"])
+        for name in ("Frontend", "VllmWorker"):
+            self.assertEqual(services[name]["runtimeVersionOverride"], "1.5.1")
+        self.assertEqual(services["Frontend"]["extraPodSpec"]["mainContainer"]["image"],
+                         "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.1")
+        self.assertEqual(services["VllmWorker"]["extraPodSpec"]["mainContainer"]["image"],
+                         QWEN38_GB10_RUNTIME_IMAGE)
+        cache = next(d for d in documents if d["kind"] == "PersistentVolumeClaim"
+                     and d["metadata"]["name"].endswith("model-cache"))
+        self.assertEqual(cache["spec"]["accessModes"], ["ReadWriteOnce"])
+        self.assertEqual(cache["spec"]["storageClassName"], "local-fast")
+        worker = services["VllmWorker"]
+        self.assertFalse(worker["scalingAdapter"]["enabled"])
+        main = worker["extraPodSpec"]["mainContainer"]
+        env = {item["name"]: item["value"] for item in main["env"]}
+        self.assertEqual(env["MODEL_NAME"], "nvidia/Qwen3.8-Flash-Next-NVFP4")
+        self.assertEqual(env["VLLM_PLE_MMAP"], "1")
+        self.assertTrue(env["VLLM_PLE_MMAP_DIR"].endswith("/snapshots/latest"))
+        self.assertIn("--kv-cache-memory-bytes 8589934592", main["args"][0])
+        self.assertNotIn("--speculative-config", main["args"][0])
+
     def test_cluster_sized_shared_resources_and_planner(self) -> None:
         documents = render(ROOT / "values" / "gemma431b.yaml")
         deployment = next(
@@ -537,7 +575,7 @@ class ModelChartRenderTests(unittest.TestCase):
         )
         self.assertIn("Waiting for ModelExpress", worker_script)
 
-    def test_nemotron35lightning_l40s_uses_full_context_marlin_profile(
+    def test_nemotron35lightning_l40s_uses_262k_context_marlin_profile(
         self,
     ) -> None:
         documents = render(
@@ -563,8 +601,8 @@ class ModelChartRenderTests(unittest.TestCase):
             {"nvidia.com/gpu.product": "NVIDIA-L40S"},
         )
         self.assertIn("--tensor-parallel-size 1", worker_script)
-        self.assertIn("--max-model-len 1048576", worker_script)
-        self.assertIn("--max-num-seqs 4", worker_script)
+        self.assertIn("--max-model-len 262144", worker_script)
+        self.assertIn("--max-num-seqs 32", worker_script)
         self.assertIn("--quantization modelopt_fp4", worker_script)
         self.assertIn("--moe-backend marlin", worker_script)
         self.assertIn("--mamba-ssm-cache-dtype float16", worker_script)

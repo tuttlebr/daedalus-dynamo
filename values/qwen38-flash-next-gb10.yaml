@@ -1,0 +1,142 @@
+model:
+  name: qwen38-flash-next-vllm-agg-gb10
+  # FP8 exceeds Spark's shared memory. Use NVIDIA's official ModelOpt NVFP4
+  # checkpoint, with its unmodified FP8 PLE table mapped from local NVMe.
+  id: nvidia/Qwen3.8-Flash-Next-NVFP4
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-qwen38-gb10:1.5.1-vllm0.31.0-2
+  imagePullPolicy: IfNotPresent
+  backendFramework: vllm
+  deploymentMode: direct
+  runtimeVersionOverride: "1.5.1"
+  buildDockerfile: runtime/qwen38-flash-next-gb10/Dockerfile
+  buildContext: runtime/qwen38-flash-next-gb10
+  buildPlatform: linux/arm64
+
+frontend:
+  # Use the existing pinned frontend runtime for this model.
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.1
+  replicas: 1
+  nodeSelector:
+    nvidia.com/gpu.product: NVIDIA-GB10
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+
+modelexpress:
+  nodeSelector:
+    nvidia.com/gpu.product: NVIDIA-GB10
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+
+worker:
+  replicas: 1
+  scalingAdapter:
+    enabled: false
+  gpu: "1"
+  # About 76 GiB resident weights; the 48 GiB lookup table is file-backed.
+  # Leave room for the OS, other pods, activations, KV and reclaimable cache.
+  memoryRequest: 88Gi
+  sharedMemorySize: 16Gi
+  nodeSelector:
+    nvidia.com/gpu.product: NVIDIA-GB10
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+  workingDir: /workspace
+  securityContext:
+    runAsUser: 0
+    capabilities:
+      add:
+        - IPC_LOCK
+        - SYS_RESOURCE
+  startupProbe:
+    path: /live
+    periodSeconds: 30
+    timeoutSeconds: 20
+    failureThreshold: 120
+  extraEnv:
+    - name: VLLM_PLE_MMAP
+      value: "1"
+    - name: VLLM_PLE_MMAP_DIR
+      value: /model/.model-express/cache/models--nvidia--Qwen3.8-Flash-Next-NVFP4/snapshots/latest
+    - name: VLLM_PLE_MMAP_WORKERS
+      value: "8"
+    - name: VLLM_PLE_MMAP_MADVISE
+      value: random
+    - name: VLLM_PLE_MMAP_FAST_ROWS
+      value: "0"
+    - name: VLLM_PLE_MMAP_PREWARM
+      value: "0"
+    # Correctness fallback for the GB10 sparse-attention top-k kernel.
+    - name: VLLM_QSA_EXACT_TOPK
+      value: "1"
+    - name: VLLM_SSM_CONV_STATE_LAYOUT
+      value: DS
+    - name: VLLM_WORKER_MULTIPROC_METHOD
+      value: spawn
+    - name: NCCL_IB_DISABLE
+      value: "1"
+    - name: TRITON_CACHE_DIR
+      value: /tmp/.triton-cache
+    - name: VLLM_CACHE_ROOT
+      value: /tmp/vllm-cache
+  vllmArgs:
+    - --load-format safetensors
+    - --served-model-name "${MODEL_NAME}"
+    - --quantization modelopt_fp4
+    - --language-model-only
+    # Text-only serving does not need NIXL media decoder agents.
+    - --dyn-tool-call-parser qwen3_coder
+    - --dyn-reasoning-parser qwen3
+    - --tensor-parallel-size 1
+    - --pipeline-parallel-size 1
+    - --data-parallel-size 1
+    - --max-model-len 262144
+    - --max-num-seqs 4
+    - --max-num-batched-tokens 4096
+    - --gpu-memory-utilization 0.80
+    - --kv-cache-memory-bytes 8589934592
+    - --enable-chunked-prefill
+    - --enable-prefix-caching
+    - --prefix-caching-hash-algo sha256
+    - --kv-cache-dtype fp8_e4m3
+    - --no-disable-hybrid-kv-cache-manager
+    - --no-enable-flashinfer-autotune
+    # Disk lookups must run outside captured CUDA graphs. MTP stays off until
+    # this baseline passes concurrent prefix-cache and generation checks.
+    - --compilation-config '{"cudagraph_mode":"PIECEWISE"}'
+
+planner:
+  enabled: false
+  minEndpoint: 1
+  maxGpuBudget: 1
+
+# PLE lookups fault pages during generation: use Spark's NVMe, not NFS.
+# All three consumers select GB10 so WaitForFirstConsumer binds on Spark.
+modelCache:
+  name: qwen38-flash-next-gb10-model-cache
+  create: true
+  storage: 192Gi
+  accessModes:
+    - ReadWriteOnce
+  mountPath: /model
+  cachePath: /model/.model-express/cache
+  storageClassName: local-fast
+
+redis:
+  enabled: true
+  name: qwen38-flash-next-gb10-redis
+  dataPvcName: qwen38-flash-next-gb10-redis-data
+  image: redis:7-alpine
+  imagePullPolicy: IfNotPresent
+  storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-fast

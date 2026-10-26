@@ -14,6 +14,7 @@ and uninstalling releases from model config paths.
 | `values/gemma431b.yaml` | `nvidia/Gemma-4-31B-IT-NVFP4` | vLLM |
 | `values/nemotronnano.yaml` | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-Reasoning-NVFP4` | vLLM |
 | `values/nemotron35lightning-gb10.yaml` | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4` | TensorRT-LLM |
+| `values/qwen38-flash-next-gb10.yaml` | `nvidia/Qwen3.8-Flash-Next-NVFP4` | vLLM, GB10 with NVMe-backed embeddings |
 | `values/nemotron35bolt-gb10.yaml` | `nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB` | vLLM, GB10, prefix caching |
 
 ## Prerequisites
@@ -249,6 +250,32 @@ make status values/nemotron35bolt-gb10.yaml
 Sources: [NVIDIA model card](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB),
 [LiLiCorr model card](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-LiLiCorr),
 and [vLLM b12x hardware support](https://github.com/vllm-project/vllm/blob/77154ca6116ae34cbfe314beef1016bde9b63989/docs/features/quantization/b12x.md).
+
+## Qwen3.8 Flash Next on Spark
+
+[`values/qwen38-flash-next-gb10.yaml`](./values/qwen38-flash-next-gb10.yaml)
+uses NVIDIA's official NVFP4 checkpoint. The requested FP8 checkpoint exceeds
+Spark's unified memory. Even the NVFP4 checkpoint needs its n-gram embedding
+table mapped from disk, so this profile uses a custom ARM64 runtime and a
+Spark-local `local-fast` model cache. It starts one text-only worker with
+native 262K context, four sequences, 8 GiB KV cache, and MTP disabled.
+
+Build and push on the Spark's native Docker daemon, then deploy using the
+existing secret and gateway:
+
+```bash
+DOCKER_HOST=ssh://daedalus-06 make image values/qwen38-flash-next-gb10.yaml
+SKIP_BUILD=1 SKIP_PUSH=1 make deploy values/qwen38-flash-next-gb10.yaml
+make status values/qwen38-flash-next-gb10.yaml
+```
+
+See the [runtime notes](./runtime/qwen38-flash-next-gb10/README.md) for source
+pins, memory sizing, patch provenance and validation. The official checkpoint
+weights are unchanged; the runtime supplies the disk-backed lookup path.
+The release was validated live on Spark: chat, tool calls, streaming,
+Responses, three concurrent prefix-cache requests, and a 250,001-token
+retrieval passed. The shared gateway advertises
+`nvidia/Qwen3.8-Flash-Next-NVFP4`; this initial profile serves text with MTP off.
 
 ## Nemotron 3.5 Lightning GB10 Release
 

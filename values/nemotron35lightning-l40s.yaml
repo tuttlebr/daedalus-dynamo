@@ -54,10 +54,10 @@ worker:
     - --pipeline-parallel-size 1
     - --data-parallel-size 1
     - --gpu-memory-utilization 0.90
-    # Preserve the model's complete advertised 1M-token context window. Keep
-    # request concurrency small so one full-length request retains KV headroom.
-    - --max-model-len 1048576
-    - --max-num-seqs 4
+    # Cap context at 262K tokens and admit up to 32 sequences. Full-length
+    # requests still share the available KV cache and may queue or preempt.
+    - --max-model-len 262144
+    - --max-num-seqs 32
     - --max-num-batched-tokens 8192
     - --enable-chunked-prefill
     - --async-scheduling

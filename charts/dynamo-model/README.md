@@ -26,6 +26,16 @@ The GB10 profile uses an explicit product selector because that node does not
 advertise `nvidia.com/gpu.memory`. It remains a one-worker profile with Planner
 disabled and a 96 GiB host-memory request.
 
+The Qwen3.8 Flash Next GB10 profile uses an 88 GiB worker request to fit beside
+the Spark's existing pod reservations. It memory-maps its embedding table from
+the `local-fast` RWO model cache. `modelexpress.nodeSelector` and
+`frontend.nodeSelector` place every cache consumer with the worker before
+`WaitForFirstConsumer` binds the claim. `model.runtimeVersionOverride` declares
+the Dynamo compatibility version for custom images. Other profiles leave
+these optional settings empty.
+`frontend.image` optionally separates a published frontend runtime from a
+model-specific worker engine; it defaults to `model.image`.
+
 These settings are cluster-capacity and launch-safety defaults, not throughput
 claims. Keep model-specific batch, context, and routing knobs unchanged until a
 representative AIPerf workload provides TTFT, ITL, throughput, and error-rate

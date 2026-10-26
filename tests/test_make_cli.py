@@ -90,6 +90,19 @@ class MakeCliTests(unittest.TestCase):
         self.assertIn("values/qwen27b.yaml", completed.stdout.splitlines())
         self.assertNotIn("qwen27b", completed.stdout.splitlines())
 
+    def test_spark_build_selects_model_dockerfile_context_and_platform(self) -> None:
+        completed = run_make("-n", "build", "values/qwen38-flash-next-gb10.yaml")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn('-f "runtime/qwen38-flash-next-gb10/Dockerfile"', completed.stdout)
+        self.assertIn('"runtime/qwen38-flash-next-gb10"', completed.stdout)
+        self.assertIn('--platform "linux/arm64"', completed.stdout)
+        overridden = run_make("-n", "build", "values/qwen38-flash-next-gb10.yaml",
+                              "DOCKERFILE=custom.Dockerfile", "CONTEXT=custom-context",
+                              "BUILD_PLATFORM=linux/amd64")
+        self.assertEqual(overridden.returncode, 0, overridden.stderr)
+        self.assertIn('-f "custom.Dockerfile" "custom-context"', overridden.stdout)
+        self.assertIn('--platform "linux/amd64"', overridden.stdout)
+
     def test_model_action_requires_exactly_one_config_goal(self) -> None:
         self.assert_failed_with(
             run_make("render"), "Usage: make render <model-config.yaml>"
