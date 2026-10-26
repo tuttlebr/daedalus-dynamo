@@ -25,6 +25,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY --chmod=0755 run-model-benchmarks.sh ./run-model-benchmarks.sh
 COPY --chmod=0755 run-kubernetes-container.sh ./run-kubernetes-container.sh
 COPY agentic-code-config.json ./agentic-code-config.json
+COPY prepare-agentic-trace.py ./prepare-agentic-trace.py
 
 RUN mkdir -p /artifacts /tmp/huggingface \
     && chown -R 65532:65532 /artifacts /tmp/huggingface

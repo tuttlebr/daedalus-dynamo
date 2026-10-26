@@ -71,6 +71,12 @@ does not create registry credentials.
 
 ### 2. Install the Inference Gateway
 
+The gateway uses the existing `daedalus/daedalus-tls` certificate Secret and
+`daedalus-dynamo/inference-gateway-api-keys` authentication Secret. Provision
+these before installation. The checked-in certificate grant permits the
+`daedalus-dynamo` gateway to reference that certificate. Clients use verified
+HTTPS with a bearer key on port `32359`.
+
 Install or upgrade Gateway API, Gateway API Inference Extension, agentgateway,
 and the shared hardened gateway:
 
@@ -163,26 +169,39 @@ Check the release and endpoint after deployment:
 make status values/qwen35b.yaml
 kubectl get dgd,pods,httproute -n daedalus-dynamo
 kubectl get svc inference-gateway -n daedalus-dynamo
-curl --fail http://192.168.1.234:32359/v1/models
+export OPENAI_API_KEY="$(kubectl get secret inference-gateway-api-keys \
+  -n daedalus-dynamo -o jsonpath='{.data.switchyard}' | base64 --decode)"
+curl --fail --resolve daedalus.ddns.me:32359:192.168.1.12 \
+  -H "Authorization: Bearer ${OPENAI_API_KEY}" \
+  https://daedalus.ddns.me:32359/v1/models
 ```
 
-Use the gateway address reported by the Service when it differs from the
-Daedalus endpoint. For local access without a reachable LoadBalancer or
-NodePort:
+The gateway requires HTTPS and a bearer key. The hostname remains
+`daedalus.ddns.me` for certificate verification; `--resolve` selects the LAN
+VIP without changing DNS. An existing `OPENAI_API_KEY` can be used instead of
+loading the Secret. For local access without a reachable LoadBalancer or
+NodePort, run the forward in one terminal and the authenticated request in another:
 
 ```bash
 kubectl port-forward -n daedalus-dynamo svc/inference-gateway 8000:32359
-curl --fail http://127.0.0.1:8000/v1/models
+curl --fail --resolve daedalus.ddns.me:8000:127.0.0.1 \
+  -H "Authorization: Bearer ${OPENAI_API_KEY}" \
+  https://daedalus.ddns.me:8000/v1/models
 ```
 
 Run one Responses API request against the first model in that catalog:
 
 ```bash
-scripts/smoke-test-responses.py --url http://192.168.1.234:32359
+scripts/smoke-test-responses.py --connect-ip 192.168.1.12 --max-output-tokens 512
 ```
 
 Pass `--model <model-id>` to select a specific deployment. The script also
-accepts `ENDPOINT_URL`, `MODEL_ID`, and `OPENAI_API_KEY` from the environment.
+accepts `ENDPOINT_URL`, `ENDPOINT_CONNECT_IP`, `MODEL_ID`, and `OPENAI_API_KEY`
+from the environment. Both client scripts default to verified HTTPS and the
+LAN VIP for `daedalus.ddns.me`; `--connect-ip ''` uses normal DNS instead.
+Unset `OPENAI_API_KEY` when finished.
+Reasoning models may need a larger output budget than the script's default
+128 tokens to reach a completed response.
 
 ## Nemotron 3.5 Bolt on Spark
 
@@ -291,8 +310,12 @@ kubectl get dgd,pods,pvc,httproute -n daedalus-dynamo -o wide
 kubectl logs -n daedalus-dynamo \
   -l 'nvidia.com/dynamo-component=ModelExpress,nvidia.com/dynamo-graph-deployment-name=nemotron-35-lightning-trtllm-gb10' \
   --tail=100
-curl --fail http://192.168.1.234:32359/v1/models
-curl --fail http://192.168.1.234:32359/v1/chat/completions \
+curl --fail --resolve daedalus.ddns.me:32359:192.168.1.12 \
+  -H "Authorization: Bearer ${OPENAI_API_KEY}" \
+  https://daedalus.ddns.me:32359/v1/models
+curl --fail --resolve daedalus.ddns.me:32359:192.168.1.12 \
+  -H "Authorization: Bearer ${OPENAI_API_KEY}" \
+  https://daedalus.ddns.me:32359/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4",
@@ -366,11 +389,18 @@ make benchmark-agentic-render
 make benchmark-agentic
 ```
 
-The render target is local and read-only. The live target verifies
+The render target reads the gateway Service's ClusterIP without changing the
+cluster. The live target verifies
 `EXPECTED_CONTEXT`, builds and pushes `AIPERF_IMAGE`, then creates one
 non-retrying Job in `NAMESPACE`. The Job discovers models from
-`http://inference-gateway.<namespace>.svc.cluster.local:32359/v1/models`; the
-model list is not derived from checked-in values files.
+`https://daedalus.ddns.me:32359/v1/models`, using a pod-local hostname mapping
+directly to the gateway Service's ClusterIP and `OPENAI_API_KEY` from Secret
+`inference-gateway-api-keys`, key `switchyard`. The model list is not derived
+from checked-in values files. The hostname supplies the existing certificate's
+TLS identity; inference traffic stays inside the cluster and does not use public
+DNS or the LAN VIP. `AIPERF_CONNECT_IP=auto` resolves the current ClusterIP on
+each run. An explicit local IP selects a different path; an empty value opts
+into normal DNS resolution.
 
 When the benchmark completes or fails, its container waits for the target to
 copy its run into
@@ -390,9 +420,13 @@ AIPERF_SKIP_BUILD=1 AIPERF_SKIP_PUSH=1 \
   make benchmark-agentic
 ```
 
-The default workload is eight six-turn agentic sessions at concurrency three,
-or 48 requests per advertised model. It is live load, and its results describe
-client-observed performance for that frozen workload only. See
+The default workload is 128 five-turn agentic sessions at concurrency three,
+or 640 requests per advertised model. Fresh sessions start throughout a
+30-minute window, including a final session at 30 minutes; queued requests and
+remaining turns finish afterward. The prompt shape targets about 70% reusable
+tokens (a workload estimate, with actual KV hits dependent on the server).
+The per-model safety timeout is two hours. It is live load, and its results
+describe client-observed performance for that frozen workload only. See
 [`benchmarks/aiperf/README.md`](./benchmarks/aiperf/README.md) for workload,
 artifact, authentication, and interpretation details.
 
@@ -470,12 +504,13 @@ match the benchmarking suite's interactive-chat shape: about 900 input tokens,
 
 ```bash
 scripts/test-endpoint-fd-stability.py \
-  --url http://192.168.1.234:32359 \
+  --connect-ip 192.168.1.12 \
   --duration 300 \
   --cooldown 90 \
   --output artifacts/fd-stability.json
 ```
 
+Export `OPENAI_API_KEY` as shown in the endpoint check above before running.
 The regression fails on any `EMFILE` response, an excessive request error
 rate, FD utilization above 80 percent, missing telemetry, or FD counts that do
 not return close to the per-pod baseline after cooldown.

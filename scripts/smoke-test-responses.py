@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import http.client
+import ipaddress
 import json
 import os
 import ssl
@@ -13,7 +14,7 @@ from typing import Any
 from urllib.parse import SplitResult, urlsplit
 
 
-DEFAULT_ENDPOINT = "http://192.168.1.234:32359"
+DEFAULT_ENDPOINT = "https://daedalus.ddns.me:32359"
 
 
 def parse_args() -> argparse.Namespace:
@@ -22,6 +23,12 @@ def parse_args() -> argparse.Namespace:
         "--url",
         default=os.environ.get("ENDPOINT_URL", DEFAULT_ENDPOINT),
         help="Endpoint base URL or full /v1/responses URL.",
+    )
+    parser.add_argument(
+        "--connect-ip",
+        default=os.environ.get("ENDPOINT_CONNECT_IP"),
+        help="Dial this IP while preserving TLS/Host identity; defaults to "
+        "192.168.1.12 for daedalus.ddns.me. Use an empty value for DNS.",
     )
     parser.add_argument(
         "--model",
@@ -40,6 +47,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-output-tokens", type=int, default=128)
     parser.add_argument("--timeout", type=float, default=300.0)
     args = parser.parse_args()
+    if args.connect_ip is None:
+        args.connect_ip = (
+            "192.168.1.12" if urlsplit(args.url).hostname == "daedalus.ddns.me" else ""
+        )
+    if args.connect_ip:
+        try:
+            ipaddress.ip_address(args.connect_ip)
+        except ValueError:
+            parser.error("--connect-ip must be an IP address or empty")
     if args.max_output_tokens < 1:
         parser.error("--max-output-tokens must be positive")
     if args.timeout <= 0:
@@ -67,17 +83,26 @@ def endpoint_paths(raw_url: str) -> tuple[SplitResult, str, str]:
 
 
 def new_connection(
-    parsed: SplitResult, timeout: float
+    parsed: SplitResult, timeout: float, connect_ip: str = ""
 ) -> http.client.HTTPConnection:
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     if parsed.scheme == "https":
-        return http.client.HTTPSConnection(
+        connection = http.client.HTTPSConnection(
             parsed.hostname,
             port,
             timeout=timeout,
             context=ssl.create_default_context(),
         )
-    return http.client.HTTPConnection(parsed.hostname, port, timeout=timeout)
+    else:
+        connection = http.client.HTTPConnection(parsed.hostname, port, timeout=timeout)
+    if connect_ip:
+        # Override only the socket destination. HTTPSConnection still uses the
+        # URL hostname for SNI, certificate verification, and the Host header.
+        create_connection = connection._create_connection
+        connection._create_connection = lambda address, *args, **kwargs: (
+            create_connection((connect_ip, address[1]), *args, **kwargs)
+        )
+    return connection
 
 
 def request_headers(api_key: str) -> dict[str, str]:
@@ -94,12 +119,13 @@ def request_json(
     api_key: str,
     timeout: float,
     payload: dict[str, Any] | None = None,
+    connect_ip: str = "",
 ) -> dict[str, Any]:
     body = None
     if payload is not None:
         body = json.dumps(payload, separators=(",", ":")).encode()
 
-    connection = new_connection(parsed, timeout)
+    connection = new_connection(parsed, timeout, connect_ip)
     try:
         connection.request(method, path, body=body, headers=request_headers(api_key))
         response = connection.getresponse()
@@ -122,9 +148,12 @@ def request_json(
 
 
 def discover_model(
-    parsed: SplitResult, models_path: str, api_key: str, timeout: float
+    parsed: SplitResult, models_path: str, api_key: str, timeout: float,
+    connect_ip: str = "",
 ) -> str:
-    data = request_json(parsed, "GET", models_path, api_key, timeout)
+    data = request_json(
+        parsed, "GET", models_path, api_key, timeout, connect_ip=connect_ip
+    )
     models = data.get("data")
     if not isinstance(models, list) or not models:
         raise RuntimeError("model discovery returned no models")
@@ -174,7 +203,7 @@ def main() -> int:
     args = parse_args()
     parsed, responses_path, models_path = endpoint_paths(args.url)
     model = args.model or discover_model(
-        parsed, models_path, args.api_key, args.timeout
+        parsed, models_path, args.api_key, args.timeout, args.connect_ip
     )
     response = request_json(
         parsed,
@@ -188,6 +217,7 @@ def main() -> int:
             "max_output_tokens": args.max_output_tokens,
             "stream": False,
         },
+        connect_ip=args.connect_ip,
     )
     output_text = validate_response(response)
     print(f"PASS: {responses_path} returned completed output for {model}")

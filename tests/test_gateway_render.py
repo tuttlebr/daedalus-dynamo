@@ -48,6 +48,20 @@ class GatewayRenderTests(unittest.TestCase):
         self.assertIn(("Service", "inference-gateway-fd-metrics"), by_kind_name)
         self.assertIn(("ConfigMap", "inference-gateway-fd-metrics"), by_kind_name)
 
+    def test_gateway_requires_tls_and_api_key(self) -> None:
+        documents = render("base")
+        gateway = next(d for d in documents if d["kind"] == "Gateway")
+        self.assertTrue(gateway["spec"]["listeners"])
+        for listener in gateway["spec"]["listeners"]:
+            self.assertEqual(listener["protocol"], "HTTPS")
+            self.assertEqual(listener["tls"]["mode"], "Terminate")
+            self.assertTrue(listener["tls"]["certificateRefs"])
+        policy = next(d for d in documents if d["kind"] == "AgentgatewayPolicy")
+        auth = policy["spec"]["traffic"]["apiKeyAuthentication"]
+        self.assertEqual(auth["mode"], "Strict")
+        self.assertEqual(auth["secretRef"]["name"], "inference-gateway-api-keys")
+        self.assertNotIn("key", auth)
+
     def test_monitoring_contains_headroom_and_availability_alerts(self) -> None:
         documents = render("monitoring")
         by_kind = {document["kind"]: document for document in documents}

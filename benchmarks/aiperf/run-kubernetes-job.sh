@@ -11,7 +11,7 @@ NAMESPACE="${NAMESPACE:-daedalus-dynamo}"
 GATEWAY_NAME="${GATEWAY_NAME:-inference-gateway}"
 GATEWAY_PORT="${GATEWAY_PORT:-32359}"
 AIPERF_IMAGE="${AIPERF_IMAGE:-}"
-default_endpoint_url="http://${GATEWAY_NAME}.${NAMESPACE}.svc.cluster.local:${GATEWAY_PORT}"
+default_endpoint_url="https://daedalus.ddns.me:${GATEWAY_PORT}"
 AIPERF_ENDPOINT_URL="${AIPERF_ENDPOINT_URL:-${default_endpoint_url}}"
 AIPERF_RUN_ID="${AIPERF_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
 AIPERF_RESULTS_DIR="${AIPERF_RESULTS_DIR:-artifacts/aiperf}"
@@ -137,10 +137,20 @@ run_dir="${results_dir}/${AIPERF_RUN_ID}"
   fail "local run directory already exists: ${run_dir}"
 mkdir -p "${run_dir}/kubernetes"
 
-export NAMESPACE AIPERF_IMAGE AIPERF_ENDPOINT_URL AIPERF_RUN_ID
+export KUBECTL EXPECTED_CONTEXT NAMESPACE GATEWAY_NAME GATEWAY_PORT
+export AIPERF_IMAGE AIPERF_ENDPOINT_URL AIPERF_RUN_ID
 export AIPERF_ACTIVE_DEADLINE_SECONDS
 submitted_job="${run_dir}/kubernetes/submitted-job.json"
 "${PYTHON}" "${SCRIPT_DIR}/render-kubernetes-job.py" >"${submitted_job}"
+"${PYTHON}" - "${submitted_job}" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    pod = json.load(source)["spec"]["template"]["spec"]
+for alias in pod.get("hostAliases", []):
+    print(f"==> Local endpoint route: {', '.join(alias['hostnames'])} -> {alias['ip']}")
+PY
 job_name="$(${PYTHON} - "${submitted_job}" <<'PY'
 import json
 import sys

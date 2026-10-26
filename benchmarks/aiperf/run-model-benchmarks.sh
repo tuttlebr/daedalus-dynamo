@@ -8,18 +8,19 @@ readonly MOONCAKE_BLOCK_SIZE="512"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 AIPERF_BIN="${AIPERF_BIN:-aiperf}"
 AGENTIC_CONFIG="${AGENTIC_CONFIG:-${SCRIPT_DIR}/agentic-code-config.json}"
-ENDPOINT_URL="${ENDPOINT_URL:-http://192.168.1.234:32359}"
+ENDPOINT_URL="${ENDPOINT_URL:-https://daedalus.ddns.me:32359}"
 GPU_TELEMETRY="${GPU_TELEMETRY-192.168.1.235:32400/metrics}"
 ARTIFACTS_DIR="${ARTIFACTS_DIR:-/artifacts}"
 RUN_ID="${RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
 MODELS="${MODELS:-}"
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
-TURNS="${TURNS:-6}"
-DATASET_SESSIONS="${DATASET_SESSIONS:-8}"
+TURNS="${TURNS:-5}"
+DATASET_SESSIONS="${DATASET_SESSIONS:-128}"
+BENCHMARK_DURATION_SECONDS="${BENCHMARK_DURATION_SECONDS:-1800}"
 CONCURRENCY="${CONCURRENCY:-3}"
 export AIPERF_METRICS_USAGE_PCT_DIFF_THRESHOLD="${AIPERF_METRICS_USAGE_PCT_DIFF_THRESHOLD:-10}"
 REQUEST_TIMEOUT_SECONDS="${REQUEST_TIMEOUT_SECONDS:-300}"
-MODEL_TIMEOUT_SECONDS="${MODEL_TIMEOUT_SECONDS:-900}"
+MODEL_TIMEOUT_SECONDS="${MODEL_TIMEOUT_SECONDS:-7200}"
 SYNTHESIS_TIMEOUT_SECONDS="${SYNTHESIS_TIMEOUT_SECONDS:-120}"
 DISCOVERY_TIMEOUT_SECONDS="${DISCOVERY_TIMEOUT_SECONDS:-10}"
 RANDOM_SEED="${RANDOM_SEED:-42}"
@@ -41,27 +42,32 @@ an OpenAI-compatible inference gateway.
 Usage:
   run-model-benchmarks.sh [--dry-run] [--list-models] [--help]
 
-The default endpoint is http://192.168.1.234:32359. The script discovers model
+The default endpoint is https://daedalus.ddns.me:32359. The script discovers model
 IDs from /v1/models unless MODELS is a comma-separated override.
+Use make benchmark-agentic for a pod pinned to the gateway ClusterIP, or the
+Compose runner for local NodePort access. The hostname is retained for TLS.
 
 Important environment variables:
-  ENDPOINT_URL              Gateway base URL (default: http://192.168.1.234:32359)
+  ENDPOINT_URL              Gateway base URL (default: https://daedalus.ddns.me:32359)
   GPU_TELEMETRY             DCGM endpoint (default: 192.168.1.235:32400/metrics);
                             set empty to disable GPU telemetry collection
-  OPENAI_API_KEY            Optional bearer token; never written to artifacts
+  OPENAI_API_KEY            Bearer token required by the default gateway
   MODELS                    Optional comma-separated model IDs
   ARTIFACTS_DIR             Artifact root (default: /artifacts)
-  TURNS                     Turns in each generated session (default: 6)
-  DATASET_SESSIONS          Frozen agent sessions to generate (default: 8)
+  TURNS                     Turns in each generated session (default: 5)
+  DATASET_SESSIONS          Fresh agent sessions to generate (default: 128)
+  BENCHMARK_DURATION_SECONDS Session-start window per model (default: 1800);
+                            final session starts at this boundary and drains
+  MODEL_TIMEOUT_SECONDS     Per-model safety ceiling (default: 7200)
   CONCURRENCY               In-flight request cap (default: 3)
   TOKENIZER                 AIPerf tokenizer; auto uses each model ID (default: auto)
   USE_SERVER_TOKEN_COUNT    Set to 1 only after validating gateway usage fields
   STOP_ON_ERROR             Set to 1 to stop after the first failed model
 
 The generated workload has a shared system prefix, group-shared repository
-context, per-session context, and growing request/response turns (six by
-default). AIPerf adds each live assistant response to later requests in that
-session.
+context, per-session context, and growing request/response turns (five by
+default). The default token shape targets about 70% reusable prompt tokens.
+AIPerf adds each live assistant response to later requests in that session.
 EOF
 }
 
@@ -159,8 +165,14 @@ require_command jq
 require_command sha256sum
 require_positive_integer TURNS "${TURNS}"
 require_positive_integer DATASET_SESSIONS "${DATASET_SESSIONS}"
+[[ "${BENCHMARK_DURATION_SECONDS}" =~ ^[0-9]+$ ]] ||
+  fail "BENCHMARK_DURATION_SECONDS must be a nonnegative integer"
 require_positive_integer CONCURRENCY "${CONCURRENCY}"
 require_positive_integer MODEL_TIMEOUT_SECONDS "${MODEL_TIMEOUT_SECONDS}"
+(( MODEL_TIMEOUT_SECONDS > BENCHMARK_DURATION_SECONDS )) ||
+  fail "MODEL_TIMEOUT_SECONDS must exceed BENCHMARK_DURATION_SECONDS"
+(( BENCHMARK_DURATION_SECONDS == 0 || DATASET_SESSIONS >= 2 )) ||
+  fail "timed benchmarks need at least two sessions; set BENCHMARK_DURATION_SECONDS=0 for a single-session smoke test"
 require_positive_integer SYNTHESIS_TIMEOUT_SECONDS "${SYNTHESIS_TIMEOUT_SECONDS}"
 require_positive_integer RANDOM_SEED "${RANDOM_SEED}"
 require_positive_number REQUEST_TIMEOUT_SECONDS "${REQUEST_TIMEOUT_SECONDS}"
@@ -214,8 +226,14 @@ else
   if [[ -n "${OPENAI_API_KEY}" ]]; then
     curl_args+=(--header "Authorization: Bearer ${OPENAI_API_KEY}")
   fi
-  catalog="$(curl "${curl_args[@]}" "${models_url}")" ||
+  if ! discovery_response="$(curl "${curl_args[@]}" --write-out $'\n%{http_code}' "${models_url}")"; then
+    discovery_status="${discovery_response##*$'\n'}"
+    if [[ "${discovery_status}" == "401" || "${discovery_status}" == "403" ]]; then
+      fail "model discovery failed at ${models_url}: gateway authentication rejected (HTTP ${discovery_status}). Use make benchmark-agentic for the Kubernetes gateway credential, or supply a valid OPENAI_API_KEY."
+    fi
     fail "model discovery failed at ${models_url}"
+  fi
+  catalog="${discovery_response%$'\n'*}"
   jq -e '
     (.data | type) == "array" and
     (.data | length) > 0 and
@@ -249,6 +267,7 @@ if (( list_models == 1 )); then
 fi
 
 if (( dry_run == 0 )); then
+  require_command python3
   require_command "${AIPERF_BIN}"
   require_command timeout
   actual_version="$("${AIPERF_BIN}" --version 2>&1 | tail -n 1)"
@@ -258,8 +277,9 @@ fi
 
 run_dir="${ARTIFACTS_DIR%/}/${RUN_ID}"
 dataset_parent="${run_dir}/dataset"
-dataset_file="${dataset_parent}/generated/dataset.jsonl"
+dataset_file="${run_dir}/scheduled-dataset.jsonl"
 effective_agentic_config="${run_dir}/effective-agentic-code-config.json"
+workload_report="${run_dir}/workload-plan.json"
 
 if (( dry_run == 1 )); then
   log "DRY RUN: no dataset will be generated and no inference requests will be sent."
@@ -288,6 +308,12 @@ else
   (( ${#dataset_files[@]} == 1 )) ||
     fail "expected one generated dataset.jsonl, found ${#dataset_files[@]}"
   dataset_file="${dataset_files[0]}"
+  python3 "${SCRIPT_DIR}/prepare-agentic-trace.py" \
+    --input "${dataset_file}" \
+    --output "${run_dir}/scheduled-dataset.jsonl" \
+    --report "${workload_report}" \
+    --duration-seconds "${BENCHMARK_DURATION_SECONDS}"
+  dataset_file="${run_dir}/scheduled-dataset.jsonl"
 
   dataset_sha256="$(sha256sum "${dataset_file}" | cut -d' ' -f1)"
   config_sha256="$(sha256sum "${effective_agentic_config}" | cut -d' ' -f1)"
@@ -310,6 +336,8 @@ else
     --argjson turns "${TURNS}" \
     --argjson dataset_block_size "${DATASET_BLOCK_SIZE}" \
     --argjson concurrency "${CONCURRENCY}" \
+    --argjson benchmark_duration_seconds "${BENCHMARK_DURATION_SECONDS}" \
+    --slurpfile workload_plan "${workload_report}" \
     --argjson random_seed "${RANDOM_SEED}" \
     --argjson use_server_token_count "${USE_SERVER_TOKEN_COUNT}" \
     '{
@@ -339,10 +367,12 @@ else
         turns_per_session: $turns,
         live_assistant_responses_accumulate: true
       },
+      workload_plan: $workload_plan[0],
       load: {
         mode: "fixed-schedule agentic trace",
         dataset_sessions: $dataset_sessions,
         expected_requests_per_model: ($dataset_sessions * $turns),
+        session_start_span_seconds: $benchmark_duration_seconds,
         concurrency_cap: $concurrency,
         session_header: "X-Dynamo-Session-ID"
       },
@@ -368,6 +398,7 @@ log "GPU telemetry: ${GPU_TELEMETRY:-disabled}"
 log "Models (${#models[@]}):"
 printf '  %s\n' "${models[@]}"
 log "Workload: ${DATASET_SESSIONS} sessions, ${TURNS} turns/session, $((DATASET_SESSIONS * TURNS)) requests/model"
+log "Session starts span ${BENCHMARK_DURATION_SECONDS}s per model; final session and queued work drain afterward."
 log "Interpretation: prefix-reuse sensitivity, not confirmed KV-cache hits."
 
 results_file="${run_dir}/model-results.jsonl"
@@ -437,6 +468,14 @@ for model in "${models[@]}"; do
   completed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
   profile_summary="${artifact_dir}/profile_export_aiperf.json"
+  if (( exit_code == 0 && BENCHMARK_DURATION_SECONDS > 0 )); then
+    if ! jq -e --argjson minimum "${BENCHMARK_DURATION_SECONDS}" \
+      '.benchmark_duration.unit == "sec" and .benchmark_duration.avg >= $minimum' \
+      "${profile_summary}" >/dev/null 2>&1; then
+      log "FAIL: measured benchmark duration did not reach ${BENCHMARK_DURATION_SECONDS}s; see ${profile_summary}"
+      exit_code=1
+    fi
+  fi
   output_length_evidence_json='{"status":"unavailable"}'
   if [[ -f "${profile_summary}" ]]; then
     output_length_evidence_json="$(

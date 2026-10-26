@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import os
 from pathlib import Path
 import subprocess
@@ -15,9 +16,97 @@ ROOT = Path(__file__).resolve().parents[1]
 BENCHMARK_DIR = ROOT / "benchmarks" / "aiperf"
 SCRIPT = BENCHMARK_DIR / "run-model-benchmarks.sh"
 KUBERNETES_RUNNER = BENCHMARK_DIR / "run-kubernetes-job.sh"
+TRACE_SPEC = importlib.util.spec_from_file_location(
+    "prepare_agentic_trace", BENCHMARK_DIR / "prepare-agentic-trace.py"
+)
+assert TRACE_SPEC and TRACE_SPEC.loader
+TRACE_MODULE = importlib.util.module_from_spec(TRACE_SPEC)
+TRACE_SPEC.loader.exec_module(TRACE_MODULE)
 
 
 class AIPerfBenchmarkTests(unittest.TestCase):
+    def render_kubernetes_job(
+        self, *variables: str, cluster_ip: str = "10.111.176.80", lookup_fails: bool = False
+    ) -> tuple[subprocess.CompletedProcess[str], str]:
+        with tempfile.TemporaryDirectory() as directory:
+            fake_kubectl = Path(directory) / "kubectl"
+            call_log = Path(directory) / "calls.log"
+            fake_kubectl.write_text(
+                '#!/usr/bin/env bash\n'
+                'printf "%s\\n" "$*" >>"${FAKE_KUBECTL_LOG}"\n'
+                'printf "%s" "${FAKE_CLUSTER_IP}"\n'
+                'exit "${FAKE_LOOKUP_EXIT_CODE}"\n'
+            )
+            fake_kubectl.chmod(0o755)
+            environment = os.environ.copy()
+            environment.update({
+                "FAKE_KUBECTL_LOG": str(call_log),
+                "FAKE_CLUSTER_IP": cluster_ip,
+                "FAKE_LOOKUP_EXIT_CODE": "1" if lookup_fails else "0",
+            })
+            result = subprocess.run(
+                [
+                    "make", "--no-print-directory", "benchmark-agentic-render",
+                    "AIPERF_RUN_ID=unit-k8s-render",
+                    "AIPERF_IMAGE=registry.example.com/aiperf:0.11.0",
+                    f"KUBECTL={fake_kubectl}",
+                    *variables,
+                ],
+                cwd=ROOT, env=environment, capture_output=True, text=True,
+            )
+            return result, call_log.read_text() if call_log.exists() else ""
+
+    def test_discovery_auth_and_generation_key_redaction_without_traffic(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fake_curl = Path(directory) / "curl"
+            fake_curl.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, os, sys\n"
+                "assert 'Authorization: Bearer ' + os.environ['OPENAI_API_KEY'] in sys.argv\n"
+                "assert sys.argv[-1] == 'https://daedalus.ddns.me:32359/v1/models'\n"
+                "print(json.dumps({'data': [{'id': 'example/model'}]}))\n"
+                "print('200')\n"
+            )
+            fake_curl.chmod(0o755)
+            env = os.environ.copy()
+            env.update(
+                {
+                    "PATH": directory + os.pathsep + env["PATH"],
+                    "ENDPOINT_URL": "https://daedalus.ddns.me:32359",
+                    "OPENAI_API_KEY": "unit-private-key",
+                    "MODELS": "",
+                    "ARTIFACTS_DIR": directory,
+                    "RUN_ID": "auth-dry-run",
+                }
+            )
+            result = subprocess.run(
+                [str(SCRIPT), "--dry-run"], cwd=ROOT, env=env,
+                check=True, capture_output=True, text=True,
+            )
+            self.assertIn("--api-key", result.stdout)
+            self.assertIn("REDACTED", result.stdout)
+            self.assertNotIn("unit-private-key", result.stdout + result.stderr)
+
+    def test_discovery_explains_rejected_credentials_without_exposing_key(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fake_curl = Path(directory) / "curl"
+            fake_curl.write_text('#!/usr/bin/env bash\nprintf "\\n401"\nexit 22\n')
+            fake_curl.chmod(0o755)
+            environment = os.environ.copy()
+            environment.update({
+                "PATH": directory + os.pathsep + environment["PATH"],
+                "OPENAI_API_KEY": "unit-rejected-key",
+                "MODELS": "",
+            })
+            result = subprocess.run(
+                [str(SCRIPT), "--list-models"], cwd=ROOT, env=environment,
+                capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("gateway authentication rejected (HTTP 401)", result.stderr)
+            self.assertIn("make benchmark-agentic", result.stderr)
+            self.assertNotIn("unit-rejected-key", result.stdout + result.stderr)
+
     def test_dry_run_covers_every_selected_model_and_redacts_key(self) -> None:
         env = os.environ.copy()
         env.update(
@@ -72,30 +161,107 @@ class AIPerfBenchmarkTests(unittest.TestCase):
         self.assertIn('CONCURRENCY="${CONCURRENCY:-3}"', script)
         self.assertIn('CONCURRENCY: "${CONCURRENCY:-3}"', compose)
 
-    def test_agentic_dataset_has_six_growing_turns(self) -> None:
+    def test_default_agentic_shape_targets_seventy_percent_reuse(self) -> None:
         config = json.loads((BENCHMARK_DIR / "agentic-code-config.json").read_text())
 
-        self.assertEqual(config["turns"]["mean"], 6)
-        self.assertEqual(config["turns"]["min"], 6)
-        self.assertEqual(config["turns"]["max"], 6)
+        self.assertEqual(config["turns"]["mean"], 5)
+        self.assertEqual(config["turns"]["min"], 5)
+        self.assertEqual(config["turns"]["max"], 5)
         self.assertEqual(config["block_size"], 512)
         self.assertEqual(config["cache"]["layer1_tokens"], 1024)
         self.assertEqual(config["cache"]["layer1_5_tokens"], 512)
+        turns = config["turns"]["mean"]
+        shared = config["cache"]["layer1_tokens"] + config["cache"]["layer1_5_tokens"]
+        initial = shared + config["cache"]["layer2"]["mean"]
+        fresh = config["new_tokens_per_turn"]["mean"]
+        output = config["generation_length"]["mean"]
+        prompts = [initial + turn * (fresh + output) for turn in range(turns)]
+        reusable = sum(prompts) - (initial + (turns - 1) * fresh - shared)
+        self.assertAlmostEqual(100 * reusable / sum(prompts), 70, delta=1)
+        self.assertLess(max(prompts) + output, config["max_prompt_tokens"])
+
+    def test_trace_spans_duration_preserves_turns_and_counts_cold_prefixes(self) -> None:
+        rows = [
+            {"session_id": session, "input_length": 512, "output_length": 128,
+             "hash_ids": hashes, **timing}
+            for session, hashes, timing in (
+                ("a", [0], {"timestamp": 0}),
+                ("a", [1], {"delay": 250}),
+                ("b", [0], {"timestamp": 0}),
+                ("b", [2], {"delay": 1000}),
+            )
+        ]
+        scheduled, report = TRACE_MODULE.prepare_trace(rows, 1800)
+        self.assertEqual([row["timestamp"] for row in scheduled if "timestamp" in row], [0, 1800000])
+        self.assertEqual([row["delay"] for row in scheduled if "delay" in row], [250, 1000])
+        self.assertEqual(rows[2]["timestamp"], 0)
+        self.assertEqual(report["requests"], 4)
+        self.assertEqual(report["total_prompt_tokens"], 3328)
+        self.assertEqual(report["estimated_reusable_prompt_tokens"], 1792)
+        self.assertAlmostEqual(report["estimated_prefix_reuse_pct"], 100 * 1792 / 3328)
+        with self.assertRaisesRegex(ValueError, "at least two"):
+            TRACE_MODULE.prepare_trace(rows[:2], 1800)
+        self.assertEqual(TRACE_MODULE.prepare_trace(rows[:2], 0)[1]["requests"], 2)
+
+    def test_duration_cannot_be_cut_short_by_timeouts_or_a_single_session(self) -> None:
+        for variable in ("AIPERF_MODEL_TIMEOUT_SECONDS=900", "AIPERF_ACTIVE_DEADLINE_SECONDS=1800", "AIPERF_DATASET_SESSIONS=1"):
+            with self.subTest(variable=variable):
+                result, _ = self.render_kubernetes_job(variable)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("AIPERF_BENCHMARK_DURATION_SECONDS", result.stderr)
+
+    def test_runner_rejects_successful_exit_with_insufficient_measured_duration(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fake_aiperf = Path(directory) / "aiperf"
+            fake_aiperf.write_text(textwrap.dedent('''\
+                #!/usr/bin/env python3
+                import json, os, sys
+                from pathlib import Path
+                if sys.argv[1] == '--version':
+                    print('0.11.0')
+                elif sys.argv[1] == 'synthesize':
+                    output = Path(sys.argv[sys.argv.index('--output') + 1])
+                    output.mkdir(parents=True, exist_ok=True)
+                    rows = [{'session_id': str(i), 'input_length': 512,
+                             'output_length': 128, 'hash_ids': [i], 'timestamp': 0}
+                            for i in range(2)]
+                    (output / 'dataset.jsonl').write_text(
+                        ''.join(json.dumps(row) + '\\n' for row in rows))
+                elif sys.argv[1] == 'profile':
+                    output = Path(sys.argv[sys.argv.index('--artifact-dir') + 1])
+                    output.mkdir(parents=True)
+                    (output / 'profile_export_aiperf.json').write_text(json.dumps({
+                        'benchmark_duration': {'unit': 'sec', 'avg': float(os.environ['FAKE_DURATION'])},
+                        'request_count': {'avg': 2},
+                        'osl_mismatch_count': {'avg': 0},
+                        'osl_mismatch_diff_pct': {'avg': 0},
+                    }))
+                else:
+                    raise SystemExit(2)
+                '''))
+            fake_aiperf.chmod(0o755)
+            for observed, expected_exit in ((1, 1), (11, 0)):
+                with self.subTest(observed=observed):
+                    environment = os.environ.copy()
+                    environment.update({
+                        "AIPERF_BIN": str(fake_aiperf), "MODELS": "example/model",
+                        "OPENAI_API_KEY": "", "GPU_TELEMETRY": "",
+                        "ARTIFACTS_DIR": directory, "RUN_ID": f"duration-{observed}",
+                        "DATASET_SESSIONS": "2", "TURNS": "1",
+                        "BENCHMARK_DURATION_SECONDS": "10", "MODEL_TIMEOUT_SECONDS": "30",
+                        "FAKE_DURATION": str(observed),
+                    })
+                    result = subprocess.run(
+                        [str(SCRIPT)], cwd=ROOT, env=environment,
+                        capture_output=True, text=True,
+                    )
+                    self.assertEqual(result.returncode, expected_exit, result.stdout + result.stderr)
+                    summary = json.loads((Path(directory) / f"duration-{observed}" / "run-summary.json").read_text())
+                    self.assertEqual(summary["failed_models"], expected_exit)
 
     def test_make_renders_bounded_all_model_kubernetes_job(self) -> None:
-        result = subprocess.run(
-            [
-                "make",
-                "--no-print-directory",
-                "benchmark-agentic-render",
-                "AIPERF_RUN_ID=unit-k8s-render",
-                "AIPERF_IMAGE=registry.example.com/aiperf:0.11.0",
-            ],
-            cwd=ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+        result, calls = self.render_kubernetes_job()
+        self.assertEqual(result.returncode, 0, result.stderr)
         manifest = json.loads(result.stdout)
 
         self.assertEqual(manifest["kind"], "Job")
@@ -119,12 +285,52 @@ class AIPerfBenchmarkTests(unittest.TestCase):
         }
         self.assertEqual(
             environment["ENDPOINT_URL"]["value"],
-            "http://inference-gateway.daedalus-dynamo.svc.cluster.local:32359",
+            "https://daedalus.ddns.me:32359",
+        )
+        self.assertEqual(
+            pod_spec["hostAliases"],
+            [{"ip": "10.111.176.80", "hostnames": ["daedalus.ddns.me"]}],
+        )
+        self.assertIn(
+            "--context kubernetes-admin@kubernetes get service inference-gateway "
+            "-n daedalus-dynamo -o jsonpath={.spec.clusterIP}",
+            calls,
         )
         self.assertEqual(environment["CONCURRENCY"]["value"], "3")
+        self.assertEqual(environment["TURNS"]["value"], "5")
+        self.assertEqual(environment["DATASET_SESSIONS"]["value"], "128")
+        self.assertEqual(environment["BENCHMARK_DURATION_SECONDS"]["value"], "1800")
+        self.assertGreater(int(environment["MODEL_TIMEOUT_SECONDS"]["value"]), 1800)
         self.assertEqual(environment["RUN_ID"]["value"], "unit-k8s-render")
         self.assertNotIn("MODELS", environment)
-        self.assertNotIn("OPENAI_API_KEY", environment)
+        self.assertEqual(
+            environment["OPENAI_API_KEY"]["valueFrom"]["secretKeyRef"],
+            {"name": "inference-gateway-api-keys", "key": "switchyard"},
+        )
+
+    def test_cluster_ip_lookup_failure_never_falls_back_to_public_dns(self) -> None:
+        for cluster_ip, lookup_fails in (("", True), ("None", False)):
+            with self.subTest(cluster_ip=cluster_ip, lookup_fails=lookup_fails):
+                result, _ = self.render_kubernetes_job(
+                    cluster_ip=cluster_ip, lookup_fails=lookup_fails,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("ClusterIP", result.stderr)
+                self.assertEqual(result.stdout, "")
+
+    def test_explicit_local_ip_and_custom_service_dns_remain_supported(self) -> None:
+        for variables, aliases in (
+            (("AIPERF_CONNECT_IP=192.168.1.235",),
+             [{"ip": "192.168.1.235", "hostnames": ["daedalus.ddns.me"]}]),
+            (("AIPERF_CONNECT_IP=",), []),
+            (("AIPERF_ENDPOINT_URL=http://custom-gateway.test.svc.cluster.local:8000",), []),
+        ):
+            with self.subTest(variables=variables):
+                result, calls = self.render_kubernetes_job(*variables)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                pod = json.loads(result.stdout)["spec"]["template"]["spec"]
+                self.assertEqual(pod.get("hostAliases", []), aliases)
+                self.assertEqual(calls, "")
 
     def test_kubernetes_runner_copies_results_before_deleting_job(self) -> None:
         self.check_kubernetes_runner()
@@ -223,6 +429,7 @@ class AIPerfBenchmarkTests(unittest.TestCase):
                     "AIPERF_RUN_ID": "unit-k8s-run",
                     "AIPERF_RESULTS_DIR": str(relative_results),
                     "AIPERF_ACTIVE_DEADLINE_SECONDS": "10",
+                    "AIPERF_BENCHMARK_DURATION_SECONDS": "0",
                     "AIPERF_POLL_SECONDS": "1",
                 }
             )
@@ -283,6 +490,8 @@ class AIPerfBenchmarkTests(unittest.TestCase):
                 benchmark = temp_dir / "benchmark.sh"
                 benchmark.write_text(
                     '#!/usr/bin/env bash\n'
+                    '[[ ! -e "${ARTIFACTS_DIR}/${RUN_ID}" ]] || exit 99\n'
+                    'mkdir -p "${ARTIFACTS_DIR}/${RUN_ID}"\n'
                     'printf "{}\\n" >"${ARTIFACTS_DIR}/${RUN_ID}/run-manifest.json"\n'
                     f'exit {exit_code}\n'
                 )

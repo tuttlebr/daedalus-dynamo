@@ -3,6 +3,7 @@
 *.ckpt
 /*-daedalus.yaml
 .DS_Store
+.nfs*
 /*-dynosim-aiperf.yaml
 .env
 .env.*

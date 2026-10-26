@@ -8,6 +8,7 @@ GATEWAY_NAME="${GATEWAY_NAME:-inference-gateway}"
 GATEWAY_REQUEST_TIMEOUT="${GATEWAY_REQUEST_TIMEOUT:-300s}"
 GATEWAY_PORT="${GATEWAY_PORT:-32359}"
 GATEWAY_NODE_PORT="${GATEWAY_NODE_PORT:-32359}"
+GATEWAY_LOAD_BALANCER_IP="${GATEWAY_LOAD_BALANCER_IP:-192.168.1.12}"
 GATEWAY_IMAGE_REGISTRY="${GATEWAY_IMAGE_REGISTRY:-daedalus.ddns.me:5050}"
 GATEWAY_IMAGE_REPOSITORY="${GATEWAY_IMAGE_REPOSITORY:-btuttle/daedalus-agentgateway}"
 GATEWAY_IMAGE_TAG="${GATEWAY_IMAGE_TAG:-v1.4.1}"
@@ -214,6 +215,9 @@ spec:
               type: Utilization
               averageUtilization: ${GATEWAY_HPA_CPU_UTILIZATION}
   service:
+    metadata:
+      annotations:
+        metallb.io/loadBalancerIPs: "${GATEWAY_LOAD_BALANCER_IP}"
     spec:
       type: LoadBalancer
       allocateLoadBalancerNodePorts: true
@@ -239,9 +243,16 @@ spec:
       kind: AgentgatewayParameters
       name: ${GATEWAY_NAME}-params
   listeners:
-    - name: http
+    - name: https
       port: ${GATEWAY_PORT}
-      protocol: HTTP
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: daedalus-tls
+            namespace: daedalus
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -260,6 +271,10 @@ spec:
       http1IdleTimeout: ${GATEWAY_HTTP1_IDLE_TIMEOUT}
       maxConnectionDuration: ${GATEWAY_MAX_CONNECTION_DURATION}
   traffic:
+    apiKeyAuthentication:
+      mode: Strict
+      secretRef:
+        name: inference-gateway-api-keys
     phase: PreRouting
     transformation:
       conditional:

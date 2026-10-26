@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import http.client
+import ipaddress
 import json
 import os
 import ssl
@@ -63,8 +64,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--url",
-        default=os.environ.get("ENDPOINT_URL", "http://192.168.1.234:32359"),
+        default=os.environ.get("ENDPOINT_URL", "https://daedalus.ddns.me:32359"),
         help="Endpoint base URL or full /v1/chat/completions URL.",
+    )
+    parser.add_argument(
+        "--connect-ip",
+        default=os.environ.get("ENDPOINT_CONNECT_IP"),
+        help="Dial this IP while preserving TLS/Host identity; defaults to "
+        "192.168.1.12 for daedalus.ddns.me. Use an empty value for DNS.",
     )
     parser.add_argument("--model", default=os.environ.get("MODEL_ID", ""))
     parser.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY", ""))
@@ -83,6 +90,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fd-growth-allowance", type=int, default=96)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
+    if args.connect_ip is None:
+        args.connect_ip = (
+            "192.168.1.12" if urlsplit(args.url).hostname == "daedalus.ddns.me" else ""
+        )
+    if args.connect_ip:
+        try:
+            ipaddress.ip_address(args.connect_ip)
+        except ValueError:
+            parser.error("--connect-ip must be an IP address or empty")
     if args.concurrency < 1 or args.duration < 1 or args.cooldown < 1:
         parser.error("concurrency, duration, and cooldown must be positive")
     if not 0 <= args.max_error_rate <= 1 or not 0 < args.max_fd_utilization < 1:
@@ -108,13 +124,24 @@ def endpoint_paths(raw_url: str) -> tuple[Any, str, str]:
     return parsed, chat_path, models_path
 
 
-def new_connection(parsed: Any, timeout: float) -> http.client.HTTPConnection:
+def new_connection(
+    parsed: Any, timeout: float, connect_ip: str = ""
+) -> http.client.HTTPConnection:
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     if parsed.scheme == "https":
-        return http.client.HTTPSConnection(
+        connection = http.client.HTTPSConnection(
             parsed.hostname, port, timeout=timeout, context=ssl.create_default_context()
         )
-    return http.client.HTTPConnection(parsed.hostname, port, timeout=timeout)
+    else:
+        connection = http.client.HTTPConnection(parsed.hostname, port, timeout=timeout)
+    if connect_ip:
+        # Override only the socket destination; retain the URL hostname for
+        # TLS SNI, certificate verification, and HTTP Host.
+        create_connection = connection._create_connection
+        connection._create_connection = lambda address, *args, **kwargs: (
+            create_connection((connect_ip, address[1]), *args, **kwargs)
+        )
+    return connection
 
 
 def request_headers(api_key: str) -> dict[str, str]:
@@ -125,9 +152,9 @@ def request_headers(api_key: str) -> dict[str, str]:
 
 
 def discover_model(
-    parsed: Any, models_path: str, api_key: str, timeout: float
+    parsed: Any, models_path: str, api_key: str, timeout: float, connect_ip: str = ""
 ) -> str:
-    conn = new_connection(parsed, timeout)
+    conn = new_connection(parsed, timeout, connect_ip)
     try:
         conn.request("GET", models_path, headers=request_headers(api_key))
         response = conn.getresponse()
@@ -164,6 +191,7 @@ def load_worker(
     payload: bytes,
     timeout: float,
     results: ResultCounter,
+    connect_ip: str = "",
 ) -> None:
     conn: http.client.HTTPConnection | None = None
     while time.monotonic() < stop_at:
@@ -171,7 +199,7 @@ def load_worker(
         body = b""
         try:
             if conn is None:
-                conn = new_connection(parsed, timeout)
+                conn = new_connection(parsed, timeout, connect_ip)
             conn.request("POST", chat_path, body=payload, headers=headers)
             response = conn.getresponse()
             body = response.read()
@@ -278,7 +306,9 @@ def percentile(values: list[float], fraction: float) -> float | None:
 def main() -> int:
     args = parse_args()
     parsed, chat_path, models_path = endpoint_paths(args.url)
-    model = args.model or discover_model(parsed, models_path, args.api_key, args.request_timeout)
+    model = args.model or discover_model(
+        parsed, models_path, args.api_key, args.request_timeout, args.connect_ip
+    )
     payload = json.dumps(
         {
             "model": model,
@@ -313,6 +343,7 @@ def main() -> int:
                 payload,
                 args.request_timeout,
                 results,
+                args.connect_ip,
             ),
             daemon=True,
         )

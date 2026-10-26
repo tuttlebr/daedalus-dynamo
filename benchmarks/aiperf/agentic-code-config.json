@@ -1,9 +1,9 @@
 {
   "new_tokens_per_turn": {
-    "mean": 256,
-    "median": 256,
-    "min": 256,
-    "max": 256,
+    "mean": 3072,
+    "median": 3072,
+    "min": 3072,
+    "max": 3072,
     "bias": 1.0
   },
   "generation_length": {
@@ -29,13 +29,13 @@
     "max": 1000
   },
   "turns": {
-    "mean": 6,
-    "median": 6,
-    "min": 6,
-    "max": 6,
+    "mean": 5,
+    "median": 5,
+    "min": 5,
+    "max": 5,
     "allow_truncation": false
   },
-  "max_prompt_tokens": 8192,
+  "max_prompt_tokens": 16384,
   "block_size": 512,
   "cache": {
     "layer1_tokens": 1024,

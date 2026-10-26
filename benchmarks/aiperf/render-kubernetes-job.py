@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import json
+import ipaddress
 import os
 import re
+import subprocess
 import sys
 from typing import NoReturn
 from urllib.parse import urlsplit
@@ -55,6 +57,13 @@ def boolean(name: str, default: str) -> str:
     return value
 
 
+def nonnegative_int(name: str, default: str) -> int:
+    value = env(name, default)
+    if not value.isdecimal():
+        fail(f"{name} must be a nonnegative integer (got {value})")
+    return int(value)
+
+
 def dns_label(name: str, value: str) -> str:
     if len(value) > 63 or not DNS_LABEL_RE.fullmatch(value):
         fail(f"{name} must be a valid DNS label (got {value})")
@@ -80,6 +89,34 @@ def env_var(name: str, value: str) -> dict[str, str]:
     return {"name": name, "value": value}
 
 
+def gateway_cluster_ip(namespace: str) -> str:
+    """Resolve the gateway Service without falling back to public DNS."""
+    gateway = dns_label("GATEWAY_NAME", env("GATEWAY_NAME", "inference-gateway"))
+    command = [env("KUBECTL", "kubectl")]
+    context = optional_env("EXPECTED_CONTEXT")
+    if context:
+        command.extend(["--context", context])
+    command.extend([
+        "get", "service", gateway, "-n", namespace,
+        "-o", "jsonpath={.spec.clusterIP}",
+    ])
+    try:
+        result = subprocess.run(
+            command, check=True, capture_output=True, text=True, timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        fail(
+            f"could not resolve ClusterIP for gateway Service {namespace}/{gateway}; "
+            "check kubectl access or set AIPERF_CONNECT_IP to a local IP"
+        )
+    address = result.stdout.strip()
+    try:
+        ipaddress.ip_address(address)
+    except ValueError:
+        fail(f"gateway Service {namespace}/{gateway} has no valid ClusterIP")
+    return address
+
+
 def main() -> None:
     namespace = dns_label("NAMESPACE", env("NAMESPACE", "daedalus-dynamo"))
     image = env("AIPERF_IMAGE")
@@ -97,7 +134,7 @@ def main() -> None:
             "underscores, and hyphens"
         )
 
-    endpoint_url = env("AIPERF_ENDPOINT_URL")
+    endpoint_url = env("AIPERF_ENDPOINT_URL", "https://daedalus.ddns.me:32359")
     endpoint = urlsplit(endpoint_url)
     try:
         _ = endpoint.port
@@ -120,8 +157,24 @@ def main() -> None:
     if pull_policy not in {"Always", "IfNotPresent", "Never"}:
         fail("AIPERF_IMAGE_PULL_POLICY must be Always, IfNotPresent, or Never")
 
-    api_key_secret = optional_env("AIPERF_API_KEY_SECRET")
-    api_key_secret_key = optional_env("AIPERF_API_KEY_SECRET_KEY", "OPENAI_API_KEY")
+    connect_ip = optional_env(
+        "AIPERF_CONNECT_IP",
+        "auto",
+    )
+    if connect_ip == "auto":
+        connect_ip = (
+            gateway_cluster_ip(namespace)
+            if endpoint.hostname == "daedalus.ddns.me"
+            else ""
+        )
+    if connect_ip:
+        try:
+            ipaddress.ip_address(connect_ip)
+        except ValueError:
+            fail("AIPERF_CONNECT_IP must be auto, an IP address, or empty")
+
+    api_key_secret = optional_env("AIPERF_API_KEY_SECRET", "inference-gateway-api-keys")
+    api_key_secret_key = optional_env("AIPERF_API_KEY_SECRET_KEY", "switchyard")
     if api_key_secret:
         dns_label("AIPERF_API_KEY_SECRET", api_key_secret)
         if (
@@ -139,17 +192,22 @@ def main() -> None:
         dns_label("AIPERF_IMAGE_PULL_SECRET", image_pull_secret)
 
     active_deadline = positive_int("AIPERF_ACTIVE_DEADLINE_SECONDS", "14400")
+    benchmark_duration = nonnegative_int("AIPERF_BENCHMARK_DURATION_SECONDS", "1800")
+    dataset_sessions = positive_int("AIPERF_DATASET_SESSIONS", "128")
+    model_timeout = positive_int("AIPERF_MODEL_TIMEOUT_SECONDS", "7200")
+    if benchmark_duration and dataset_sessions < 2:
+        fail("timed benchmarks need at least two sessions; set AIPERF_BENCHMARK_DURATION_SECONDS=0 for a single-session smoke test")
+    if model_timeout <= benchmark_duration or active_deadline <= benchmark_duration:
+        fail("model timeout and Job deadline must exceed AIPERF_BENCHMARK_DURATION_SECONDS")
     models = optional_env("AIPERF_MODELS")
 
     container_env: list[dict[str, object]] = [
         env_var("ENDPOINT_URL", endpoint_url),
         env_var("ARTIFACTS_DIR", "/artifacts"),
         env_var("RUN_ID", run_id),
-        env_var("TURNS", str(positive_int("AIPERF_TURNS", "6"))),
-        env_var(
-            "DATASET_SESSIONS",
-            str(positive_int("AIPERF_DATASET_SESSIONS", "8")),
-        ),
+        env_var("TURNS", str(positive_int("AIPERF_TURNS", "5"))),
+        env_var("DATASET_SESSIONS", str(dataset_sessions)),
+        env_var("BENCHMARK_DURATION_SECONDS", str(benchmark_duration)),
         env_var("CONCURRENCY", str(positive_int("AIPERF_CONCURRENCY", "3"))),
         env_var(
             "REQUEST_TIMEOUT_SECONDS",
@@ -157,7 +215,7 @@ def main() -> None:
         ),
         env_var(
             "MODEL_TIMEOUT_SECONDS",
-            str(positive_int("AIPERF_MODEL_TIMEOUT_SECONDS", "900")),
+            str(model_timeout),
         ),
         env_var(
             "SYNTHESIS_TIMEOUT_SECONDS",
@@ -262,6 +320,10 @@ def main() -> None:
     }
     if image_pull_secret:
         pod_spec["imagePullSecrets"] = [{"name": image_pull_secret}]
+    if connect_ip:
+        # Route discovery and generation straight to the local Service while
+        # retaining the certificate's hostname for verified TLS.
+        pod_spec["hostAliases"] = [{"ip": connect_ip, "hostnames": [endpoint.hostname]}]
 
     name = job_name(run_id)
     manifest = {

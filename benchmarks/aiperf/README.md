@@ -9,12 +9,26 @@ The frozen workload models an agentic conversation with four prefix layers:
 1. A 1,024-token system/tool prefix shared by every session.
 2. A 512-token repository prefix shared within one of four groups.
 3. A 1,024-token context unique to each session.
-4. Six growing conversation turns. AIPerf appends every live assistant response
+4. Five growing conversation turns, adding 3,072 fresh tokens per continuation.
+   AIPerf appends every live assistant response
    before sending the next user turn.
 
-The default run replays eight sessions with the generator's bounded agentic
-inter-turn schedule, a concurrency cap of three, and exactly 48 requests per
-model. Every session sends `X-Dynamo-Session-ID`, and its HTTP connection is
+The default run replays 128 fresh sessions with a concurrency cap of three and
+exactly 640 requests per model. Session starts are evenly spaced across 1,800
+seconds, with the final session starting at the 30-minute boundary. Continuation
+delays are preserved, and all queued requests and remaining turns drain afterward,
+so a successful profile lasts at least 30 minutes per model. The runner checks
+AIPerf's measured duration before marking a timed profile successful.
+
+The five-turn shape targets about 70% reusable prompt tokens: 2,560 initial
+tokens, 3,072 new tokens per continuation, and 128 generated tokens per turn.
+The longest default prompt is approximately 15,360 tokens before chat-template
+overhead. This models reusable prefixes, not a guaranteed server KV-cache hit
+rate. `workload-plan.json` records the token-weighted estimate, including cold
+first occurrences of shared prefixes and the assumptions about retained history.
+Sessions are not recycled to fill the duration, which would inflate reuse.
+
+Every session sends `X-Dynamo-Session-ID`, and its HTTP connection is
 reused across turns. The generator uses AIPerf 0.11.0's fixed 512-token
 Mooncake block size so the generated hash IDs and trace loader reconstruct the
 same shared prompt blocks. AIPerf 0.11.0 rejects block-size overrides for file
@@ -23,7 +37,8 @@ block size.
 
 ## Run as a Kubernetes Job
 
-From the repository root, inspect the exact Job without changing the cluster:
+From the repository root, inspect the exact Job without changing the cluster
+(kubectl reads the gateway Service's current ClusterIP):
 
 ```bash
 make benchmark-agentic-render
@@ -37,8 +52,18 @@ make benchmark-agentic
 
 The Make target checks `EXPECTED_CONTEXT` and the in-cluster gateway Service
 before building or sending traffic. It builds and pushes the pinned client
-image, creates a Job with `backoffLimit: 0`, and uses the Service FQDN rather
-than host DNS. The Job uses ephemeral storage. When the benchmark exits, its
+image and creates a Job with `backoffLimit: 0`. The Job uses
+`https://daedalus.ddns.me:32359`, a pod-local hostname mapping directly to
+the gateway Service's ClusterIP, and verified TLS. Both discovery and generation
+stay inside the cluster; they do not traverse the public endpoint or LAN VIP.
+The URL retains the hostname because the existing certificate only covers
+`daedalus.ddns.me`, not the Service FQDN. It loads `OPENAI_API_KEY` from Secret
+`inference-gateway-api-keys`, key `switchyard`, for model discovery and
+generation. The default `AIPERF_CONNECT_IP=auto` looks up `GATEWAY_NAME` in
+`NAMESPACE` on each render or run and fails if that lookup fails. Set an explicit
+local IP to change the mapping, or set it empty to opt into normal DNS.
+Custom endpoint hostnames use their own DNS unless an explicit IP is supplied.
+The Job uses ephemeral storage. When the benchmark exits, its
 container stays running while the target copies the run back to:
 
 ```text
@@ -56,24 +81,40 @@ Set
 `AIPERF_KEEP_JOB=1` to retain it after a successful copy.
 
 By default, `make benchmark-agentic` builds and pushes `AIPERF_IMAGE`. Reuse an
-already published image with `AIPERF_SKIP_BUILD=1 AIPERF_SKIP_PUSH=1`. Private
-gateway credentials can be referenced without rendering their value:
+already published image with `AIPERF_SKIP_BUILD=1 AIPERF_SKIP_PUSH=1`. The
+default credential reference renders no secret value. To use a different
+Secret in the Job's namespace:
 
 ```bash
 AIPERF_API_KEY_SECRET=gateway-benchmark-key \
+  AIPERF_API_KEY_SECRET_KEY=OPENAI_API_KEY \
   make benchmark-agentic
 ```
 
-The Secret must contain `OPENAI_API_KEY`, or set
-`AIPERF_API_KEY_SECRET_KEY` to another key. Useful bounded-workload overrides
+Set `AIPERF_API_KEY_SECRET_KEY` to the key stored in that Secret. Useful bounded-workload overrides
 include `AIPERF_TURNS`, `AIPERF_DATASET_SESSIONS`, `AIPERF_CONCURRENCY`,
+`AIPERF_BENCHMARK_DURATION_SECONDS` (default 1800),
 `AIPERF_MODEL_TIMEOUT_SECONDS`, and `AIPERF_ACTIVE_DEADLINE_SECONDS`.
+The per-model timeout defaults to 7200 seconds; the whole-Job deadline remains
+14400 seconds. Increase the Job deadline for large model catalogs. Both ceilings
+must exceed the session-start window. Set `AIPERF_BENCHMARK_DURATION_SECONDS=0`
+for an immediate, finite smoke run; timed runs need at least two sessions.
 `AIPERF_MODELS` remains available for a deliberate focused run; leave it empty
 to evaluate every model returned by `/v1/models`.
 
 ## Build and inspect
 
-From the repository root:
+From the repository root, set `OPENAI_API_KEY` to an existing gateway key.
+For the current cluster, load it without printing the value:
+
+```bash
+export OPENAI_API_KEY="$(kubectl get secret inference-gateway-api-keys \
+  -n daedalus-dynamo -o jsonpath='{.data.switchyard}' | base64 --decode)"
+```
+
+Keep the HTTPS hostname in the URL. Docker's `--add-host` provides the LAN
+NodePort IP override for both discovery and generation while preserving certificate
+verification:
 
 ```bash
 docker build \
@@ -81,7 +122,9 @@ docker build \
   benchmarks/aiperf
 
 docker run --rm \
-  -e ENDPOINT_URL=http://192.168.1.234:32359 \
+  --add-host daedalus.ddns.me:192.168.1.234 \
+  -e ENDPOINT_URL=https://daedalus.ddns.me:32359 \
+  -e OPENAI_API_KEY \
   daedalus-dynamo-aiperf:0.11.0 \
   --list-models
 ```
@@ -91,7 +134,9 @@ prints redacted AIPerf commands without generating inference traffic:
 
 ```bash
 docker run --rm \
-  -e ENDPOINT_URL=http://192.168.1.234:32359 \
+  --add-host daedalus.ddns.me:192.168.1.234 \
+  -e ENDPOINT_URL=https://daedalus.ddns.me:32359 \
+  -e OPENAI_API_KEY \
   daedalus-dynamo-aiperf:0.11.0 \
   --dry-run
 ```
@@ -106,12 +151,16 @@ mkdir -p artifacts/aiperf
 
 docker run --rm --init \
   --user "$(id -u):$(id -g)" \
-  -e ENDPOINT_URL=http://192.168.1.234:32359 \
+  --add-host daedalus.ddns.me:192.168.1.234 \
+  -e ENDPOINT_URL=https://daedalus.ddns.me:32359 \
+  -e OPENAI_API_KEY \
   -v "$PWD/artifacts/aiperf:/artifacts" \
   daedalus-dynamo-aiperf:0.11.0
 ```
 
-The equivalent Compose workflow is:
+The equivalent Compose workflow maps the hostname to node `192.168.1.234`
+and uses the existing fixed NodePort `32359`. Set `ENDPOINT_CONNECT_IP` to
+select another cluster node's LAN IP:
 
 ```bash
 mkdir -p artifacts/aiperf
@@ -119,8 +168,13 @@ AIPERF_UID="$(id -u)" AIPERF_GID="$(id -g)" \
   docker compose -f benchmarks/aiperf/docker-compose.yaml run --rm aiperf
 ```
 
-For an authenticated endpoint, export the key only for the container process.
-The runner never writes it to the run manifest or rendered commands:
+The gateway requires the exported key for both discovery and generation.
+HTTP 401 or 403 means the gateway rejected the supplied credential even if the
+local connection succeeded. Use a current gateway key, or use
+`make benchmark-agentic` to load the configured Kubernetes Secret directly into
+the pod.
+You can also enter a key interactively. The runner omits it from its run
+manifest and redacts it in dry-run commands:
 
 ```bash
 read -rsp 'Gateway API key: ' OPENAI_API_KEY && printf '\n'
@@ -133,21 +187,31 @@ unset OPENAI_API_KEY
 ## Tune the bounded workload
 
 All model runs use the same generated dataset and seed. The request count is
-`DATASET_SESSIONS * TURNS`. For example, this runs 16 eight-turn sessions, or
-128 requests per model:
+`DATASET_SESSIONS * TURNS`. `BENCHMARK_DURATION_SECONDS` controls the session-start
+window, not a stop timer. For example, this doubles the default session density
+over the same 30-minute window:
 
 ```bash
 mkdir -p artifacts/aiperf
 AIPERF_UID="$(id -u)" AIPERF_GID="$(id -g)" \
-DATASET_SESSIONS=16 TURNS=8 CONCURRENCY=8 \
+DATASET_SESSIONS=256 BENCHMARK_DURATION_SECONDS=1800 \
   docker compose -f benchmarks/aiperf/docker-compose.yaml run --rm aiperf
 ```
 
 The checked-in default concurrency of three models the current maximum of one
 active turn from each of the two people and the autonomous bot. A higher value
-is a deliberate stress test, not an SLA-representative run. The eight generated
+is a deliberate stress test, not an SLA-representative run. The generated
 sessions and their token shape remain a recipe proxy until replaced by a
 Daedalus trace.
+
+Changing turn counts or token lengths changes the reuse estimate. Larger turn
+counts may require increasing `max_prompt_tokens` in a custom `AGENTIC_CONFIG`.
+For a short Kubernetes validation, use:
+
+```bash
+make benchmark-agentic AIPERF_DATASET_SESSIONS=2 AIPERF_TURNS=2 \
+  AIPERF_BENCHMARK_DURATION_SECONDS=30
+```
 
 Set `MODELS` to a comma-separated list for a focused run. Discovery remains the
 default because it is the only way to cover every model currently advertised by
@@ -220,6 +284,8 @@ Each run gets an immutable timestamped directory with:
 - `run-manifest.json`, including the exact workload, dataset digest, AIPerf
   version and source commit, models, and unknown infrastructure facts.
 - The generated `dataset.jsonl`, generator manifest, and quality reports.
+- `scheduled-dataset.jsonl`, the exact replay input, and `workload-plan.json`,
+  containing the effective session-start span and modeled prefix reuse.
 - Per-model `profile_export_aiperf.json` summaries and
   `profile_export.jsonl` request records.
 - `run-summary.json` with the exit status and artifact directory for every
