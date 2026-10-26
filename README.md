@@ -14,6 +14,7 @@ and uninstalling releases from model config paths.
 | `values/gemma431b.yaml` | `nvidia/Gemma-4-31B-IT-NVFP4` | vLLM |
 | `values/nemotronnano.yaml` | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-Reasoning-NVFP4` | vLLM |
 | `values/nemotron35lightning-gb10.yaml` | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4` | TensorRT-LLM |
+| `values/nemotron35bolt-gb10.yaml` | `nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB` | vLLM, GB10, prefix caching |
 
 ## Prerequisites
 
@@ -182,6 +183,53 @@ scripts/smoke-test-responses.py --url http://192.168.1.234:32359
 
 Pass `--model <model-id>` to select a specific deployment. The script also
 accepts `ENDPOINT_URL`, `MODEL_ID`, and `OPENAI_API_KEY` from the environment.
+
+## Nemotron 3.5 Bolt on Spark
+
+[`values/nemotron35bolt-gb10.yaml`](./values/nemotron35bolt-gb10.yaml)
+serves the exact NVIDIA 24GB IQ2 checkpoint on
+one GB10. It configures 131,072 tokens, tensor parallel size 1, a 64-sequence
+admission ceiling, 48 GiB KV cache, and a 16-token prefix-match unit. DFlash is
+disabled because its sliding-window cache manager prevents fine-grained reuse
+in this runtime. The model revision is pinned. The model cache and compiled kernels use Spark's local
+NVMe.
+
+INC-01 tuning uses an 8,192-token batch budget and limits each long prefill to
+1,024 tokens under contention. CUDA graphs are disabled while compiled kernels
+remain enabled: larger-concurrency graph configurations failed on their first
+request in this SM121 preview runtime. The sequence ceiling is not a guarantee
+of 64 simultaneous full-context requests; KV demand and compute still bound
+concurrency. See the [runtime notes](./runtime/nemotron35bolt-gb10/README.md)
+for cache configuration and validation results.
+
+This checkpoint's b12x IQ2 kernels require Blackwell SM120/SM121; the cluster's
+L40S GPUs cannot run the supported packed-weight backend. The profile therefore
+requires stopping the Qwen3.8 Flash Next release that otherwise occupies the
+GB10. Uninstall retains both releases' model-cache PVCs for reuse.
+
+The custom ARM64 runtime pins NVIDIA's model-card vLLM revision
+`77154ca6116ae34cbfe314beef1016bde9b63989`, Dynamo
+`1.6.0.dev20261019`, and b12x `1.5.1`. This is a preview runtime; the stable
+shared image predates the required Bolt and LiLiCorr support.
+
+Validated on the cluster on 2026-10-20: text, image input, concurrent requests,
+and streaming text plus automatic and forced tool round trips through both
+Chat Completions and Responses. A 130,992-token prompt passed through Dynamo
+and the authenticated gateway; a 128,392-token prompt passed through Switchyard's
+`daedalus/local` alias. Repeated long prompts reused 107,904 cached tokens.
+Worker metrics confirmed active speculative decoding. Muse and Qwen are stopped,
+and Switchyard's four Muse-containing route profiles now select Bolt.
+Validation records are in `artifacts/nemotron35bolt-migration/`.
+
+```bash
+DOCKER_HOST=ssh://daedalus-06 make image values/nemotron35bolt-gb10.yaml
+SKIP_BUILD=1 SKIP_PUSH=1 make deploy values/nemotron35bolt-gb10.yaml
+make status values/nemotron35bolt-gb10.yaml
+```
+
+Sources: [NVIDIA model card](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB),
+[LiLiCorr model card](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-LiLiCorr),
+and [vLLM b12x hardware support](https://github.com/vllm-project/vllm/blob/77154ca6116ae34cbfe314beef1016bde9b63989/docs/features/quantization/b12x.md).
 
 ## Nemotron 3.5 Lightning GB10 Release
 

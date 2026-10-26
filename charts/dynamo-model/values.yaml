@@ -9,6 +9,8 @@ model:
   backendFramework: vllm
   deploymentMode: direct
   envFromSecret: hf-token-secret
+  # Set for custom images whose tag is not the Dynamo runtime version.
+  runtimeVersionOverride: ""
 
 modelCache:
   name: dynamo-model-cache
@@ -43,6 +45,9 @@ redis:
 
 modelexpress:
   enabled: true
+  # Pin every model-cache consumer when using a node-local RWO volume.
+  nodeSelector: {}
+  tolerations: []
   image: nvcr.io/nvidia/ai-dynamo/modelexpress-server:0.4.1
   imagePullPolicy: IfNotPresent
   port: 8000
@@ -60,11 +65,15 @@ modelexpress:
       memory: 4Gi
 
 frontend:
+  # A separate frontend image can supply native transport features while a
+  # model-specific worker image supplies a newer inference engine.
+  image: ""
   # Start each model release with one CPU-only frontend.
   replicas: 1
   # Optional Kubernetes nodeSelector for the CPU-only frontend. This is useful
   # when the shared runtime image should reuse layers on a model worker node.
   nodeSelector: {}
+  tolerations: []
   httpPort: 8000
   httpBodyLimitMb: "200"
   requestPlane: tcp

@@ -13,7 +13,11 @@
         "imagePullPolicy": { "$ref": "#/definitions/imagePullPolicy" },
         "backendFramework": { "type": "string", "enum": ["vllm", "sglang", "trtllm"] },
         "deploymentMode": { "type": "string", "enum": ["direct", "dgdr"] },
-        "envFromSecret": { "type": "string", "minLength": 1 }
+        "envFromSecret": { "type": "string", "minLength": 1 },
+        "runtimeVersionOverride": { "type": "string", "pattern": "^$|^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "buildDockerfile": { "type": "string", "minLength": 1 },
+        "buildContext": { "type": "string", "minLength": 1 },
+        "buildPlatform": { "type": "string", "enum": ["linux/amd64", "linux/arm64"] }
       }
     },
     "planner": {
@@ -64,6 +68,8 @@
     "modelexpress": {
       "type": "object",
       "properties": {
+        "nodeSelector": { "type": "object", "additionalProperties": { "type": "string" } },
+        "tolerations": { "type": "array", "items": { "type": "object" } },
         "imagePullPolicy": { "$ref": "#/definitions/imagePullPolicy" },
         "resources": { "$ref": "#/definitions/resourceRequirements" },
         "resetRegistryOnStart": { "type": "boolean" },
@@ -173,6 +179,9 @@
     "frontend": {
       "type": "object",
       "properties": {
+        "image": { "type": "string" },
+        "nodeSelector": { "type": "object", "additionalProperties": { "type": "string" } },
+        "tolerations": { "type": "array", "items": { "type": "object" } },
         "replicas": { "type": "integer", "minimum": 1 },
         "extraArgs": {
           "type": "array",

@@ -17,6 +17,10 @@ SHARED_RUNTIME_IMAGE = (
     "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1"
 )
 GB10_RUNTIME_IMAGE = "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1"
+NEMOTRON35_BOLT_RUNTIME_IMAGE = (
+    "daedalus.ddns.me:5050/btuttle/daedalus-dynamo-nemotron35bolt-gb10:"
+    "1.6.0dev20261019-vllm77154ca-mamba-prefill-20261026-2"
+)
 NEMOTRON35_LIGHTNING_RUNTIME_IMAGE = (
     "nvcr.io/nvidia/ai-dynamo/vllm-runtime:"
     "1.5.0-nemotron-3.5-lightning-dev.1"
@@ -66,6 +70,8 @@ class ModelChartRenderTests(unittest.TestCase):
                     continue
                 if values_file.name == "qwen35-122b-gb10.yaml":
                     expected_image = GB10_RUNTIME_IMAGE
+                elif values_file.name == "nemotron35bolt-gb10.yaml":
+                    expected_image = NEMOTRON35_BOLT_RUNTIME_IMAGE
                 elif values_file.name == "nemotron35lightning-l40s.yaml":
                     expected_image = NEMOTRON35_LIGHTNING_RUNTIME_IMAGE
                 elif values_file.name == "muse-glimmer-l40s.yaml":

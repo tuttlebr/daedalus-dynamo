@@ -1,0 +1,151 @@
+# Exact NVIDIA IQ2 checkpoint: b12x kernels require Blackwell SM120/SM121.
+# The cluster's L40S (SM89) cannot use this packed-weight vLLM backend.
+# Source: NVIDIA's model card, checked 2026-10-20.
+model:
+  name: nemotron35bolt-vllm-gb10
+  id: nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-nemotron35bolt-gb10:1.6.0dev20261019-vllm77154ca-mamba-prefill-20261026-2
+  imagePullPolicy: IfNotPresent
+  backendFramework: vllm
+  deploymentMode: direct
+  runtimeVersionOverride: "1.6.0"
+  buildDockerfile: runtime/nemotron35bolt-gb10/Dockerfile
+  buildContext: runtime/nemotron35bolt-gb10
+  buildPlatform: linux/arm64
+
+frontend:
+  # The checkpoint correction is worker-only; keep the working frontend image.
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-nemotron35bolt-gb10:1.6.0dev20261019-vllm77154ca-1
+  replicas: 1
+  nodeSelector:
+    nvidia.com/gpu.product: NVIDIA-GB10
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+  extraArgs:
+    - --trust-remote-code
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "4"
+      memory: 4Gi
+
+modelexpress:
+  nodeSelector:
+    nvidia.com/gpu.product: NVIDIA-GB10
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+
+worker:
+  replicas: 1
+  scalingAdapter:
+    enabled: false
+  gpu: "1"
+  cpuRequest: "4"
+  # Reserve room for weights, the larger KV pool, and runtime/graph buffers.
+  memoryRequest: 88Gi
+  sharedMemorySize: 16Gi
+  nodeSelector:
+    nvidia.com/gpu.product: NVIDIA-GB10
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+  workingDir: /workspace
+  startupProbe:
+    path: /live
+    periodSeconds: 30
+    timeoutSeconds: 20
+    failureThreshold: 120
+  extraEnv:
+    - name: VLLM_USE_V2_MODEL_RUNNER
+      value: "1"
+    - name: VLLM_WORKER_MULTIPROC_METHOD
+      value: spawn
+    - name: HF_HOME
+      value: /model/.model-express
+    - name: HF_MODULES_CACHE
+      value: /model/runtime-cache/hf_modules
+    - name: TRITON_CACHE_DIR
+      value: /model/runtime-cache/triton
+    - name: VLLM_CACHE_ROOT
+      value: /model/runtime-cache/vllm
+    - name: NCCL_IB_DISABLE
+      value: "1"
+  vllmArgs:
+    - --served-model-name "${MODEL_NAME}"
+    - --revision c6cc2e8ffa353403213d6b9b18aaf8eb684d705a
+    - --trust-remote-code
+    - --load-format auto
+    - --enable-multimodal
+    - --dyn-tool-call-parser qwen3_coder
+    - --dyn-reasoning-parser nemotron_v3
+    - --reasoning-parser nemotron_v3
+    - --tensor-parallel-size 1
+    - --pipeline-parallel-size 1
+    - --data-parallel-size 1
+    - --max-model-len 131072
+    # INC-01: size admission with KV capacity; 256 slots with a 32 GiB pool
+    # saturated at ~44 short requests. Long contexts still reduce concurrency.
+    - --max-num-seqs 64
+    - --max-num-batched-tokens 8192
+    # 256-slot SM121 trials failed their first request at graph caps 512 and 64
+    # (512 traced to cuGraphLaunch). Keep compiled kernels, skip CUDA graphs.
+    - --compilation-config '{"cudagraph_mode":"NONE"}'
+    # Share prefill iterations so long memory jobs leave room for short prompts.
+    - --long-prefill-token-threshold 1024
+    - --gpu-memory-utilization 0.70
+    # Explicit 48 GiB pool overrides gpu-memory-utilization on unified-memory GB10.
+    - --kv-cache-memory-bytes 51539607552
+    - --enable-chunked-prefill
+    - --enable-prefix-caching
+    - --prefix-caching-hash-algo sha256
+    # Preserve short-prefix reuse without a speculative draft cache group.
+    - --prefix-match-unit 16
+    - --kv-cache-dtype fp8
+    - --linear-backend b12x
+    - --moe-backend b12x
+    - --attention-backend FLASHINFER
+    - --mamba-backend flashinfer
+    - --mamba-ssm-cache-dtype bfloat16
+    - --mamba-cache-dtype bfloat16
+    - --mamba-cache-mode align
+    - --seed 42
+    - --limit-mm-per-prompt '{"image":2,"video":1}'
+    - --video-pruning-rate 0.5
+    - --media-io-kwargs '{"video":{"fps":2,"num_frames":256}}'
+
+planner:
+  enabled: false
+  minEndpoint: 1
+  maxGpuBudget: 1
+
+# Keep both checkpoint downloads and compiled kernels on Spark's local NVMe.
+modelCache:
+  name: nemotron35bolt-gb10-model-cache
+  create: true
+  storage: 96Gi
+  accessModes:
+    - ReadWriteOnce
+  mountPath: /model
+  cachePath: /model/.model-express/cache
+  storageClassName: local-fast
+
+redis:
+  enabled: true
+  name: nemotron35bolt-gb10-redis
+  dataPvcName: nemotron35bolt-gb10-redis-data
+  image: redis:7-alpine
+  imagePullPolicy: IfNotPresent
+  storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-fast

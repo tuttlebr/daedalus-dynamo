@@ -82,14 +82,18 @@ KUBECTL ?= kubectl
 DOCKER ?= docker
 PYTHON ?= python3
 
-DOCKERFILE ?= Dockerfile
-CONTEXT ?= .
 BASE_IMAGE ?= nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1
 DOCKER_BUILD_ARGS ?=
 
 MODEL_IMAGE_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*image:[[:space:]]*//p' "$(MODEL_CONFIG)" 2>/dev/null | head -1 | tr -d '"')
 MODEL_DGD_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*name:[[:space:]]*//p' "$(MODEL_CONFIG)" 2>/dev/null | head -1 | tr -d '"')
 MODEL_ID_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*id:[[:space:]]*//p' "$(MODEL_CONFIG)" 2>/dev/null | head -1 | tr -d '"')
+MODEL_DOCKERFILE_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*buildDockerfile:[[:space:]]*//p' "$(MODEL_CONFIG)" 2>/dev/null | head -1 | tr -d '"')
+MODEL_CONTEXT_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*buildContext:[[:space:]]*//p' "$(MODEL_CONFIG)" 2>/dev/null | head -1 | tr -d '"')
+MODEL_PLATFORM_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*buildPlatform:[[:space:]]*//p' "$(MODEL_CONFIG)" 2>/dev/null | head -1 | tr -d '"')
+DOCKERFILE ?= $(if $(MODEL_DOCKERFILE_FROM_CONFIG),$(MODEL_DOCKERFILE_FROM_CONFIG),Dockerfile)
+CONTEXT ?= $(if $(MODEL_CONTEXT_FROM_CONFIG),$(MODEL_CONTEXT_FROM_CONFIG),.)
+BUILD_PLATFORM ?= $(MODEL_PLATFORM_FROM_CONFIG)
 MODEL_IMAGE_REPOSITORY := $(shell printf '%s\n' '$(MODEL_IMAGE_FROM_CONFIG)' | sed 's/:[^/:]*$$//')
 MODEL_IMAGE_TAG := $(shell printf '%s\n' '$(MODEL_IMAGE_FROM_CONFIG)' | sed 's/^.*://')
 MODEL_DGD ?= $(MODEL_DGD_FROM_CONFIG)
@@ -285,6 +289,9 @@ build: check-model check-docker
 	@build_args=(); \
 	if [[ -n "$(BASE_IMAGE)" ]]; then \
 		build_args+=(--build-arg "BASE_IMAGE=$(BASE_IMAGE)"); \
+	fi; \
+	if [[ -n "$(BUILD_PLATFORM)" ]]; then \
+		build_args+=(--platform "$(BUILD_PLATFORM)"); \
 	fi; \
 	$(DOCKER) build "$${build_args[@]}" $(DOCKER_BUILD_ARGS) -t "$(IMAGE)" -f "$(DOCKERFILE)" "$(CONTEXT)"
 

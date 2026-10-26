@@ -1,0 +1,1730 @@
+{
+  "id": null,
+  "uid": "dynamo-efficiency",
+  "title": "Dynamo \u00b7 Efficiency & SLA Patterns",
+  "description": "Six selected-range average/p95 summaries and rolling trends, plus token-weighted vLLM prefix-cache reuse, for Dynamo deployments in daedalus-dynamo. Active-sample KV occupancy and output-token efficiency separate useful work from expected idle time; choose All observed time to include idle.",
+  "editable": true,
+  "schemaVersion": 42,
+  "version": 2,
+  "timezone": "browser",
+  "refresh": "5m",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h"
+    ]
+  },
+  "tags": [
+    "dynamo",
+    "daedalus",
+    "efficiency",
+    "sla"
+  ],
+  "graphTooltip": 1,
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "title": "Metric definitions",
+      "type": "link",
+      "targetBlank": true,
+      "url": "https://docs.nvidia.com/dynamo/dev/reference/observability/metrics-catalog"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Metrics source",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {
+          "text": "Prometheus",
+          "value": "prometheus"
+        },
+        "options": [],
+        "refresh": 1
+      },
+      {
+        "name": "deployment",
+        "label": "Deployment",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "query_result(count by (label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name!=\"\"}[$__range])))",
+          "refId": "StandardVariableQuery"
+        },
+        "definition": "query_result(count by (label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name!=\"\"}[$__range])))",
+        "regex": "/label_nvidia_com_dynamo_graph_deployment_name=\"([^\"]+)\"/",
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".+",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "description": "Includes deployments observed anywhere in the selected range, including replaced pods."
+      },
+      {
+        "name": "trend_window",
+        "label": "Trend window",
+        "type": "custom",
+        "query": "5m,15m,30m,1h,6h",
+        "current": {
+          "text": "15m",
+          "value": "15m"
+        },
+        "options": [
+          {
+            "text": "5m",
+            "value": "5m",
+            "selected": false
+          },
+          {
+            "text": "15m",
+            "value": "15m",
+            "selected": true
+          },
+          {
+            "text": "30m",
+            "value": "30m",
+            "selected": false
+          },
+          {
+            "text": "1h",
+            "value": "1h",
+            "selected": false
+          },
+          {
+            "text": "6h",
+            "value": "6h",
+            "selected": false
+          }
+        ],
+        "description": "Trailing trend window; selected-range cards always use the dashboard time range."
+      },
+      {
+        "name": "active_only",
+        "label": "Sample scope",
+        "type": "custom",
+        "query": "Active samples : 1,All observed time : 0",
+        "current": {
+          "text": "Active samples",
+          "value": "1"
+        },
+        "options": [
+          {
+            "text": "Active samples",
+            "value": "1",
+            "selected": true
+          },
+          {
+            "text": "All observed time",
+            "value": "0",
+            "selected": false
+          }
+        ],
+        "description": "Occupancy and efficiency only; prefix reuse always uses observed tokens. Active = output-producing one-minute windows, including rate-window padding."
+      },
+      {
+        "name": "ttft_objective_ms",
+        "label": "TTFT objective (ms)",
+        "type": "textbox",
+        "query": "1000",
+        "current": {
+          "text": "1000",
+          "value": "1000"
+        },
+        "options": [],
+        "description": "Illustrative reference line; enter your own objective. Does not create an alert or SLA."
+      },
+      {
+        "name": "itl_objective_ms",
+        "label": "ITL objective (ms)",
+        "type": "textbox",
+        "query": "100",
+        "current": {
+          "text": "100",
+          "value": "100"
+        },
+        "options": [],
+        "description": "Illustrative reference line; enter your own objective. Does not create an alert or SLA."
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "Dynamo efficiency & latency",
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**The cards summarize the entire selected time range, per deployment.** Start with **24 hours** or **7 days** for occasional household and agent traffic. Below, **Trend window** controls smoothing; solid lines show averages and dashed lines p95.\n\n**KV Cache Occupancy** measures capacity in use. **Prefix Cache Reuse (vLLM)** below measures cached / queried prompt tokens; compare that ratio with benchmark reuse estimates. **Sample scope** applies only to occupancy and Tokens/Watt: active samples are output-producing one-minute windows; choose **All observed time** to include quiet periods. Latency and length always use actual observations. Gaps stay gaps; missing telemetry stays unavailable. Serving metrics are scoped to `daedalus-dynamo`, including requests from clients and agents in `daedalus`."
+      }
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "Time to First Token \u00b7 selected range",
+      "description": "Request-weighted frontend TTFT. p95 is computed from pooled histogram buckets, never by averaging worker or time-window percentiles. Idle time adds no observations.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 0,
+        "y": 3
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 1,
+          "min": 0,
+          "noValue": "No samples",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "-1": {
+                  "text": "No observations",
+                  "color": "text",
+                  "index": 0
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "((1000 * (sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_time_to_first_token_seconds_sum{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) / (sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_time_to_first_token_seconds_count{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))))) and on (deployment) ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_time_to_first_token_seconds_count{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0)) or on (deployment) (-1 + 0 * ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_time_to_first_token_seconds_count{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) == 0))",
+          "refId": "A",
+          "legendFormat": "{{deployment}} \u00b7 Average",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "((1000 * histogram_quantile(0.95, sum by (deployment, le) ((max by (namespace, pod, model, le) (increase(dynamo_frontend_time_to_first_token_seconds_bucket{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))))) and on (deployment) ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_time_to_first_token_seconds_count{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0)) or on (deployment) (-1 + 0 * ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_time_to_first_token_seconds_count{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) == 0))",
+          "refId": "B",
+          "legendFormat": "{{deployment}} \u00b7 p95",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "horizontal",
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "wideLayout": false,
+        "text": {
+          "valueSize": 30,
+          "titleSize": 12
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Inter-token Latency \u00b7 selected range",
+      "description": "Frontend token-weighted inter-token delivery latency, including streaming/chunk delivery effects. Average and p95 use the ITL histogram's own observation population.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 8,
+        "y": 3
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 1,
+          "min": 0,
+          "noValue": "No samples",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "-1": {
+                  "text": "No observations",
+                  "color": "text",
+                  "index": 0
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "((1000 * (sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_inter_token_latency_seconds_sum{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) / (sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_inter_token_latency_seconds_count{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))))) and on (deployment) ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_inter_token_latency_seconds_count{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0)) or on (deployment) (-1 + 0 * ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_inter_token_latency_seconds_count{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) == 0))",
+          "refId": "A",
+          "legendFormat": "{{deployment}} \u00b7 Average",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "((1000 * histogram_quantile(0.95, sum by (deployment, le) ((max by (namespace, pod, model, le) (increase(dynamo_frontend_inter_token_latency_seconds_bucket{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))))) and on (deployment) ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_inter_token_latency_seconds_count{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0)) or on (deployment) (-1 + 0 * ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_inter_token_latency_seconds_count{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) == 0))",
+          "refId": "B",
+          "legendFormat": "{{deployment}} \u00b7 p95",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "horizontal",
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "wideLayout": false,
+        "text": {
+          "valueSize": 30,
+          "titleSize": 12
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "KV Cache Occupancy \u00b7 selected range",
+      "description": "At each one-minute sample, average the KV occupancy fractions across selected worker DP ranks within each deployment. Average and p95 then describe that deployment mean over time. This is cache occupancy, not cache hit rate; unequal rank capacities are not weighted. Sample scope controls whether quiet periods are included.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 3
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "min": 0,
+          "noValue": "No samples",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "-1": {
+                  "text": "No observations",
+                  "color": "text",
+                  "index": 0
+                }
+              }
+            }
+          ],
+          "max": 1
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "avg_over_time(((avg by (deployment) ((max by (namespace, pod, dp_rank) (dynamo_component_gpu_cache_usage_percent{namespace=\"daedalus-dynamo\"})) * on (namespace, pod) group_left (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1)))) and on (deployment) (((sum by (deployment) ((max by (namespace, pod, model) (rate(dynamo_frontend_output_tokens_total{namespace=\"daedalus-dynamo\"}[1m]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0) or ((sum by (deployment) ((max by (namespace, pod, model) (rate(dynamo_frontend_output_tokens_total{namespace=\"daedalus-dynamo\"}[1m]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) and on () (vector($active_only) == 0))))[$__range:1m])",
+          "refId": "A",
+          "legendFormat": "{{deployment}} \u00b7 Average",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "quantile_over_time(0.95, ((avg by (deployment) ((max by (namespace, pod, dp_rank) (dynamo_component_gpu_cache_usage_percent{namespace=\"daedalus-dynamo\"})) * on (namespace, pod) group_left (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1)))) and on (deployment) (((sum by (deployment) ((max by (namespace, pod, model) (rate(dynamo_frontend_output_tokens_total{namespace=\"daedalus-dynamo\"}[1m]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0) or ((sum by (deployment) ((max by (namespace, pod, model) (rate(dynamo_frontend_output_tokens_total{namespace=\"daedalus-dynamo\"}[1m]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) and on () (vector($active_only) == 0))))[$__range:1m])",
+          "refId": "B",
+          "legendFormat": "{{deployment}} \u00b7 p95",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "horizontal",
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "wideLayout": false,
+        "text": {
+          "valueSize": 30,
+          "titleSize": 12
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "Tokens/Watt \u00b7 selected range",
+      "description": "Generated output tokens/s divided by summed physical GPU board watts, equivalent to output tokens/J. Average and p95 are the mean and temporal percentile of one-minute sampled ratios. Prompt tokens are excluded. Every live worker must have complete physical-GPU power mapping. MIG and visibly shared boards are excluded. GPU power excludes CPU, RAM, and wall power. Sample scope controls whether idle GPU power is reflected.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 0,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: tok/s/W",
+          "decimals": 1,
+          "min": 0,
+          "noValue": "No samples",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "-1": {
+                  "text": "No observations",
+                  "color": "text",
+                  "index": 0
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "avg_over_time((((((sum by (deployment) ((max by (namespace, pod, model) (rate(dynamo_frontend_output_tokens_total{namespace=\"daedalus-dynamo\"}[1m]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) / (sum by (deployment) (max by (deployment, Hostname, UUID) ((label_replace(label_replace((((DCGM_FI_DEV_POWER_USAGE{exported_namespace=\"daedalus-dynamo\",exported_pod!=\"\",UUID!=\"\",GPU_I_ID=\"\"} > 0) < 1000000) and on (Hostname, UUID) (count by (Hostname, UUID) (max by (Hostname, UUID, exported_namespace, exported_pod) (DCGM_FI_DEV_GPU_UTIL{exported_pod!=\"\",UUID!=\"\"})) == 1)), \"namespace\", \"$1\", \"exported_namespace\", \"(.+)\"), \"pod\", \"$1\", \"exported_pod\", \"(.+)\")) * on (namespace, pod) group_left (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1)))))) and on (deployment) (count by (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1)) == on (deployment) count by (deployment) ((((max by (namespace, pod) (label_replace((sum by (namespace, pod) (max by (namespace, pod, container) (kube_pod_container_resource_requests{namespace=\"daedalus-dynamo\",resource=\"nvidia_com_gpu\"}))), \"request_class\", \"app\", \"pod\", \".*\") or label_replace((max by (namespace, pod) (kube_pod_init_container_resource_requests{namespace=\"daedalus-dynamo\",resource=\"nvidia_com_gpu\"})), \"request_class\", \"init\", \"pod\", \".*\"))) > 0) * on (namespace, pod) group_left (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1))) == on (deployment, namespace, pod) (count by (deployment, namespace, pod) (max by (deployment, namespace, pod, Hostname, UUID) ((label_replace(label_replace((((DCGM_FI_DEV_POWER_USAGE{exported_namespace=\"daedalus-dynamo\",exported_pod!=\"\",UUID!=\"\",GPU_I_ID=\"\"} > 0) < 1000000) and on (Hostname, UUID) (count by (Hostname, UUID) (max by (Hostname, UUID, exported_namespace, exported_pod) (DCGM_FI_DEV_GPU_UTIL{exported_pod!=\"\",UUID!=\"\"})) == 1)), \"namespace\", \"$1\", \"exported_namespace\", \"(.+)\"), \"pod\", \"$1\", \"exported_pod\", \"(.+)\")) * on (namespace, pod) group_left (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1)))))))) unless on (deployment) (count by (deployment) ((kube_pod_container_resource_requests{namespace=\"daedalus-dynamo\",resource=~\"nvidia_com_mig_.*\"} > 0) * on (namespace, pod) group_left (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1))))) and on (deployment) (((sum by (deployment) ((max by (namespace, pod, model) (rate(dynamo_frontend_output_tokens_total{namespace=\"daedalus-dynamo\"}[1m]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0) or ((sum by (deployment) ((max by (namespace, pod, model) (rate(dynamo_frontend_output_tokens_total{namespace=\"daedalus-dynamo\"}[1m]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) and on () (vector($active_only) == 0))))[$__range:1m])",
+          "refId": "A",
+          "legendFormat": "{{deployment}} \u00b7 Average",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "quantile_over_time(0.95, (((((sum by (deployment) ((max by (namespace, pod, model) (rate(dynamo_frontend_output_tokens_total{namespace=\"daedalus-dynamo\"}[1m]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) / (sum by (deployment) (max by (deployment, Hostname, UUID) ((label_replace(label_replace((((DCGM_FI_DEV_POWER_USAGE{exported_namespace=\"daedalus-dynamo\",exported_pod!=\"\",UUID!=\"\",GPU_I_ID=\"\"} > 0) < 1000000) and on (Hostname, UUID) (count by (Hostname, UUID) (max by (Hostname, UUID, exported_namespace, exported_pod) (DCGM_FI_DEV_GPU_UTIL{exported_pod!=\"\",UUID!=\"\"})) == 1)), \"namespace\", \"$1\", \"exported_namespace\", \"(.+)\"), \"pod\", \"$1\", \"exported_pod\", \"(.+)\")) * on (namespace, pod) group_left (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1)))))) and on (deployment) (count by (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1)) == on (deployment) count by (deployment) ((((max by (namespace, pod) (label_replace((sum by (namespace, pod) (max by (namespace, pod, container) (kube_pod_container_resource_requests{namespace=\"daedalus-dynamo\",resource=\"nvidia_com_gpu\"}))), \"request_class\", \"app\", \"pod\", \".*\") or label_replace((max by (namespace, pod) (kube_pod_init_container_resource_requests{namespace=\"daedalus-dynamo\",resource=\"nvidia_com_gpu\"})), \"request_class\", \"init\", \"pod\", \".*\"))) > 0) * on (namespace, pod) group_left (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1))) == on (deployment, namespace, pod) (count by (deployment, namespace, pod) (max by (deployment, namespace, pod, Hostname, UUID) ((label_replace(label_replace((((DCGM_FI_DEV_POWER_USAGE{exported_namespace=\"daedalus-dynamo\",exported_pod!=\"\",UUID!=\"\",GPU_I_ID=\"\"} > 0) < 1000000) and on (Hostname, UUID) (count by (Hostname, UUID) (max by (Hostname, UUID, exported_namespace, exported_pod) (DCGM_FI_DEV_GPU_UTIL{exported_pod!=\"\",UUID!=\"\"})) == 1)), \"namespace\", \"$1\", \"exported_namespace\", \"(.+)\"), \"pod\", \"$1\", \"exported_pod\", \"(.+)\")) * on (namespace, pod) group_left (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1)))))))) unless on (deployment) (count by (deployment) ((kube_pod_container_resource_requests{namespace=\"daedalus-dynamo\",resource=~\"nvidia_com_mig_.*\"} > 0) * on (namespace, pod) group_left (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1))))) and on (deployment) (((sum by (deployment) ((max by (namespace, pod, model) (rate(dynamo_frontend_output_tokens_total{namespace=\"daedalus-dynamo\"}[1m]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0) or ((sum by (deployment) ((max by (namespace, pod, model) (rate(dynamo_frontend_output_tokens_total{namespace=\"daedalus-dynamo\"}[1m]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) and on () (vector($active_only) == 0))))[$__range:1m])",
+          "refId": "B",
+          "legendFormat": "{{deployment}} \u00b7 p95",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "horizontal",
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "wideLayout": false,
+        "text": {
+          "valueSize": 30,
+          "titleSize": 12
+        }
+      }
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "Input Sequence Length \u00b7 selected range",
+      "description": "Request-weighted prompt length observed at first output token. Includes cached prompt tokens. Average and p95 come from the input sequence histogram.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 8,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: tokens",
+          "decimals": 1,
+          "min": 0,
+          "noValue": "No samples",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "-1": {
+                  "text": "No observations",
+                  "color": "text",
+                  "index": 0
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "((1 * (sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_input_sequence_tokens_sum{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) / (sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_input_sequence_tokens_count{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))))) and on (deployment) ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_input_sequence_tokens_count{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0)) or on (deployment) (-1 + 0 * ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_input_sequence_tokens_count{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) == 0))",
+          "refId": "A",
+          "legendFormat": "{{deployment}} \u00b7 Average",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "((1 * histogram_quantile(0.95, sum by (deployment, le) ((max by (namespace, pod, model, le) (increase(dynamo_frontend_input_sequence_tokens_bucket{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))))) and on (deployment) ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_input_sequence_tokens_count{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0)) or on (deployment) (-1 + 0 * ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_input_sequence_tokens_count{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) == 0))",
+          "refId": "B",
+          "legendFormat": "{{deployment}} \u00b7 p95",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "horizontal",
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "wideLayout": false,
+        "text": {
+          "valueSize": 30,
+          "titleSize": 12
+        }
+      }
+    },
+    {
+      "id": 15,
+      "type": "stat",
+      "title": "Output Sequence Length \u00b7 selected range",
+      "description": "Request-weighted generated sequence length observed at completion. Ongoing streams do not enter this population until the frontend records the observation.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: tokens",
+          "decimals": 1,
+          "min": 0,
+          "noValue": "No samples",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "-1": {
+                  "text": "No observations",
+                  "color": "text",
+                  "index": 0
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "((1 * (sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_output_sequence_tokens_sum{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) / (sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_output_sequence_tokens_count{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))))) and on (deployment) ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_output_sequence_tokens_count{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0)) or on (deployment) (-1 + 0 * ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_output_sequence_tokens_count{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) == 0))",
+          "refId": "A",
+          "legendFormat": "{{deployment}} \u00b7 Average",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "((1 * histogram_quantile(0.95, sum by (deployment, le) ((max by (namespace, pod, model, le) (increase(dynamo_frontend_output_sequence_tokens_bucket{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))))) and on (deployment) ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_output_sequence_tokens_count{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0)) or on (deployment) (-1 + 0 * ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_output_sequence_tokens_count{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) == 0))",
+          "refId": "B",
+          "legendFormat": "{{deployment}} \u00b7 p95",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "horizontal",
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "wideLayout": false,
+        "text": {
+          "valueSize": 30,
+          "titleSize": 12
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "row",
+      "title": "Latency, utilization & workload patterns",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      }
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Time to First Token \u00b7 $trend_window trend",
+      "description": "Request-weighted frontend TTFT. p95 is computed from pooled histogram buckets, never by averaging worker or time-window percentiles. Idle time adds no observations.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 14
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 1,
+          "min": 0,
+          "noValue": "No samples",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "spanNulls": false,
+            "insertNulls": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* \u00b7 p95$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    5,
+                    4
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Objective"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    2,
+                    5
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(1000 * (sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_time_to_first_token_seconds_sum{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) / (sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_time_to_first_token_seconds_count{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))))) and on (deployment) ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_time_to_first_token_seconds_count{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0)",
+          "refId": "A",
+          "legendFormat": "{{deployment}} \u00b7 Average",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(1000 * histogram_quantile(0.95, sum by (deployment, le) ((max by (namespace, pod, model, le) (increase(dynamo_frontend_time_to_first_token_seconds_bucket{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))))) and on (deployment) ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_time_to_first_token_seconds_count{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0)",
+          "refId": "B",
+          "legendFormat": "{{deployment}} \u00b7 p95",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "vector($ttft_objective_ms)",
+          "refId": "C",
+          "legendFormat": "Objective",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        }
+      ],
+      "interval": "1m",
+      "maxDataPoints": 1440,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc",
+          "hideZeros": false
+        }
+      }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Inter-token Latency \u00b7 $trend_window trend",
+      "description": "Frontend token-weighted inter-token delivery latency, including streaming/chunk delivery effects. Average and p95 use the ITL histogram's own observation population.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 14
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 1,
+          "min": 0,
+          "noValue": "No samples",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "spanNulls": false,
+            "insertNulls": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* \u00b7 p95$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    5,
+                    4
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Objective"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    2,
+                    5
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(1000 * (sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_inter_token_latency_seconds_sum{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) / (sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_inter_token_latency_seconds_count{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))))) and on (deployment) ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_inter_token_latency_seconds_count{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0)",
+          "refId": "A",
+          "legendFormat": "{{deployment}} \u00b7 Average",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(1000 * histogram_quantile(0.95, sum by (deployment, le) ((max by (namespace, pod, model, le) (increase(dynamo_frontend_inter_token_latency_seconds_bucket{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))))) and on (deployment) ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_inter_token_latency_seconds_count{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0)",
+          "refId": "B",
+          "legendFormat": "{{deployment}} \u00b7 p95",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "vector($itl_objective_ms)",
+          "refId": "C",
+          "legendFormat": "Objective",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        }
+      ],
+      "interval": "1m",
+      "maxDataPoints": 1440,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc",
+          "hideZeros": false
+        }
+      }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "KV Cache Occupancy \u00b7 $trend_window trend",
+      "description": "At each one-minute sample, average the KV occupancy fractions across selected worker DP ranks within each deployment. Average and p95 then describe that deployment mean over time. This is cache occupancy, not cache hit rate; unequal rank capacities are not weighted. Sample scope controls whether quiet periods are included.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 14
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "min": 0,
+          "noValue": "No samples",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "max": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "spanNulls": false,
+            "insertNulls": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* \u00b7 p95$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    5,
+                    4
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "avg_over_time(((avg by (deployment) ((max by (namespace, pod, dp_rank) (dynamo_component_gpu_cache_usage_percent{namespace=\"daedalus-dynamo\"})) * on (namespace, pod) group_left (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1)))) and on (deployment) (((sum by (deployment) ((max by (namespace, pod, model) (rate(dynamo_frontend_output_tokens_total{namespace=\"daedalus-dynamo\"}[1m]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0) or ((sum by (deployment) ((max by (namespace, pod, model) (rate(dynamo_frontend_output_tokens_total{namespace=\"daedalus-dynamo\"}[1m]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) and on () (vector($active_only) == 0))))[$trend_window:1m])",
+          "refId": "A",
+          "legendFormat": "{{deployment}} \u00b7 Average",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "quantile_over_time(0.95, ((avg by (deployment) ((max by (namespace, pod, dp_rank) (dynamo_component_gpu_cache_usage_percent{namespace=\"daedalus-dynamo\"})) * on (namespace, pod) group_left (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1)))) and on (deployment) (((sum by (deployment) ((max by (namespace, pod, model) (rate(dynamo_frontend_output_tokens_total{namespace=\"daedalus-dynamo\"}[1m]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0) or ((sum by (deployment) ((max by (namespace, pod, model) (rate(dynamo_frontend_output_tokens_total{namespace=\"daedalus-dynamo\"}[1m]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) and on () (vector($active_only) == 0))))[$trend_window:1m])",
+          "refId": "B",
+          "legendFormat": "{{deployment}} \u00b7 p95",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        }
+      ],
+      "interval": "1m",
+      "maxDataPoints": 1440,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc",
+          "hideZeros": false
+        }
+      }
+    },
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "Tokens/Watt \u00b7 $trend_window trend",
+      "description": "Generated output tokens/s divided by summed physical GPU board watts, equivalent to output tokens/J. Average and p95 are the mean and temporal percentile of one-minute sampled ratios. Prompt tokens are excluded. Every live worker must have complete physical-GPU power mapping. MIG and visibly shared boards are excluded. GPU power excludes CPU, RAM, and wall power. Sample scope controls whether idle GPU power is reflected.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 22
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: tok/s/W",
+          "decimals": 1,
+          "min": 0,
+          "noValue": "No samples",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "spanNulls": false,
+            "insertNulls": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* \u00b7 p95$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    5,
+                    4
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "avg_over_time((((((sum by (deployment) ((max by (namespace, pod, model) (rate(dynamo_frontend_output_tokens_total{namespace=\"daedalus-dynamo\"}[1m]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) / (sum by (deployment) (max by (deployment, Hostname, UUID) ((label_replace(label_replace((((DCGM_FI_DEV_POWER_USAGE{exported_namespace=\"daedalus-dynamo\",exported_pod!=\"\",UUID!=\"\",GPU_I_ID=\"\"} > 0) < 1000000) and on (Hostname, UUID) (count by (Hostname, UUID) (max by (Hostname, UUID, exported_namespace, exported_pod) (DCGM_FI_DEV_GPU_UTIL{exported_pod!=\"\",UUID!=\"\"})) == 1)), \"namespace\", \"$1\", \"exported_namespace\", \"(.+)\"), \"pod\", \"$1\", \"exported_pod\", \"(.+)\")) * on (namespace, pod) group_left (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1)))))) and on (deployment) (count by (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1)) == on (deployment) count by (deployment) ((((max by (namespace, pod) (label_replace((sum by (namespace, pod) (max by (namespace, pod, container) (kube_pod_container_resource_requests{namespace=\"daedalus-dynamo\",resource=\"nvidia_com_gpu\"}))), \"request_class\", \"app\", \"pod\", \".*\") or label_replace((max by (namespace, pod) (kube_pod_init_container_resource_requests{namespace=\"daedalus-dynamo\",resource=\"nvidia_com_gpu\"})), \"request_class\", \"init\", \"pod\", \".*\"))) > 0) * on (namespace, pod) group_left (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1))) == on (deployment, namespace, pod) (count by (deployment, namespace, pod) (max by (deployment, namespace, pod, Hostname, UUID) ((label_replace(label_replace((((DCGM_FI_DEV_POWER_USAGE{exported_namespace=\"daedalus-dynamo\",exported_pod!=\"\",UUID!=\"\",GPU_I_ID=\"\"} > 0) < 1000000) and on (Hostname, UUID) (count by (Hostname, UUID) (max by (Hostname, UUID, exported_namespace, exported_pod) (DCGM_FI_DEV_GPU_UTIL{exported_pod!=\"\",UUID!=\"\"})) == 1)), \"namespace\", \"$1\", \"exported_namespace\", \"(.+)\"), \"pod\", \"$1\", \"exported_pod\", \"(.+)\")) * on (namespace, pod) group_left (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1)))))))) unless on (deployment) (count by (deployment) ((kube_pod_container_resource_requests{namespace=\"daedalus-dynamo\",resource=~\"nvidia_com_mig_.*\"} > 0) * on (namespace, pod) group_left (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1))))) and on (deployment) (((sum by (deployment) ((max by (namespace, pod, model) (rate(dynamo_frontend_output_tokens_total{namespace=\"daedalus-dynamo\"}[1m]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0) or ((sum by (deployment) ((max by (namespace, pod, model) (rate(dynamo_frontend_output_tokens_total{namespace=\"daedalus-dynamo\"}[1m]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) and on () (vector($active_only) == 0))))[$trend_window:1m])",
+          "refId": "A",
+          "legendFormat": "{{deployment}} \u00b7 Average",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "quantile_over_time(0.95, (((((sum by (deployment) ((max by (namespace, pod, model) (rate(dynamo_frontend_output_tokens_total{namespace=\"daedalus-dynamo\"}[1m]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) / (sum by (deployment) (max by (deployment, Hostname, UUID) ((label_replace(label_replace((((DCGM_FI_DEV_POWER_USAGE{exported_namespace=\"daedalus-dynamo\",exported_pod!=\"\",UUID!=\"\",GPU_I_ID=\"\"} > 0) < 1000000) and on (Hostname, UUID) (count by (Hostname, UUID) (max by (Hostname, UUID, exported_namespace, exported_pod) (DCGM_FI_DEV_GPU_UTIL{exported_pod!=\"\",UUID!=\"\"})) == 1)), \"namespace\", \"$1\", \"exported_namespace\", \"(.+)\"), \"pod\", \"$1\", \"exported_pod\", \"(.+)\")) * on (namespace, pod) group_left (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1)))))) and on (deployment) (count by (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1)) == on (deployment) count by (deployment) ((((max by (namespace, pod) (label_replace((sum by (namespace, pod) (max by (namespace, pod, container) (kube_pod_container_resource_requests{namespace=\"daedalus-dynamo\",resource=\"nvidia_com_gpu\"}))), \"request_class\", \"app\", \"pod\", \".*\") or label_replace((max by (namespace, pod) (kube_pod_init_container_resource_requests{namespace=\"daedalus-dynamo\",resource=\"nvidia_com_gpu\"})), \"request_class\", \"init\", \"pod\", \".*\"))) > 0) * on (namespace, pod) group_left (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1))) == on (deployment, namespace, pod) (count by (deployment, namespace, pod) (max by (deployment, namespace, pod, Hostname, UUID) ((label_replace(label_replace((((DCGM_FI_DEV_POWER_USAGE{exported_namespace=\"daedalus-dynamo\",exported_pod!=\"\",UUID!=\"\",GPU_I_ID=\"\"} > 0) < 1000000) and on (Hostname, UUID) (count by (Hostname, UUID) (max by (Hostname, UUID, exported_namespace, exported_pod) (DCGM_FI_DEV_GPU_UTIL{exported_pod!=\"\",UUID!=\"\"})) == 1)), \"namespace\", \"$1\", \"exported_namespace\", \"(.+)\"), \"pod\", \"$1\", \"exported_pod\", \"(.+)\")) * on (namespace, pod) group_left (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1)))))))) unless on (deployment) (count by (deployment) ((kube_pod_container_resource_requests{namespace=\"daedalus-dynamo\",resource=~\"nvidia_com_mig_.*\"} > 0) * on (namespace, pod) group_left (deployment) ((label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")) and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running|Unknown\"} == 1))))) and on (deployment) (((sum by (deployment) ((max by (namespace, pod, model) (rate(dynamo_frontend_output_tokens_total{namespace=\"daedalus-dynamo\"}[1m]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0) or ((sum by (deployment) ((max by (namespace, pod, model) (rate(dynamo_frontend_output_tokens_total{namespace=\"daedalus-dynamo\"}[1m]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) and on () (vector($active_only) == 0))))[$trend_window:1m])",
+          "refId": "B",
+          "legendFormat": "{{deployment}} \u00b7 p95",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        }
+      ],
+      "interval": "1m",
+      "maxDataPoints": 1440,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc",
+          "hideZeros": false
+        }
+      }
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "Input Sequence Length \u00b7 $trend_window trend",
+      "description": "Request-weighted prompt length observed at first output token. Includes cached prompt tokens. Average and p95 come from the input sequence histogram.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 22
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: tokens",
+          "decimals": 1,
+          "min": 0,
+          "noValue": "No samples",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "spanNulls": false,
+            "insertNulls": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* \u00b7 p95$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    5,
+                    4
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(1 * (sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_input_sequence_tokens_sum{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) / (sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_input_sequence_tokens_count{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))))) and on (deployment) ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_input_sequence_tokens_count{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0)",
+          "refId": "A",
+          "legendFormat": "{{deployment}} \u00b7 Average",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(1 * histogram_quantile(0.95, sum by (deployment, le) ((max by (namespace, pod, model, le) (increase(dynamo_frontend_input_sequence_tokens_bucket{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))))) and on (deployment) ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_input_sequence_tokens_count{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0)",
+          "refId": "B",
+          "legendFormat": "{{deployment}} \u00b7 p95",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        }
+      ],
+      "interval": "1m",
+      "maxDataPoints": 1440,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc",
+          "hideZeros": false
+        }
+      }
+    },
+    {
+      "id": 25,
+      "type": "timeseries",
+      "title": "Output Sequence Length \u00b7 $trend_window trend",
+      "description": "Request-weighted generated sequence length observed at completion. Ongoing streams do not enter this population until the frontend records the observation.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 22
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: tokens",
+          "decimals": 1,
+          "min": 0,
+          "noValue": "No samples",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "spanNulls": false,
+            "insertNulls": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* \u00b7 p95$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    5,
+                    4
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(1 * (sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_output_sequence_tokens_sum{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) / (sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_output_sequence_tokens_count{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))))) and on (deployment) ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_output_sequence_tokens_count{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0)",
+          "refId": "A",
+          "legendFormat": "{{deployment}} \u00b7 Average",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(1 * histogram_quantile(0.95, sum by (deployment, le) ((max by (namespace, pod, model, le) (increase(dynamo_frontend_output_sequence_tokens_bucket{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))))) and on (deployment) ((sum by (deployment) ((max by (namespace, pod, model) (increase(dynamo_frontend_output_sequence_tokens_count{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0)",
+          "refId": "B",
+          "legendFormat": "{{deployment}} \u00b7 p95",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        }
+      ],
+      "interval": "1m",
+      "maxDataPoints": 1440,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc",
+          "hideZeros": false
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "row",
+      "title": "Prefix cache reuse \u00b7 vLLM backend",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      }
+    },
+    {
+      "id": 16,
+      "type": "stat",
+      "title": "Prefix Cache Reuse (vLLM) \u00b7 selected range",
+      "description": "vLLM backend prefix-cache hit tokens divided by queried tokens, using counter increases over the selected range (card) or trailing Trend window (chart). Pools tokens across worker engines/ranks within each deployment after deduplicating scrapes; historical pod labels retain replaced workers. This is token-weighted reuse, not KV capacity occupancy or a frontend router estimate. No per-request p95 is available from these counters. Sample scope does not apply. Zero hits with observed queried tokens is 0%; no queries, missing counter pairs, and backends without these vLLM metrics remain No samples. Includes all observed client traffic. Select the benchmark's exact time range to compare with its modeled reuse estimate; the estimate assumes identical token prefixes and retained cache state, not guaranteed hits.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 31
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "min": 0,
+          "noValue": "No samples",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "-1": {
+                  "text": "No observations",
+                  "color": "text",
+                  "index": 0
+                }
+              }
+            }
+          ],
+          "max": 1
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(((sum by (deployment) ((max by (namespace, pod, model_name, engine, dp_rank) (increase(vllm:prefix_cache_hits_total{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) / (sum by (deployment) ((max by (namespace, pod, model_name, engine, dp_rank) (increase(vllm:prefix_cache_queries_total{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))))) and on (deployment) ((sum by (deployment) ((max by (namespace, pod, model_name, engine, dp_rank) (increase(vllm:prefix_cache_queries_total{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0)) unless on (deployment) ((((max by (namespace, pod, model_name, engine, dp_rank) (increase(vllm:prefix_cache_queries_total{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))) unless on (deployment, namespace, pod, model_name, engine, dp_rank) ((max by (namespace, pod, model_name, engine, dp_rank) (increase(vllm:prefix_cache_hits_total{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) or (((max by (namespace, pod, model_name, engine, dp_rank) (increase(vllm:prefix_cache_hits_total{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))) unless on (deployment, namespace, pod, model_name, engine, dp_rank) ((max by (namespace, pod, model_name, engine, dp_rank) (increase(vllm:prefix_cache_queries_total{namespace=\"daedalus-dynamo\"}[$__range]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}[$__range])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))))",
+          "refId": "A",
+          "legendFormat": "{{deployment}} \u00b7 Reuse",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "horizontal",
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "wideLayout": false,
+        "text": {
+          "valueSize": 30,
+          "titleSize": 12
+        }
+      }
+    },
+    {
+      "id": 26,
+      "type": "timeseries",
+      "title": "Prefix Cache Reuse (vLLM) \u00b7 $trend_window trend",
+      "description": "vLLM backend prefix-cache hit tokens divided by queried tokens, using counter increases over the selected range (card) or trailing Trend window (chart). Pools tokens across worker engines/ranks within each deployment after deduplicating scrapes; historical pod labels retain replaced workers. This is token-weighted reuse, not KV capacity occupancy or a frontend router estimate. No per-request p95 is available from these counters. Sample scope does not apply. Zero hits with observed queried tokens is 0%; no queries, missing counter pairs, and backends without these vLLM metrics remain No samples. Includes all observed client traffic. Select the benchmark's exact time range to compare with its modeled reuse estimate; the estimate assumes identical token prefixes and retained cache state, not guaranteed hits.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 8,
+        "y": 31
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "min": 0,
+          "noValue": "No samples",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "max": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "spanNulls": false,
+            "insertNulls": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* \u00b7 p95$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    5,
+                    4
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(((sum by (deployment) ((max by (namespace, pod, model_name, engine, dp_rank) (increase(vllm:prefix_cache_hits_total{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) / (sum by (deployment) ((max by (namespace, pod, model_name, engine, dp_rank) (increase(vllm:prefix_cache_queries_total{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))))) and on (deployment) ((sum by (deployment) ((max by (namespace, pod, model_name, engine, dp_rank) (increase(vllm:prefix_cache_queries_total{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) > 0)) unless on (deployment) ((((max by (namespace, pod, model_name, engine, dp_rank) (increase(vllm:prefix_cache_queries_total{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))) unless on (deployment, namespace, pod, model_name, engine, dp_rank) ((max by (namespace, pod, model_name, engine, dp_rank) (increase(vllm:prefix_cache_hits_total{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))) or (((max by (namespace, pod, model_name, engine, dp_rank) (increase(vllm:prefix_cache_hits_total{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\"))) unless on (deployment, namespace, pod, model_name, engine, dp_rank) ((max by (namespace, pod, model_name, engine, dp_rank) (increase(vllm:prefix_cache_queries_total{namespace=\"daedalus-dynamo\"}[$trend_window]))) * on (namespace, pod) group_left (deployment) (label_replace(max by (namespace, pod, label_nvidia_com_dynamo_graph_deployment_name) (max_over_time(kube_pod_labels{namespace=\"daedalus-dynamo\",label_nvidia_com_dynamo_graph_deployment_name=~\"${deployment:regex}\",label_nvidia_com_dynamo_component_type=~\"worker|prefill|decode\"}[$trend_window])), \"deployment\", \"$1\", \"label_nvidia_com_dynamo_graph_deployment_name\", \"(.+)\")))))",
+          "refId": "A",
+          "legendFormat": "{{deployment}} \u00b7 Reuse",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        }
+      ],
+      "interval": "1m",
+      "maxDataPoints": 1440,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc",
+          "hideZeros": false
+        }
+      }
+    }
+  ]
+}

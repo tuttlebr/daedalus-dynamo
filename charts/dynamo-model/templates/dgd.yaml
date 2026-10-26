@@ -15,6 +15,9 @@ spec:
   services:
     Frontend:
       componentType: frontend
+      {{- with .Values.model.runtimeVersionOverride }}
+      runtimeVersionOverride: {{ . | quote }}
+      {{- end }}
       envFromSecret: {{ .Values.model.envFromSecret | quote }}
       replicas: {{ .Values.frontend.replicas }}
       volumeMounts:
@@ -25,8 +28,12 @@ spec:
         nodeSelector:
           {{- toYaml . | nindent 10 }}
         {{- end }}
+        {{- with .Values.frontend.tolerations }}
+        tolerations:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
         mainContainer:
-          image: {{ .Values.model.image | quote }}
+          image: {{ default .Values.model.image .Values.frontend.image | quote }}
           imagePullPolicy: {{ .Values.model.imagePullPolicy }}
           startupProbe:
             httpGet:
@@ -104,6 +111,14 @@ spec:
         - name: {{ .Values.modelCache.name | quote }}
           mountPoint: {{ .Values.modelCache.mountPath | quote }}
       extraPodSpec:
+        {{- with .Values.modelexpress.nodeSelector }}
+        nodeSelector:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.modelexpress.tolerations }}
+        tolerations:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
         mainContainer:
           image: {{ .Values.modelexpress.image | quote }}
           imagePullPolicy: {{ .Values.modelexpress.imagePullPolicy }}
@@ -268,6 +283,9 @@ spec:
     {{- end }}
     {{ .Values.worker.componentName }}:
       componentType: worker
+      {{- with .Values.model.runtimeVersionOverride }}
+      runtimeVersionOverride: {{ . | quote }}
+      {{- end }}
       subComponentType: decode
       scalingAdapter:
         enabled: {{ .Values.worker.scalingAdapter.enabled }}
