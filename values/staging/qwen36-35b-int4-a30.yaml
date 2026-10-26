@@ -1,0 +1,105 @@
+# Isolated text-only staging profile; no gateway or Switchyard route is implied.
+# Publisher: https://huggingface.co/Intel/Qwen3.6-35B-A3B-int4-mixed-AutoRound
+# The publisher warns that INT4 generation loops may remain unresolved. Validate
+# startup memory, protocol behavior and frozen workload quality before promotion.
+model:
+  name: qwen36-35b-int4-a30
+  annotations:
+    nvidia.com/enable-grove: "false"
+  id: Intel/Qwen3.6-35B-A3B-int4-mixed-AutoRound
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1@sha256:a6bb45ad652f01d08b5a18b54b9fa9e80584ce18ee1ba1e5a760a8f228872fe5
+  imagePullPolicy: IfNotPresent
+  backendFramework: vllm
+  deploymentMode: direct
+  runtimeVersionOverride: "1.4.1"
+
+frontend:
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1@sha256:a6bb45ad652f01d08b5a18b54b9fa9e80584ce18ee1ba1e5a760a8f228872fe5
+  replicas: 1
+  resources:
+    requests:
+      memory: 4Gi
+    limits:
+      memory: 8Gi
+  nodeSelector:
+    kubernetes.io/hostname: daedalus-04
+  extraArgs:
+    - --dyn-chat-processor
+    - vllm
+    - --enable-auto-tool-choice
+    - --tool-call-parser
+    - qwen3_coder
+    - --reasoning-parser
+    - qwen3
+
+modelexpress:
+  image: nvcr.io/nvidia/ai-dynamo/modelexpress-server:0.4.1@sha256:79c6beb8718d38b8f793f89299b8e301e6c1794189c68fdbeca9ac01cacb2a05
+  nodeSelector:
+    kubernetes.io/hostname: daedalus-04
+
+worker:
+  replicas: 1
+  scalingAdapter:
+    enabled: false
+  gpu: "1"
+  cpuRequest: "8"
+  cpuLimit: "12"
+  memoryRequest: 64Gi
+  memoryLimit: 80Gi
+  nodeSelector:
+    kubernetes.io/hostname: daedalus-04
+  vllmArgs:
+    - --load-format safetensors
+    - --revision 65f69c73f17488236c85c85211f6ba28d7106157
+    # The installed INC reader handles this checkpoint's group128 symmetric
+    # GPTQ packing. Marlin is supported on SM80; refuse an emulation fallback.
+    - --quantization inc
+    - --moe-backend marlin
+    - --served-model-name "${MODEL_NAME}"
+    - --language-model-only
+    - --frontend-decoding
+    - --dyn-tool-call-parser qwen3_coder
+    - --dyn-reasoning-parser qwen3
+    - --dyn-enable-structural-tag
+    - --reasoning-parser qwen3
+    - --tensor-parallel-size 1
+    - --pipeline-parallel-size 1
+    - --data-parallel-size 1
+    - --dtype bfloat16
+    - --enforce-eager
+    - --max-model-len 131072
+    - --max-num-seqs 1
+    - --max-num-batched-tokens 512
+    - --gpu-memory-utilization 0.95
+    - --kv-cache-memory-bytes 3221225472
+    - --kv-cache-dtype auto
+    - --enable-chunked-prefill
+    - --no-enable-prefix-caching
+
+planner:
+  enabled: false
+  minEndpoint: 1
+  maxGpuBudget: 1
+
+# All three model-cache consumers stay on the same A30 node before binding.
+# The chart retains these independent PVCs on uninstall.
+modelCache:
+  name: qwen36-35b-int4-a30-model-cache
+  create: true
+  storage: 64Gi
+  accessModes:
+    - ReadWriteOnce
+  mountPath: /model
+  cachePath: /model/.model-express/cache
+  storageClassName: local-fast
+
+redis:
+  enabled: true
+  name: qwen36-35b-int4-a30-redis
+  dataPvcName: qwen36-35b-int4-a30-redis-data
+  image: redis:7-alpine@sha256:6ba19c50b56777f5c11c58eff8ddb69d0d5f27ba131cffb63f180ccfd43c66af
+  imagePullPolicy: IfNotPresent
+  storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-fast
