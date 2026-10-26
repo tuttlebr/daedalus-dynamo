@@ -14,9 +14,11 @@ spec:
     - interval: {{ .Values.metrics.podMonitor.interval | quote }}
       path: /metrics
       port: system
+    {{- if .Values.metrics.podMonitor.nixlEnabled }}
     - interval: {{ .Values.metrics.podMonitor.interval | quote }}
       path: /metrics
       port: nixl
+    {{- end }}
   selector:
     matchLabels:
       nvidia.com/dynamo-component-type: decode

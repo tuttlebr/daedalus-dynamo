@@ -1,0 +1,9 @@
+# Apply after the platform chart: kubectl -n dynamo-system patch podmonitor
+# dynamo-frontend --type=merge --patch-file observability/dynamo-frontend-selector.patch.yaml
+# ModelExpress also has component-type=frontend but does not serve /metrics.
+spec:
+  selector:
+    matchLabels:
+      nvidia.com/dynamo-component-type: frontend
+      nvidia.com/dynamo-component: Frontend
+      nvidia.com/metrics-enabled: "true"

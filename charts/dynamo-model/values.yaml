@@ -208,6 +208,8 @@ metrics:
     namespace: dynamo-system
     partOf: daedalus-dynamo-demo
     interval: 5s
+    # Enable only when a worker actually exposes the separate NIXL metrics port.
+    nixlEnabled: false
 
 availability:
   podDisruptionBudgets:
