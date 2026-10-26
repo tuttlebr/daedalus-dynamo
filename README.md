@@ -11,6 +11,7 @@ and uninstalling releases from model config paths.
 | `values/nemotron-omni.yaml` | `nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4` | vLLM |
 | `values/qwen35b.yaml` | `nvidia/Qwen3.6-35B-A3B-NVFP4` | vLLM |
 | `values/qwen27b.yaml` | `Qwen/Qwen3.8-27B-FP8` | vLLM |
+| `values/qwen38-27b-l40s.yaml` | `Qwen/Qwen3.8-27B-FP8` | vLLM, fixed text-only TP1 on L40S |
 | `values/gemma431b.yaml` | `nvidia/Gemma-4-31B-IT-NVFP4` | vLLM |
 | `values/nemotronnano.yaml` | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-Reasoning-NVFP4` | vLLM |
 | `values/nemotron35lightning-gb10.yaml` | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4` | TensorRT-LLM |
@@ -250,6 +251,79 @@ make status values/nemotron35bolt-gb10.yaml
 Sources: [NVIDIA model card](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB),
 [LiLiCorr model card](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-LiLiCorr),
 and [vLLM b12x hardware support](https://github.com/vllm-project/vllm/blob/77154ca6116ae34cbfe314beef1016bde9b63989/docs/features/quantization/b12x.md).
+
+## Qwen3.8 27B FP8 on one L40S
+
+[`values/qwen38-27b-l40s.yaml`](./values/qwen38-27b-l40s.yaml) is a separate
+fixed-capacity release named `qwen38-27b-vllm-l40s`. It preserves the existing
+TP2 `qwen27b.yaml` recipe and existing model endpoints. The worker and frontend
+pin the Dynamo 1.4.1 image by digest; the worker selects model revision
+`017b9c7af6b5689d5dd426a76e0bc077eb5ca20a` with `--revision` and serves the
+model ID `Qwen/Qwen3.8-27B-FP8`.
+
+This fixed single-node release sets the direct DGD metadata annotation
+`nvidia.com/enable-grove: "false"` through `model.annotations`. The installed
+Dynamo operator uses ordinary component Deployments instead of Grove gang
+recovery for this model. Other profiles retain their existing scheduling path.
+The frontend and ModelExpress Service names remain
+`qwen38-27b-vllm-l40s-frontend` and `qwen38-27b-vllm-l40s-modelexpress`.
+
+Select the scheduling backend when creating the DGD. Converting an existing
+Grove DGD requires a reviewed, scoped recreation: its stored `minAvailable`
+defaults are incompatible with the non-Grove path, a metadata-only toggle does
+not trigger the generation watcher, and old Grove resources are not migrated
+automatically. Retain the separate model-cache PVC, Redis, HTTPRoute and serving
+configuration, remove only this model's old DGD and dependent compute, and
+recreate it from the reviewed values. Account for the brief frontend outage;
+keep application routing on the existing backend until the replacement passes
+readiness and endpoint checks. Do not change the global operator or other DGD
+profiles to perform this migration.
+
+The profile uses one L40S, TP1, text-only frontend decoding, a 131,072-token
+model limit, four sequence slots, a 4,096-token batch budget, and an explicit
+8 GiB FP8 KV pool. Prefix caching and chunked prefill are enabled; speculative
+decoding, Planner, and the scaling adapter are disabled. Four slots do not
+promise four concurrent full-context requests. Verify the runtime's reported
+KV token capacity and an actual full-context request before accepting the
+configured context limit as usable capacity.
+
+The frontend selects the vLLM Python chat processor with automatic tool
+selection and the `qwen3_coder` tool and `qwen3` reasoning parsers. The worker
+retains the native parser metadata and `--dyn-enable-structural-tag`, and sets
+the engine's `--reasoning-parser qwen3`. The engine reasoning parser allows
+thinking before constrained tool arguments; structural tags preserve the Qwen
+tool-call framing consumed by the frontend postprocessor. The Python frontend
+leaves `tool_choice=none` without a tool grammar. Structural-tag scope and schema
+selection retain their runtime defaults. Qualify automatic, named, required,
+and tool-free continuation responses through this exact combined path before
+using the endpoint for the application workflow.
+
+The Python frontend requests 4 GiB host memory with an 8 GiB limit; its
+inherited CPU request and limit remain 500m and 2 cores. The generic Rust
+frontend's 2 GiB memory limit is insufficient for this Python processing path.
+
+The worker requests 48 GiB host memory. Its frontend, ModelExpress, and worker
+all select `daedalus-03` so the distinct 64 GiB `local-fast` RWO model-cache
+claim binds beside every consumer. Redis uses a separate 1 GiB local claim.
+ModelExpress prepopulates the upstream default revision. The worker uses the
+standard safetensors loader and revision-aware Hugging Face resolver for its
+configuration and weights; a missing pinned snapshot can require a separate
+download. Confirm it actually loads the pinned `017b9c7...` snapshot before
+qualifying the endpoint. Do not move a cache consumer to another node
+independently.
+
+For an additional backend without reconciling the shared gateway, use the
+existing deployment controls after reviewing the rendered manifests:
+
+```bash
+make lint values/qwen38-27b-l40s.yaml
+make render values/qwen38-27b-l40s.yaml
+GATEWAY=0 SKIP_BUILD=1 SKIP_PUSH=1 SKIP_SECRET=1 make deploy values/qwen38-27b-l40s.yaml
+```
+
+This profile defines launch settings, not a quality or latency result. Keep
+existing serving routes until startup, model identity, capacity, tool parsing,
+and the intended application workflow pass their endpoint checks.
 
 ## Qwen3.8 Flash Next on Spark
 

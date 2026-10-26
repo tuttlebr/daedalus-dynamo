@@ -8,6 +8,7 @@
       "required": ["name", "id", "image", "imagePullPolicy", "backendFramework", "deploymentMode"],
       "properties": {
         "name": { "type": "string", "minLength": 1 },
+        "annotations": { "type": "object", "additionalProperties": { "type": "string" } },
         "id": { "type": "string", "minLength": 1 },
         "image": { "type": "string", "minLength": 1 },
         "imagePullPolicy": { "$ref": "#/definitions/imagePullPolicy" },

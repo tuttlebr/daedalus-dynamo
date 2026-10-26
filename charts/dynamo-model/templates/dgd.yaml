@@ -5,6 +5,10 @@ apiVersion: nvidia.com/v1alpha1
 kind: DynamoGraphDeployment
 metadata:
   name: {{ include "dynamo-model.name" . | quote }}
+  {{- with .Values.model.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   labels:
     {{- include "dynamo-model.labels" . | nindent 4 }}
 spec:

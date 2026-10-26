@@ -3,6 +3,8 @@ app:
 
 model:
   name: example-vllm-agg
+  # Metadata on a directly rendered DynamoGraphDeployment, not its pods.
+  annotations: {}
   id: nvidia/example-model
   image: example.com/dynamo-model:latest
   imagePullPolicy: IfNotPresent

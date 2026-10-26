@@ -1,0 +1,99 @@
+model:
+  name: qwen38-27b-vllm-l40s
+  # Fixed single-node serving avoids Grove gang recovery for this release.
+  annotations:
+    nvidia.com/enable-grove: "false"
+  id: Qwen/Qwen3.8-27B-FP8
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1@sha256:a6bb45ad652f01d08b5a18b54b9fa9e80584ce18ee1ba1e5a760a8f228872fe5
+  imagePullPolicy: IfNotPresent
+  backendFramework: vllm
+  deploymentMode: direct
+  runtimeVersionOverride: "1.4.1"
+
+frontend:
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1@sha256:a6bb45ad652f01d08b5a18b54b9fa9e80584ce18ee1ba1e5a760a8f228872fe5
+  replicas: 1
+  resources:
+    requests:
+      memory: 4Gi
+    limits:
+      memory: 8Gi
+  nodeSelector:
+    kubernetes.io/hostname: daedalus-03
+  extraArgs:
+    - --dyn-chat-processor
+    - vllm
+    - --enable-auto-tool-choice
+    - --tool-call-parser
+    - qwen3_coder
+    - --reasoning-parser
+    - qwen3
+
+modelexpress:
+  nodeSelector:
+    kubernetes.io/hostname: daedalus-03
+
+worker:
+  # Separate TP1 release: keep the existing TP2 qwen27b profile intact.
+  replicas: 1
+  scalingAdapter:
+    enabled: false
+  gpu: "1"
+  memoryRequest: 48Gi
+  nodeSelector:
+    kubernetes.io/hostname: daedalus-03
+  vllmArgs:
+    # Use the standard resolver for revision-pinned config and weight files;
+    # ModelExpress prepopulation alone downloads the upstream default revision.
+    - --load-format safetensors
+    - --revision 017b9c7af6b5689d5dd426a76e0bc077eb5ca20a
+    - --quantization fp8
+    - --served-model-name "${MODEL_NAME}"
+    - --language-model-only
+    - --frontend-decoding
+    - --trust-remote-code
+    - --dyn-tool-call-parser qwen3_coder
+    - --dyn-reasoning-parser qwen3
+    - --dyn-enable-structural-tag
+    - --reasoning-parser qwen3
+    - --tensor-parallel-size 1
+    - --pipeline-parallel-size 1
+    - --data-parallel-size 1
+    - --max-model-len 131072
+    - --max-num-seqs 4
+    - --max-num-batched-tokens 4096
+    - --gpu-memory-utilization 0.90
+    - --kv-cache-memory-bytes 8589934592
+    - --enable-chunked-prefill
+    - --scheduling-policy priority
+    - --enable-prefix-caching
+    - --prefix-caching-hash-algo sha256
+    - --kv-cache-dtype fp8
+
+planner:
+  enabled: false
+  minEndpoint: 1
+  maxGpuBudget: 1
+
+# Every model-cache consumer is pinned to the same node before this local RWO
+# claim binds. Do not move one consumer independently of the others.
+modelCache:
+  name: qwen38-27b-l40s-model-cache
+  create: true
+  storage: 64Gi
+  accessModes:
+    - ReadWriteOnce
+  mountPath: /model
+  cachePath: /model/.model-express/cache
+  storageClassName: local-fast
+
+redis:
+  enabled: true
+  name: qwen38-27b-l40s-redis
+  dataPvcName: qwen38-27b-l40s-redis-data
+  image: redis:7-alpine
+  imagePullPolicy: IfNotPresent
+  storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-fast

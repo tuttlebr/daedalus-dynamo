@@ -17,6 +17,10 @@ SHARED_RUNTIME_IMAGE = (
     "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1"
 )
 GB10_RUNTIME_IMAGE = "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1"
+QWEN38_L40S_RUNTIME_IMAGE = (
+    "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1@sha256:"
+    "a6bb45ad652f01d08b5a18b54b9fa9e80584ce18ee1ba1e5a760a8f228872fe5"
+)
 QWEN38_GB10_RUNTIME_IMAGE = (
     "daedalus.ddns.me:5050/btuttle/daedalus-dynamo-qwen38-gb10:"
     "1.5.1-vllm0.31.0-2"
@@ -74,6 +78,8 @@ class ModelChartRenderTests(unittest.TestCase):
                     continue
                 if values_file.name == "qwen35-122b-gb10.yaml":
                     expected_image = GB10_RUNTIME_IMAGE
+                elif values_file.name == "qwen38-27b-l40s.yaml":
+                    expected_image = QWEN38_L40S_RUNTIME_IMAGE
                 elif values_file.name == "qwen38-flash-next-gb10.yaml":
                     expected_image = QWEN38_GB10_RUNTIME_IMAGE
                 elif values_file.name == "nemotron35bolt-gb10.yaml":
@@ -198,6 +204,156 @@ class ModelChartRenderTests(unittest.TestCase):
 
         self.assertEqual(gpu_memory["operator"], "Lt")
         self.assertEqual(gpu_memory["values"], ["40959"])
+
+    def test_qwen38_27b_l40s_is_a_pinned_fixed_text_only_tp1_release(self) -> None:
+        documents = render(ROOT / "values" / "qwen38-27b-l40s.yaml")
+        deployment = next(
+            document
+            for document in documents
+            if document["kind"] == "DynamoGraphDeployment"
+        )
+        self.assertEqual(deployment["metadata"]["name"], "qwen38-27b-vllm-l40s")
+        self.assertEqual(
+            deployment["metadata"]["annotations"],
+            {"nvidia.com/enable-grove": "false"},
+        )
+        services = deployment["spec"]["services"]
+        self.assertEqual(set(services), {"Frontend", "ModelExpress", "VllmWorker"})
+        worker = services["VllmWorker"]
+        self.assertEqual(worker["replicas"], 1)
+        self.assertFalse(worker["scalingAdapter"]["enabled"])
+        self.assertEqual(worker["resources"]["requests"]["gpu"], "1")
+        self.assertEqual(worker["resources"]["limits"]["gpu"], "1")
+        self.assertEqual(worker["resources"]["requests"]["memory"], "48Gi")
+        for component in ("Frontend", "VllmWorker"):
+            service = services[component]
+            self.assertEqual(service["runtimeVersionOverride"], "1.4.1")
+            self.assertEqual(
+                service["extraPodSpec"]["mainContainer"]["image"],
+                QWEN38_L40S_RUNTIME_IMAGE,
+            )
+        cache_name = "qwen38-27b-l40s-model-cache"
+        for service in services.values():
+            self.assertEqual(
+                service["extraPodSpec"]["nodeSelector"],
+                {"kubernetes.io/hostname": "daedalus-03"},
+            )
+            self.assertIn(
+                {"name": cache_name, "mountPoint": "/model"},
+                service["volumeMounts"],
+            )
+        self.assertEqual(services["Frontend"]["replicas"], 1)
+        self.assertEqual(
+            services["Frontend"]["extraPodSpec"]["mainContainer"]["resources"],
+            {
+                "requests": {"cpu": "500m", "memory": "4Gi"},
+                "limits": {"cpu": "2", "memory": "8Gi"},
+            },
+        )
+        container = worker["extraPodSpec"]["mainContainer"]
+        environment = {item["name"]: item["value"] for item in container["env"]}
+        self.assertEqual(environment["MODEL_NAME"], "Qwen/Qwen3.8-27B-FP8")
+        self.assertEqual(environment["HF_HUB_CACHE"], "/model/.model-express/cache")
+        self.assertNotIn("DYN_MM_ALLOW_INTERNAL", environment)
+        script = container["args"][0]
+        for flag, value in (
+            ("--revision", "017b9c7af6b5689d5dd426a76e0bc077eb5ca20a"),
+            ("--load-format", "safetensors"),
+            ("--quantization", "fp8"),
+            ("--tensor-parallel-size", "1"),
+            ("--pipeline-parallel-size", "1"),
+            ("--data-parallel-size", "1"),
+            ("--max-model-len", "131072"),
+            ("--max-num-seqs", "4"),
+            ("--max-num-batched-tokens", "4096"),
+            ("--gpu-memory-utilization", "0.90"),
+            ("--kv-cache-memory-bytes", "8589934592"),
+            ("--kv-cache-dtype", "fp8"),
+            ("--dyn-tool-call-parser", "qwen3_coder"),
+            ("--dyn-reasoning-parser", "qwen3"),
+            ("--reasoning-parser", "qwen3"),
+        ):
+            self.assertIn(f"{flag} {value}", script)
+        for flag in (
+            "--language-model-only",
+            "--frontend-decoding",
+            "--dyn-enable-structural-tag",
+            "--enable-prefix-caching",
+            "--enable-chunked-prefill",
+        ):
+            self.assertIn(flag, script)
+        for flag in ("--enable-multimodal", "--mm-processor-cache-gb", "--speculative"):
+            self.assertNotIn(flag, script)
+        self.assertNotIn("--dyn-structural-tag-scope", script)
+        self.assertNotIn("--dyn-structural-tag-schema", script)
+        subprocess.run(["bash", "-n"], input=script, text=True, check=True)
+        frontend_script = services["Frontend"]["extraPodSpec"]["mainContainer"][
+            "args"
+        ][0]
+        command = frontend_script.split("exec python3 -m dynamo.frontend", 1)[1]
+        argv = shlex.split(command.replace("\\\n", ""))
+        for flag, value in (
+            ("--dyn-chat-processor", "vllm"),
+            ("--tool-call-parser", "qwen3_coder"),
+            ("--reasoning-parser", "qwen3"),
+        ):
+            self.assertEqual(argv[argv.index(flag) + 1], value)
+        self.assertIn("--enable-auto-tool-choice", argv)
+        subprocess.run(["bash", "-n"], input=frontend_script, text=True, check=True)
+        claims = {
+            document["metadata"]["name"]: document["spec"]
+            for document in documents
+            if document["kind"] == "PersistentVolumeClaim"
+        }
+        for name, size in (
+            (cache_name, "64Gi"),
+            ("qwen38-27b-l40s-redis-data", "1Gi"),
+        ):
+            self.assertEqual(claims[name]["storageClassName"], "local-fast")
+            self.assertEqual(claims[name]["accessModes"], ["ReadWriteOnce"])
+            self.assertEqual(claims[name]["resources"]["requests"]["storage"], size)
+        # This is an additional profile, not a conversion of the TP2 recipe.
+        original = yaml.safe_load((ROOT / "values" / "qwen27b.yaml").read_text())
+        self.assertEqual(original["worker"]["gpu"], "2")
+        self.assertIn("--tensor-parallel-size 2", original["worker"]["vllmArgs"])
+        self.assertNotEqual(original["model"]["name"], deployment["metadata"]["name"])
+        self.assertNotEqual(original["modelCache"]["name"], cache_name)
+        self.assertNotEqual(original["redis"]["dataPvcName"], "qwen38-27b-l40s-redis-data")
+
+    def test_direct_model_annotations_are_scoped_metadata_and_require_strings(self) -> None:
+        for values_file in MODEL_VALUES:
+            with self.subTest(model=values_file.stem):
+                documents = render(values_file)
+                deployment = next(
+                    document
+                    for document in documents
+                    if document["kind"] == "DynamoGraphDeployment"
+                )
+                expected = (
+                    {"nvidia.com/enable-grove": "false"}
+                    if values_file.name == "qwen38-27b-l40s.yaml"
+                    else {}
+                )
+                self.assertEqual(deployment["metadata"].get("annotations", {}), expected)
+                # The operator reads the DGD, not an annotation copied into a
+                # worker/frontend pod, Service, or unrelated model release.
+                self.assertNotIn("nvidia.com/enable-grove", json.dumps(deployment["spec"]))
+                for document in documents:
+                    if document is not deployment:
+                        self.assertNotIn("nvidia.com/enable-grove", json.dumps(document))
+        result = subprocess.run(
+            [
+                "helm", "template", "annotation-type-check", str(CHART),
+                "--values", str(ROOT / "values" / "qwen38-27b-l40s.yaml"),
+                "--set-json", 'model.annotations={"nvidia.com/enable-grove":false}',
+            ],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("annotations", result.stderr)
+        self.assertIn("string", result.stderr)
 
     def test_frontend_receives_configured_cli_flags(self) -> None:
         documents = render(ROOT / "values" / "gemma431b.yaml")
