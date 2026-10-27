@@ -302,6 +302,7 @@ class OfficialFp8ProfileTests(unittest.TestCase):
             "--revision": REVISION,
             "--tokenizer-revision": REVISION,
             "--quantization": "fp8",
+            "--dtype": "bfloat16",
             "--moe-backend": "triton",
             "--tensor-parallel-size": "1",
             "--pipeline-parallel-size": "1",
@@ -310,7 +311,7 @@ class OfficialFp8ProfileTests(unittest.TestCase):
             "--max-num-seqs": "3",
             "--max-num-batched-tokens": "4096",
             "--kv-cache-memory-bytes": "4294967296",
-            "--kv-cache-dtype": "fp8",
+            "--kv-cache-dtype": "auto",
             "--prefix-caching-hash-algo": "sha256",
             "--reasoning-parser": "qwen3",
             "--dyn-tool-call-parser": "qwen3_coder",
@@ -335,9 +336,52 @@ class OfficialFp8ProfileTests(unittest.TestCase):
             "--no-enable-log-requests",
         ]:
             self.assertEqual(argv.count(flag), 1, flag)
-        for flag in ["--trust-remote-code", "--speculative-config", "--cpu-offload-gb"]:
+        for flag in [
+            "--trust-remote-code",
+            "--speculative-config",
+            "--cpu-offload-gb",
+            "--calculate-kv-scales",
+        ]:
             self.assertNotIn(flag, argv)
         self.assertEqual(set(actual["offline"].values()), {"1"})
+
+    def test_bf16_capacity_counts_full_contexts_instead_of_sequence_slots(self):
+        # Tiny geometry fixture from the official95a config, bound to its pin.
+        # Keep this independent of any operator's ignored metadata/cache directory.
+        self.assertEqual(self.production_pin["revision"], REVISION)
+        self.assertEqual(
+            self.production_pin["config_sha256"],
+            "570ef7ea45a7e1d3de2b1d3c70c4ac3562d0e768acdc195778cb4f4d95025845",
+        )
+        layer_types = (
+            "linear_attention",
+            "linear_attention",
+            "linear_attention",
+            "full_attention",
+        ) * 10
+        kv_heads, head_dimension, bf16_bytes = 2, 256, 2
+        completed, capture = self.run_startup("VllmWorker")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        argv = json.loads(capture.read_text())["argv"]
+        self.assertEqual(arguments_after(argv, "--kv-cache-dtype"), ["auto"])
+        self.assertEqual(arguments_after(argv, "--dtype"), ["bfloat16"])
+        tokens = int(arguments_after(argv, "--max-model-len")[0])
+        slots = int(arguments_after(argv, "--max-num-seqs")[0])
+        pool = int(arguments_after(argv, "--kv-cache-memory-bytes")[0])
+        self.assertEqual(len(layer_types), 40)
+        self.assertEqual(layer_types.count("full_attention"), 10)
+        raw_attention = (
+            tokens
+            * layer_types.count("full_attention")
+            * kv_heads
+            * head_dimension
+            * 2  # Separate key and value tensors.
+            * bf16_bytes
+        )
+        self.assertEqual(raw_attention, 5 * 2**29)  # 2.5GiB before recurrent state.
+        self.assertEqual(slots * raw_attention, 15 * 2**29)  # 7.5GiB for3 contexts.
+        self.assertLess(raw_attention, pool)
+        self.assertGreater(slots * raw_attention, pool)
 
     def test_emitted_frontend_bash_uses_guard_before_existing_parser_entrypoint(self):
         completed, capture = self.run_startup("Frontend")

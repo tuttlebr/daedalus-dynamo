@@ -336,9 +336,9 @@ names and the `Qwen/Qwen3.8-27B-FP8` model alias while registering the official
 values file alone is unsupported. The separate pinned cache can be prepared
 without using a GPU or changing serving resources.
 
-The profile keeps 131,072 tokens, three sequence slots, an explicit 4 GiB FP8
-KV pool, eager execution and a 4,096-token batch budget. These are launch
-settings, not demonstrated capacity or quality. See the
+The profile keeps FP8 weights, 131,072 tokens, three sequence slots, an explicit
+4 GiB BF16 KV pool, eager execution and a 4,096-token batch budget. These are
+launch settings, not demonstrated capacity or quality. See the
 [profile and transition procedure](./runtime/qwen36-35b-fp8-l40s/README.md)
 before preparing the cache, replacing the current worker or rolling back.
 

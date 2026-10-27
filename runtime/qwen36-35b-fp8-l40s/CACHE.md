@@ -56,8 +56,12 @@ and the complete application protocol. No context clipping or GPU-sharing
 workaround follows from a successful download. A serving transition and rollback
 are separate operator actions and require draining current consumers first.
 
-The initial serving pool is 4 GiB. Three scheduling slots do not promise three
-simultaneously resident full-length 131072-token inputs: their raw aligned
-attention/state lower bound is already 4.110 GiB, before additional overhead.
-Actual capacity and peak memory remain unproven until startup; keep the full
-window and existing pool while measuring that fit.
+The initial serving pool is 4 GiB BF16 KV; weight quantization remains FP8.
+Three scheduling slots do not promise three simultaneously resident full-length
+131072-token inputs: their raw attention KV alone needs 7.5 GiB, before
+recurrent state, alignment and other overhead. BF16 holds fewer cache tokens
+than FP8 in the same pool, so work can queue or require cache eviction. Actual
+capacity and peak memory remain unproven until startup; usable capacity of at
+least 131072 tokens is a hard load gate. Keep the full window and existing pool
+while measuring that fit. This serving precision choice does not change cache
+downloads, weight files or the integrity marker.

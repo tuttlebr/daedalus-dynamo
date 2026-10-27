@@ -23,15 +23,24 @@ combination. There is no speculative decoding or MTP. All consumers stay on
 `daedalus-03`; the frontend retains its 4 GiB memory request and 8 GiB limit.
 
 The worker uses one L40S, TP1, eager execution, a 131,072-token model limit,
-three sequence slots, prefix caching, chunked prefill and a fixed 4 GiB FP8 KV
-pool. The 4,096-token batch budget accommodates the pinned hybrid GDN/attention
+three sequence slots, prefix caching, chunked prefill and a fixed 4 GiB BF16 KV
+pool (`--dtype bfloat16 --kv-cache-dtype auto`). FP8 weight quantization is
+unchanged. The installed backend disables runtime KV-scale calibration for
+hybrid GDN/Mamba models, and this checkpoint has no calibrated KV-scale tensors
+or scheme. BF16 KV avoids relying on the default uncalibrated FP8 scale.
+
+The 4,096-token batch budget accommodates the pinned hybrid GDN/attention
 page alignment; a 1,024-token budget cannot satisfy the installed backend's
 block-size validation. Three slots preserve the repository's active-actor
 concurrency requirement. They do not promise three simultaneous 131,072-token
-resident contexts: their raw state and aligned KV lower bound already exceeds
-the fixed pool. Actual allocation, peak memory, eviction behavior and one full
-context must be qualified after startup. Do not shorten the context or change
-the pool to make a failed qualification appear successful.
+resident contexts: BF16 full-attention KV alone needs 2.5 GiB per full-length
+request, before recurrent state and alignment. Three such contexts exceed the
+fixed pool. Compared with FP8 KV, BF16 holds fewer cached tokens in the same
+pool; concurrent work can queue or require cache eviction. Actual allocation,
+peak memory, eviction behavior and one full context must be qualified after
+startup. Usable capacity of at least 131,072 tokens remains a hard load gate.
+Do not shorten the context or change the pool to make a failed qualification
+appear successful.
 
 ## Prepare and verify the separate cache
 
