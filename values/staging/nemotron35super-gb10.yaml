@@ -54,6 +54,8 @@ worker:
     timeoutSeconds: 5
     failureThreshold: 120
   extraEnv:
+  - name: DYN_HEALTH_CHECK_REQUEST_TIMEOUT
+    value: '120'
   - name: VLLM_USE_V2_MODEL_RUNNER
     value: '1'
   - name: VLLM_WORKER_MULTIPROC_METHOD

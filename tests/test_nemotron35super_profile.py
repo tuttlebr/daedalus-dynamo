@@ -159,6 +159,19 @@ class SuperProfileTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             PREPARE.render("another-namespace")
 
+    def test_worker_health_check_allows_long_prefill_without_masking_probes(self):
+        services = self.graph()["spec"]["services"]
+        worker_service = services["VllmWorker"]
+        worker = worker_service["extraPodSpec"]["mainContainer"]
+        frontend = services["Frontend"]["extraPodSpec"]["mainContainer"]
+        key = "DYN_HEALTH_CHECK_REQUEST_TIMEOUT"
+        env = {item["name"]: item.get("value") for item in worker["env"]}
+        self.assertEqual(env.get(key), "120")
+        self.assertNotIn(key, {item["name"] for item in frontend["env"]})
+        self.assertEqual(worker_service["readinessProbe"]["httpGet"]["path"], "/health")
+        self.assertEqual(worker_service["livenessProbe"]["httpGet"]["path"], "/live")
+        self.assertEqual(worker_service["livenessProbe"]["failureThreshold"], 30)
+
     def test_wrong_graph_or_extra_component_fails_closed(self):
         for mutate in (
             lambda graph: graph["metadata"].update(name="unrelated-live-model"),

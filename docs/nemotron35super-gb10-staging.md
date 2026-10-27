@@ -12,6 +12,14 @@ Marlin experts, no prefix caching or MTP, and no image/video/audio admission.
 Model loading, actual usable context, memory peak, protocol behavior, quality
 and speed require observation; these settings prove none of them.
 
+The worker sets `DYN_HEALTH_CHECK_REQUEST_TIMEOUT=120` seconds. Dynamo's
+default three-second generate health check can time out while a full-context
+prefill occupies the engine, marking a successful request's worker unavailable.
+This per-worker timeout allows that prefill to complete; health checks remain
+enabled and the `/health` readiness and `/live` liveness probes remain intact.
+A genuinely stalled health request can therefore take up to 120 seconds to
+mark the worker unhealthy.
+
 The only supported namespace is `daedalus-dynamo`. The stage name is
 `nemotron35super-gb10-stage`; its only added endpoint is a private ClusterIP
 `nemotron35super-gb10-stage-private:8000`. No gateway route, NodePort, model
