@@ -327,7 +327,6 @@ class OfficialFp8ProfileTests(unittest.TestCase):
             ["Qwen/Qwen3.6-35B-A3B-FP8", "Qwen/Qwen3.8-27B-FP8"],
         )
         for flag in [
-            "--enforce-eager",
             "--enable-chunked-prefill",
             "--enable-prefix-caching",
             "--language-model-only",
@@ -337,6 +336,7 @@ class OfficialFp8ProfileTests(unittest.TestCase):
         ]:
             self.assertEqual(argv.count(flag), 1, flag)
         for flag in [
+            "--enforce-eager",
             "--trust-remote-code",
             "--speculative-config",
             "--cpu-offload-gb",

@@ -22,12 +22,21 @@ and frontend use the existing Python processing and Qwen tool/reasoning parser
 combination. There is no speculative decoding or MTP. All consumers stay on
 `daedalus-03`; the frontend retains its 4 GiB memory request and 8 GiB limit.
 
-The worker uses one L40S, TP1, eager execution, a 131,072-token model limit,
+The worker uses one L40S, TP1, the pinned vLLM compilation and CUDA graph
+defaults, a 131,072-token model limit,
 three sequence slots, prefix caching, chunked prefill and a fixed 4 GiB BF16 KV
 pool (`--dtype bfloat16 --kv-cache-dtype auto`). FP8 weight quantization is
 unchanged. The installed backend disables runtime KV-scale calibration for
 hybrid GDN/Mamba models, and this checkpoint has no calibrated KV-scale tensors
 or scheme. BF16 KV avoids relying on the default uncalibrated FP8 scale.
+
+Compilation and graph capture have additional startup and persistent memory
+costs outside the fixed KV pool. Qualify the actual capture configuration,
+usable context capacity and memory use before workflow acceptance. If graph
+startup fails, stop that worker before restoring the captured previous Helm
+revision; do not reduce the context, KV pool or reasoning allowance to force a
+pass. A previously captured eager worker remains a serving rollback when its
+model aliases and client paths match the saved release.
 
 The 4,096-token batch budget accommodates the pinned hybrid GDN/attention
 page alignment; a 1,024-token budget cannot satisfy the installed backend's

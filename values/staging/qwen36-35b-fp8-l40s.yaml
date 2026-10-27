@@ -58,7 +58,6 @@ worker:
   - --max-model-len 131072
   - --max-num-seqs 3
   - --max-num-batched-tokens 4096
-  - --enforce-eager
   - --gpu-memory-utilization 0.90
   - --kv-cache-memory-bytes 4294967296
   - --enable-chunked-prefill
