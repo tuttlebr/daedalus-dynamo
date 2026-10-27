@@ -28,6 +28,15 @@ remain. The current stack upgrade script therefore preserves the retired state.
 An explicit restoration must also restore the compatible route/catalog state;
 do not uninstall the release or delete its caches as part of this transition.
 
+The Bolt worker sets `DYN_HEALTH_CHECK_REQUEST_TIMEOUT=120` seconds. Dynamo's
+default three-second generate canary can expire behind a healthy long prefill,
+causing the frontend to remove the model and its aliases temporarily. The longer
+per-worker timeout permits that work to finish. Health checks remain enabled;
+the `/health` readiness and `/live` liveness/startup probes stay intact. A truly
+stalled health request can therefore take up to 120 seconds to mark the worker
+unhealthy. This does not extend application deadlines or change the engine's
+model, cache, resource or token limits.
+
 ## Controlled transition
 
 1. Save current Helm values and revisions, full graph components, frontend and

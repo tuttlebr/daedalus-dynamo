@@ -74,6 +74,10 @@ worker:
     timeoutSeconds: 20
     failureThreshold: 120
   extraEnv:
+    # A healthy long prefill can exceed Dynamo's three-second generate canary.
+    # Keep checks enabled while allowing the request to finish before expiry.
+    - name: DYN_HEALTH_CHECK_REQUEST_TIMEOUT
+      value: "120"
     - name: VLLM_USE_V2_MODEL_RUNNER
       value: "1"
     - name: VLLM_WORKER_MULTIPROC_METHOD
