@@ -12,6 +12,7 @@ and uninstalling releases from model config paths.
 | `values/qwen35b.yaml` | `nvidia/Qwen3.6-35B-A3B-NVFP4` | vLLM |
 | `values/qwen27b.yaml` | `Qwen/Qwen3.8-27B-FP8` | vLLM |
 | `values/qwen38-27b-l40s.yaml` | `Qwen/Qwen3.8-27B-FP8` | vLLM, fixed text-only TP1 on L40S |
+| `values/staging/qwen36-35b-fp8-l40s.yaml` | `Qwen/Qwen3.6-35B-A3B-FP8` | Staged same-L40S replacement; pinned offline cache and post-renderer required |
 | `values/gemma431b.yaml` | `nvidia/Gemma-4-31B-IT-NVFP4` | vLLM |
 | `values/nemotronnano.yaml` | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-Reasoning-NVFP4` | vLLM |
 | `values/nemotron35lightning-gb10.yaml` | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4` | TensorRT-LLM |
@@ -324,6 +325,22 @@ GATEWAY=0 SKIP_BUILD=1 SKIP_PUSH=1 SKIP_SECRET=1 make deploy values/qwen38-27b-l
 This profile defines launch settings, not a quality or latency result. Keep
 existing serving routes until startup, model identity, capacity, tool parsing,
 and the intended application workflow pass their endpoint checks.
+
+## Official Qwen3.6 FP8 on the existing L40S service
+
+[`values/staging/qwen36-35b-fp8-l40s.yaml`](./values/staging/qwen36-35b-fp8-l40s.yaml)
+is an alternative for the existing L40S release. It retains the current Service
+names and the `Qwen/Qwen3.8-27B-FP8` model alias while registering the official
+`Qwen/Qwen3.6-35B-A3B-FP8` model first. It requires the
+[offline-cache post-renderer](./scripts/qwen36_fp8_postrender.py); deploying the
+values file alone is unsupported. The separate pinned cache can be prepared
+without using a GPU or changing serving resources.
+
+The profile keeps 131,072 tokens, three sequence slots, an explicit 4 GiB FP8
+KV pool, eager execution and a 4,096-token batch budget. These are launch
+settings, not demonstrated capacity or quality. See the
+[profile and transition procedure](./runtime/qwen36-35b-fp8-l40s/README.md)
+before preparing the cache, replacing the current worker or rolling back.
 
 ## Qwen3.8 Flash Next on Spark
 
