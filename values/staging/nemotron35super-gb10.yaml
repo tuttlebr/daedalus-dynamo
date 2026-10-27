@@ -1,0 +1,119 @@
+# HELD private text-only stage. Requires explicit approval of Bolt interruption.
+model:
+  name: nemotron35super-gb10-stage
+  id: nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-nemotron35bolt-gb10@sha256:fce406623d1f78dc393cafae7d752185bea75a5cd37cfe9f8a0a03630d01f7f6
+  imagePullPolicy: IfNotPresent
+  backendFramework: vllm
+  deploymentMode: direct
+  runtimeVersionOverride: 1.6.0
+  envFromSecret: stage-placeholder-must-be-removed
+  annotations:
+    nvidia.com/enable-grove: 'false'
+frontend:
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-nemotron35bolt-gb10@sha256:bcec6368c6a9d4693c30d4f4aaccb9384c2773ac73f2abc6ff3a8214d9bd4444
+  replicas: 1
+  nodeSelector: &id001
+    kubernetes.io/hostname: daedalus-06
+    nvidia.com/gpu.product: NVIDIA-GB10
+  tolerations:
+  - key: nvidia.com/gpu
+    operator: Equal
+    value: 'true'
+    effect: NoSchedule
+  extraArgs:
+  - --trust-remote-code
+  resources:
+    requests:
+      cpu: 500m
+      memory: 4Gi
+    limits:
+      cpu: '4'
+      memory: 8Gi
+modelexpress:
+  enabled: false
+  waitForCacheReady: false
+worker:
+  replicas: 1
+  scalingAdapter:
+    enabled: false
+  gpu: '1'
+  cpuRequest: '4'
+  memoryRequest: 96Gi
+  sharedMemorySize: 16Gi
+  nodeSelector: *id001
+  tolerations:
+  - key: nvidia.com/gpu
+    operator: Equal
+    value: 'true'
+    effect: NoSchedule
+  workingDir: /workspace
+  startupProbe:
+    path: /live
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 120
+  extraEnv:
+  - name: VLLM_USE_V2_MODEL_RUNNER
+    value: '1'
+  - name: VLLM_WORKER_MULTIPROC_METHOD
+    value: spawn
+  - name: NCCL_IB_DISABLE
+    value: '1'
+  - name: HF_HOME
+    value: /model
+  - name: HF_MODULES_CACHE
+    value: /model/runtime-cache/hf_modules
+  - name: TRITON_CACHE_DIR
+    value: /model/runtime-cache/triton
+  - name: VLLM_CACHE_ROOT
+    value: /model/runtime-cache/vllm
+  vllmArgs:
+  - --served-model-name "${MODEL_NAME}"
+  - --revision da5b2650a835292c678994a1fa3fb653250fb508
+  - --trust-remote-code
+  - --load-format safetensors
+  - --language-model-only
+  - --limit-mm-per-prompt '{"image":0,"video":0,"audio":0}'
+  - --dyn-tool-call-parser qwen3_coder
+  - --dyn-reasoning-parser nemotron_v3
+  - --reasoning-parser nemotron_v3
+  - --moe-backend marlin
+  - --tensor-parallel-size 1
+  - --pipeline-parallel-size 1
+  - --data-parallel-size 1
+  - --max-model-len 131072
+  - --max-num-seqs 1
+  - --max-num-batched-tokens 2048
+  - --enforce-eager
+  - --gpu-memory-utilization 0.75
+  - --kv-cache-memory-bytes 8589934592
+  - --enable-chunked-prefill
+  - --no-enable-prefix-caching
+  - --kv-cache-dtype fp8
+  - --mamba-backend flashinfer
+  - --mamba-ssm-cache-dtype bfloat16
+  - --mamba-cache-dtype bfloat16
+  - --seed 42
+  memoryLimit: 104Gi
+  livenessFailureThreshold: 30
+planner:
+  enabled: false
+  minEndpoint: 1
+  maxGpuBudget: 1
+  compatHook:
+    enabled: false
+modelCache:
+  name: nemotron35super-gb10-stage-model-cache
+  create: true
+  storage: 128Gi
+  accessModes:
+  - ReadWriteOnce
+  mountPath: /model
+  cachePath: /model/hf
+  storageClassName: local-fast
+redis:
+  enabled: false
+metrics:
+  podMonitor:
+    enabled: false

@@ -25,6 +25,12 @@ profiles. Pinned versions, replay instructions and validation are in
 | `values/qwen38-flash-next-gb10.yaml` | `nvidia/Qwen3.8-Flash-Next-NVFP4` | vLLM, GB10 with NVMe-backed embeddings |
 | `values/nemotron35bolt-gb10.yaml` | `nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB` | vLLM, GB10, prefix caching |
 
+An opt-in [private Super GB10 stage](docs/nemotron35super-gb10-staging.md) uses
+`values/staging/nemotron35super-gb10.yaml` with its mandatory offline
+post-renderer. It does not alter the default deployments or gateway. Loading
+it requires separately approved Bolt interruption; do not use `make deploy`
+for that stage.
+
 ## Prerequisites
 
 The deployment host needs:
