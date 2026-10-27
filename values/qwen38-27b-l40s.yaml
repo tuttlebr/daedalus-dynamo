@@ -37,8 +37,9 @@ modelexpress:
 worker:
   annotations:
     nvidia.com/deployment-strategy: Recreate
-  # Separate TP1 release: keep the existing TP2 qwen27b profile intact.
-  replicas: 1
+  # Retired TP1 worker; old client IDs resolve to the active Bolt service.
+  # Preserve this historical profile and cache for an explicit rollback.
+  replicas: 0
   scalingAdapter:
     enabled: false
   gpu: "1"

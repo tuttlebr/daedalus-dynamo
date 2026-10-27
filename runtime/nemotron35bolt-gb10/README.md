@@ -4,6 +4,11 @@ The image pins vLLM `0.32.0rc1.dev100+g77154ca61`, Dynamo
 stable `1.6.0`, ModelExpress `0.7.0`, and b12x `1.5.1`. The serving profile is
 [`values/nemotron35bolt-gb10.yaml`](../../values/nemotron35bolt-gb10.yaml).
 
+This is the active model for local inference. The former Qwen IDs are explicit
+aliases of Bolt weights, and the Qwen L40S inference worker defaults to zero.
+See [single-model serving](../../docs/single-model-serving.md) for compatibility
+metadata, guarded rollout and rollback.
+
 ## Current serving configuration
 
 The profile disables DFlash and sets `--prefix-match-unit 16` while retaining

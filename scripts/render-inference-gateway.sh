@@ -407,6 +407,30 @@ render_route() {
     exit 2
   fi
 
+  # Compatibility IDs are stable client contracts. Resolve only the declared
+  # aliases, so ordinary route replay cannot restore a retired worker backend.
+  local resolved effective_dgd canonical_model canonical_revision
+  resolved="$(python3 - "$(dirname "${BASH_SOURCE[0]}")" "${MODEL_ID}" "${MODEL_DGD}" <<'PY'
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(sys.argv[1]).resolve()))
+from model_compatibility import load_policy
+
+policy = load_policy()
+if sys.argv[2] in policy["aliases"]:
+    print(policy["backend_dgd"])
+    print(policy["canonical_model"])
+    print(policy["canonical_revision"])
+else:
+    print(sys.argv[3])
+PY
+)"
+  local -a compatibility_fields
+  mapfile -t compatibility_fields <<<"${resolved}"
+  effective_dgd="${compatibility_fields[0]}"
+  canonical_model="${compatibility_fields[1]:-}"
+  canonical_revision="${compatibility_fields[2]:-}"
+
   cat <<EOF
 ---
 apiVersion: gateway.networking.k8s.io/v1
@@ -419,7 +443,12 @@ metadata:
     daedalus-dynamo/route-kind: model
   annotations:
     daedalus-dynamo/model-id: "${MODEL_ID}"
-    daedalus-dynamo/model-dgd: "${MODEL_DGD}"
+    daedalus-dynamo/model-dgd: "${effective_dgd}"
+$(if [[ -n "${canonical_model}" ]]; then
+    printf '    daedalus-dynamo/canonical-model-id: "%s"\n' "${canonical_model}"
+    printf '    daedalus-dynamo/canonical-model-revision: "%s"\n' "${canonical_revision}"
+    printf '    daedalus-dynamo/compatibility-alias: "true"\n'
+  fi)
 spec:
   parentRefs:
     - group: gateway.networking.k8s.io
@@ -435,7 +464,7 @@ spec:
               name: X-Gateway-Base-Model-Name
               value: "${MODEL_ID}"
       backendRefs:
-        - name: ${MODEL_DGD}-frontend
+        - name: ${effective_dgd}-frontend
           port: 8000
       timeouts:
         request: ${GATEWAY_REQUEST_TIMEOUT}

@@ -89,7 +89,9 @@ worker:
     - name: NCCL_IB_DISABLE
       value: "1"
   vllmArgs:
-    - --served-model-name "${MODEL_NAME}"
+    # Preserve previous client model IDs as aliases of these Bolt weights.
+    # Dynamo registers all three names against the same Bolt model card.
+    - --served-model-name "${MODEL_NAME}" "Qwen/Qwen3.6-35B-A3B-FP8" "Qwen/Qwen3.8-27B-FP8"
     - --revision c6cc2e8ffa353403213d6b9b18aaf8eb684d705a
     - --trust-remote-code
     - --load-format auto

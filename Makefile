@@ -561,7 +561,7 @@ gateway-route: check-model
 	@$(MAKE) --no-print-directory gateway-base
 	@$(MAKE) --no-print-directory gateway-route-apply "$(MODEL_CONFIG)"
 
-gateway-route-apply: check-model check-kubectl
+gateway-route-apply: check-model check-kubectl check-python
 	@echo "==> Applying $(GATEWAY_NAME) route for $(MODEL_ID)"
 	@APP_LABEL_VALUE="$(APP_LABEL_VALUE)" \
 		GATEWAY_NAME="$(GATEWAY_NAME)" \

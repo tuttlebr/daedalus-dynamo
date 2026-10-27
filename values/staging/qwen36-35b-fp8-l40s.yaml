@@ -38,7 +38,9 @@ modelexpress:
 worker:
   annotations:
     nvidia.com/deployment-strategy: Recreate
-  replicas: 1
+  # Retired inference worker; the existing Bolt service accepts both old IDs.
+  # Keep cache, frontend and read-only recovery configuration for rollback.
+  replicas: 0
   scalingAdapter:
     enabled: false
   gpu: '1'
