@@ -1,0 +1,238 @@
+alertmanager:
+  enabled: true
+extraManifests:
+- apiVersion: monitoring.coreos.com/v1
+  kind: Prometheus
+  metadata:
+    annotations:
+      maintenance.daedalus.io/reason: Permanent Prometheus instance, managed by kube-prometheus-stack
+        Helm; existing metrics volume preserved.
+    labels:
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/part-of: kube-prometheus-stack
+      maintenance.daedalus.io/replaces: kube-prometheus-stack-prometheus
+    name: kube-prometheus-maintenance
+    namespace: monitoring
+  spec:
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                - prometheus
+              - key: app.kubernetes.io/instance
+                operator: In
+                values:
+                - kube-prometheus-maintenance
+            topologyKey: kubernetes.io/hostname
+          weight: 100
+    alerting:
+      alertmanagers:
+      - apiVersion: v2
+        name: kube-prometheus-stack-alertmanager
+        namespace: monitoring
+        pathPrefix: /
+        port: http-web
+    automountServiceAccountToken: true
+    enableAdminAPI: false
+    enableOTLPReceiver: false
+    evaluationInterval: 30s
+    externalUrl: http://kube-prometheus-stack-prometheus.monitoring:9090
+    hostNetwork: false
+    image: quay.io/prometheus/prometheus:v3.15.1-distroless
+    imagePullPolicy: IfNotPresent
+    listenLocal: false
+    logFormat: logfmt
+    logLevel: info
+    paused: false
+    persistentVolumeClaimRetentionPolicy:
+      whenDeleted: Retain
+      whenScaled: Retain
+    podMonitorNamespaceSelector: {}
+    podMonitorSelector: {}
+    portName: http-web
+    probeNamespaceSelector: {}
+    probeSelector:
+      matchLabels:
+        release: kube-prometheus-stack
+    replicas: 1
+    resources:
+      requests:
+        cpu: 250m
+        memory: 2048Mi
+    retention: 30d
+    routePrefix: /
+    ruleNamespaceSelector: {}
+    ruleSelector:
+      matchLabels:
+        release: kube-prometheus-stack
+    scrapeConfigNamespaceSelector: {}
+    scrapeConfigSelector:
+      matchLabels:
+        release: kube-prometheus-stack
+    scrapeInterval: 30s
+    securityContext:
+      fsGroup: 2000
+      runAsGroup: 2000
+      runAsNonRoot: true
+      runAsUser: 1000
+      seccompProfile:
+        type: RuntimeDefault
+    serviceAccountName: kube-prometheus-stack-prometheus
+    serviceMonitorNamespaceSelector: {}
+    serviceMonitorSelector: {}
+    shards: 1
+    storage:
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+          - ReadWriteOnce
+          resources:
+            requests:
+              storage: 100Gi
+          storageClassName: local-fast
+    tsdb:
+      outOfOrderTimeWindow: 0s
+    version: v3.15.1
+    walCompression: true
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      app: kube-prometheus-stack-prometheus
+      app.kubernetes.io/instance: kube-prometheus-stack
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/part-of: kube-prometheus-stack
+      app.kubernetes.io/version: 82.18.0
+      chart: kube-prometheus-stack-82.18.0
+      heritage: Helm
+      release: kube-prometheus-stack
+      self-monitor: 'true'
+    name: kube-prometheus-stack-prometheus
+    namespace: monitoring
+    annotations:
+      meta.helm.sh/release-name: kube-prometheus-stack
+      meta.helm.sh/release-namespace: monitoring
+      service.cilium.io/src-ranges-policy: allow
+  spec:
+    allocateLoadBalancerNodePorts: true
+    clusterIP: 10.101.214.138
+    clusterIPs:
+    - 10.101.214.138
+    externalTrafficPolicy: Cluster
+    internalTrafficPolicy: Cluster
+    ipFamilies:
+    - IPv4
+    ipFamilyPolicy: SingleStack
+    loadBalancerClass: daedalus.ai/nodeport-only
+    loadBalancerSourceRanges:
+    - 192.168.1.0/24
+    - 172.30.50.0/24
+    - 10.0.1.0/24
+    - 10.0.2.0/24
+    - 10.0.3.0/24
+    - 10.0.4.0/24
+    ports:
+    - name: http-web
+      nodePort: 30500
+      port: 9090
+      protocol: TCP
+      targetPort: 9090
+    selector:
+      app.kubernetes.io/name: prometheus
+      operator.prometheus.io/name: kube-prometheus-maintenance
+    sessionAffinity: None
+    type: LoadBalancer
+grafana:
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+      - disableDeletion: false
+        editable: true
+        folder: NVIDIA GPU
+        name: nvidia
+        options:
+          path: /var/lib/grafana/dashboards/nvidia
+        orgId: 1
+        type: file
+      - disableDeletion: false
+        editable: true
+        folder: Cilium Network
+        name: cilium
+        options:
+          path: /var/lib/grafana/dashboards/cilium
+        orgId: 1
+        type: file
+  dashboards:
+    cilium:
+      cilium-agent:
+        datasource: Prometheus
+        gnetId: 16611
+        revision: 1
+      cilium-hubble:
+        datasource: Prometheus
+        gnetId: 16613
+        revision: 1
+      cilium-operator:
+        datasource: Prometheus
+        gnetId: 16612
+        revision: 1
+    nvidia:
+      dcgm-exporter:
+        datasource: Prometheus
+        gnetId: 12239
+        revision: 2
+  service:
+    nodePort: 32222
+    type: LoadBalancer
+  sidecar:
+    dashboards:
+      enabled: true
+      searchNamespace: ALL
+kube-state-metrics:
+  metricLabelsAllowlist:
+  - pods=[nvidia.com/dynamo-graph-deployment-name,nvidia.com/dynamo-component-type]
+  resources:
+    requests:
+      cpu: 25m
+      memory: 224Mi
+prometheus:
+  prometheusSpec:
+    nodeSelector: null
+    paused: false
+    persistentVolumeClaimRetentionPolicy:
+      whenDeleted: Retain
+      whenScaled: Retain
+    podMonitorNamespaceSelector: {}
+    podMonitorSelectorNilUsesHelmValues: false
+    replicas: 0
+    retention: 30d
+    ruleNamespaceSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    serviceMonitorSelectorNilUsesHelmValues: false
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+          - ReadWriteOnce
+          resources:
+            requests:
+              storage: 100Gi
+          storageClassName: local-fast
+  service:
+    enabled: false
+    nodePort: 30500
+    type: NodePort
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 128Mi
+crds:
+  upgradeJob:
+    enabled: true

@@ -3,4 +3,4 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1
+    image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0

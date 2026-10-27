@@ -1,0 +1,10 @@
+# Docker Hub has not published the 2.15.2 image yet. Use the official release
+# asset digest published by nats-io/nats-server for the existing amd64 server.
+FROM alpine:3.22 AS binary
+ADD --checksum=sha256:67cb8e10bc6f0c4b47f75a728529a20953dbae2a4f9a4a52ae8517d65ae303ff \
+    https://github.com/nats-io/nats-server/releases/download/v2.15.2/nats-server-v2.15.2-linux-amd64.tar.gz /tmp/nats.tar.gz
+RUN tar -xzf /tmp/nats.tar.gz -C /tmp
+
+FROM nats:2.15.1-alpine@sha256:7ae34c25dfd6fe2e01c6483eabef20d796690fdcac6c4d94ca780a6cf9877fde
+COPY --from=binary /tmp/nats-server-v2.15.2-linux-amd64/nats-server /usr/local/bin/nats-server
+RUN nats-server --version

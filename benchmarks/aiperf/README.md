@@ -1,7 +1,7 @@
 # Inference Gateway AIPerf Runner
 
 This container discovers every model from the inference gateway's `/v1/models`
-catalog and profiles each model in catalog order with NVIDIA AIPerf 0.11.0.
+catalog and profiles each model in catalog order with NVIDIA AIPerf 0.13.0.
 It does not hard-code the model list.
 
 The frozen workload models an agentic conversation with four prefix layers:
@@ -29,9 +29,9 @@ first occurrences of shared prefixes and the assumptions about retained history.
 Sessions are not recycled to fill the duration, which would inflate reuse.
 
 Every session sends `X-Dynamo-Session-ID`, and its HTTP connection is
-reused across turns. The generator uses AIPerf 0.11.0's fixed 512-token
+reused across turns. The generator uses AIPerf 0.13.0's fixed 512-token
 Mooncake block size so the generated hash IDs and trace loader reconstruct the
-same shared prompt blocks. AIPerf 0.11.0 rejects block-size overrides for file
+same shared prompt blocks. AIPerf 0.13.0 rejects block-size overrides for file
 datasets, so the runner fails early if a custom agentic config uses any other
 block size.
 
@@ -118,14 +118,14 @@ verification:
 
 ```bash
 docker build \
-  -t daedalus-dynamo-aiperf:0.11.0 \
+  -t daedalus-dynamo-aiperf:0.13.0 \
   benchmarks/aiperf
 
 docker run --rm \
   --add-host daedalus.ddns.me:192.168.1.234 \
   -e ENDPOINT_URL=https://daedalus.ddns.me:32359 \
   -e OPENAI_API_KEY \
-  daedalus-dynamo-aiperf:0.11.0 \
+  daedalus-dynamo-aiperf:0.13.0 \
   --list-models
 ```
 
@@ -137,7 +137,7 @@ docker run --rm \
   --add-host daedalus.ddns.me:192.168.1.234 \
   -e ENDPOINT_URL=https://daedalus.ddns.me:32359 \
   -e OPENAI_API_KEY \
-  daedalus-dynamo-aiperf:0.11.0 \
+  daedalus-dynamo-aiperf:0.13.0 \
   --dry-run
 ```
 
@@ -155,7 +155,7 @@ docker run --rm --init \
   -e ENDPOINT_URL=https://daedalus.ddns.me:32359 \
   -e OPENAI_API_KEY \
   -v "$PWD/artifacts/aiperf:/artifacts" \
-  daedalus-dynamo-aiperf:0.11.0
+  daedalus-dynamo-aiperf:0.13.0
 ```
 
 The equivalent Compose workflow maps the hostname to node `192.168.1.234`

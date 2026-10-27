@@ -5,7 +5,8 @@ USER root
 
 # Preserve the model-capable vLLM/Torch stack instead of installing [vllm].
 RUN pip install --no-cache-dir \
-      ai-dynamo==1.6.0.dev20261019 \
+      ai-dynamo==1.6.0 \
+      modelexpress==0.7.0 \
       b12x==1.5.1 \
       blake3==1.0.8 uvloop==0.22.1 \
  && python3 -c 'import b12x; from importlib.metadata import version; print("vllm", version("vllm")); print("dynamo", version("ai-dynamo"))'
@@ -21,6 +22,11 @@ RUN pip install --no-cache-dir protobuf==6.33.6 grpcio-tools==1.76.0 grpcio==1.8
 COPY patch_mamba_prefill_alignment.py /tmp/patch_mamba_prefill_alignment.py
 RUN python3 /tmp/patch_mamba_prefill_alignment.py \
  && rm /tmp/patch_mamba_prefill_alignment.py
+
+COPY patch_dynamo_generation_import.py /tmp/patch_dynamo_generation_import.py
+RUN python3 /tmp/patch_dynamo_generation_import.py \
+ && rm /tmp/patch_dynamo_generation_import.py \
+ && python3 -c 'import dynamo.vllm.main; print("Dynamo generation worker import passed")'
 
 WORKDIR /workspace
 ENTRYPOINT ["/bin/bash"]

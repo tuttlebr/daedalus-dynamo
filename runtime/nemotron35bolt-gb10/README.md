@@ -1,7 +1,7 @@
 # Nemotron 3.5 Bolt on GB10
 
 The image pins vLLM `0.32.0rc1.dev100+g77154ca61`, Dynamo
-`1.6.0.dev20261019`, and b12x `1.5.1`. The serving profile is
+stable `1.6.0`, ModelExpress `0.7.0`, and b12x `1.5.1`. The serving profile is
 [`values/nemotron35bolt-gb10.yaml`](../../values/nemotron35bolt-gb10.yaml).
 
 ## Current serving configuration
@@ -13,18 +13,37 @@ hits across the hybrid groups. Without an explicit prefix-match unit, the
 remaining groups would default to coarser block-sized prefix hashes. Recheck
 the resolved block sizes and actual backend cache hits after an upgrade.
 
-The worker keeps the patched image described below. The frontend retains its
-original image. Speculation can be restored using the backed-up Helm revision
+The worker uses image tag
+`1.6.0-vllm77154ca-mamba-prefill-20261027-compat1`; the frontend uses
+`1.6.0-vllm77154ca-mamba-prefill-20261027`. Both contain stable Dynamo 1.6.0.
+Speculation can be restored using the backed-up Helm revision
 and values; the existing draft checkpoint remains cached on disk.
 
-Helm revision 7 deployed this configuration on October 26. The resolved cache
-groups are now six 4,224-token groups with 16-token prefix matching. A five-turn
+Helm revision 7 deployed the cache configuration on October 26; revision 10
+upgraded Dynamo on October 27 while retaining these engine settings. The October 26
+resolved cache groups were six 4,224-token groups with 16-token prefix matching. A five-turn
 replay reused 29,680 of 45,185 prompt tokens (65.69%). An identical repeated
 long prompt reused 8,752 of 8,756 tokens, and a constrained reference-number
 answer was correct on both cold and warm calls. Exact open-ended reasoning
 output was not byte-identical; numerical equivalence is not established by
 these functional checks. The full AIPerf workload has not yet been rerun.
 See [the deployment report](../../artifacts/bolt-no-dflash-20261026/deployment-report.md).
+
+## Stable Dynamo generation compatibility
+
+The model still requires the pinned vLLM 0.32 development engine. Dynamo 1.6.0
+imports an embedding helper whose old ZMQ API was removed in that engine.
+[`patch_dynamo_generation_import.py`](./patch_dynamo_generation_import.py)
+defers that unused import into the embedding function, allowing generation
+startup without substituting an incompatible API. It checks both package
+versions and the original source hash; the image build imports the complete
+Dynamo vLLM entrypoint afterward. This image supports this Bolt generation
+profile; its multiprocess embedding path is not supported.
+
+The October 27 upgrade passed Chat Completions, Responses, streaming tools,
+strict empty-argument tool choices, and tool result round trips through the
+authenticated LAN gateway. These checks do not replace the previous long-context
+or performance qualification. See [the stack upgrade notes](../../docs/stack-upgrade-20261027.md).
 
 ## Mamba prefill checkpoint correction
 
@@ -59,9 +78,9 @@ Dynamo frontend directly, isolating the failure below the benchmark client.
 The Dockerfile applies the correction during image construction. The patch
 requires the audited vLLM version and SHA-256 of the original scheduler source
 and refuses unexpected upstream code. Rebuild under a new image tag before
-selecting the new image in the serving profile. The profile now selects image tag
-`1.6.0dev20261019-vllm77154ca-mamba-prefill-20261026-2`; Helm revision 6
-deployed that worker on October 26. The frontend retains its original image.
+selecting the new image in the serving profile. Helm revision 6 originally
+deployed image tag `1.6.0dev20261019-vllm77154ca-mamba-prefill-20261026-2`
+on October 26. The current stable Dynamo worker retains that scheduler patch.
 
 Run the CPU regression checks with:
 

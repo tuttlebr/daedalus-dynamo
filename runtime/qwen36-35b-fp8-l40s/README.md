@@ -17,7 +17,7 @@ gateway routes and unrelated backends remain intact.
 
 The worker pins the official revision in
 [model-pin.json](./model-pin.json), the safetensors loader, FP8 quantization,
-the Triton MoE backend and the existing Dynamo 1.4.1 image digest. The worker
+the Triton MoE backend and the Dynamo 1.6.0 image digest. The worker
 and frontend use the existing Python processing and Qwen tool/reasoning parser
 combination. There is no speculative decoding or MTP. All consumers stay on
 `daedalus-03`; the frontend retains its 4 GiB memory request and 8 GiB limit.
@@ -89,6 +89,13 @@ schema shapes and other model grammars retain their original behavior. This
 correction does not change a required tool choice to automatic selection or
 insert a dummy tool argument. A runtime/library upgrade requires reviewing and
 qualifying the compatibility code again; an unexpected version fails startup.
+
+The October 27 upgrade reviewed this wrapper against XGrammar 0.2.7 in the
+pinned Dynamo 1.6.0 image and updated both guards. Automatic, required and named
+empty-argument tool choices, streaming tools, and Chat/Responses tool round
+trips passed through the LAN gateway and the Daedalus Switchyard application
+path. The worker uses the operator's `Recreate` strategy so an upgrade does
+not require a second free L40S. See [the stack upgrade notes](../../docs/stack-upgrade-20261027.md).
 
 For a change confined to this launcher, compare the rendered DGD with the
 captured release first. Only the frontend command and ConfigMap mount may

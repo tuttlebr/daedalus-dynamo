@@ -1,0 +1,34 @@
+dcgmExporter:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 864Mi
+  serviceMonitor:
+    enabled: true
+devicePlugin:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+gfd:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 128Mi
+migManager:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 96Mi
+toolkit:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 192Mi
+validator:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+driver:
+  enabled: false

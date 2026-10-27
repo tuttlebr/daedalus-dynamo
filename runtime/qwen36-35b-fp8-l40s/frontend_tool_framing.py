@@ -14,9 +14,9 @@ import runpy
 import sys
 from typing import Any
 
-_EXPECTED_VERSION = "0.2.3"
+_EXPECTED_VERSION = "0.2.7"
 _EXPECTED_BUILDER_SHA256 = (
-    "4543784a700f855dd8118297695eda375f169c75215399f3b662dbe985ba99b6"
+    "61866aa28336accf52e97decd7b5b5e409980d4cd901e95a2e97ff9fa2030453"
 )
 _MODELS = ("qwen_3_coder", "qwen_3_5")
 _LEGACY_END = "\n</function>\n</tool_call>"

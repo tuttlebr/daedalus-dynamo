@@ -1,11 +1,16 @@
 nats:
   container:
+    image:
+      repository: daedalus.ddns.me:5050/btuttle/daedalus-nats
+      tag: 2.15.2
     merge:
       resources:
         requests:
           cpu: 100m
           memory: 128Mi
   reloader:
+    image:
+      tag: 0.25.0
     merge:
       resources:
         requests:

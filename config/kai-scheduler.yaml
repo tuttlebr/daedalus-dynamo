@@ -1,0 +1,34 @@
+global:
+  gpuSharingMode: Disabled
+admission:
+  gpuPodRuntimeClassName: nvidia
+  queueLabelSelector: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+binder:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 160Mi
+podgroupcontroller:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+podgrouper:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+queuecontroller:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+scheduler:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 224Mi

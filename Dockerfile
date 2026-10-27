@@ -1,4 +1,4 @@
-ARG BASE_IMAGE="nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1"
+ARG BASE_IMAGE="nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0"
 
 FROM ${BASE_IMAGE}
 USER root
@@ -8,7 +8,7 @@ RUN pip install -U --no-cache-dir \
       cupy-cuda13x \
       ftfy \
       librosa \
-      modelexpress \
+      modelexpress==0.7.0 \
       nvtx \
       sentencepiece \
       soundfile \

@@ -124,6 +124,10 @@ spec:
           {{- toYaml . | nindent 10 }}
         {{- end }}
         mainContainer:
+          {{- with .Values.modelexpress.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           image: {{ .Values.modelexpress.image | quote }}
           imagePullPolicy: {{ .Values.modelexpress.imagePullPolicy }}
           resources:
@@ -228,10 +232,14 @@ spec:
               echo "Downloading $MODEL_NAME model..."
               ./modelexpress-cli --endpoint http://localhost:{{ .Values.modelexpress.port }} \
                 --cache-path "$MODEL_CACHE_PATH" \
-                model download "$MODEL_NAME" --strategy {{ .Values.modelexpress.downloadStrategy }}
+                model download "$MODEL_NAME" --strategy {{ .Values.modelexpress.downloadStrategy }}{{ with .Values.modelexpress.modelRevision }} --revision {{ . | quote }}{{ end }}
 
               SNAPSHOTS_PARENT="$MODEL_CACHE_PATH/models--${MODEL_NAME//\//--}/snapshots"
+              {{- if .Values.modelexpress.modelRevision }}
+              SNAPSHOT_DIR="$SNAPSHOTS_PARENT/{{ .Values.modelexpress.modelRevision }}"
+              {{- else }}
               SNAPSHOT_DIR="$(ls -td "$SNAPSHOTS_PARENT"/*/ 2>/dev/null | head -1 || true)"
+              {{- end }}
               if [ -n "$SNAPSHOT_DIR" ]; then
                 SNAPSHOTS_PARENT=$(dirname "$SNAPSHOT_DIR")
                 ln -sfn "$(basename "$SNAPSHOT_DIR")" "$SNAPSHOTS_PARENT/latest"
@@ -286,6 +294,10 @@ spec:
             {{- toYaml .Values.planner.resources | nindent 12 }}
     {{- end }}
     {{ .Values.worker.componentName }}:
+      {{- with .Values.worker.annotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       componentType: worker
       {{- with .Values.model.runtimeVersionOverride }}
       runtimeVersionOverride: {{ . | quote }}

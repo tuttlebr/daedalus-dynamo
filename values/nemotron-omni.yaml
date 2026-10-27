@@ -1,7 +1,7 @@
 model:
   name: nemotron-omni-vllm-agg
   id: nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4
-  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0
   imagePullPolicy: IfNotPresent
   backendFramework: vllm
   deploymentMode: direct
@@ -69,7 +69,7 @@ redis:
   enabled: true
   name: nemotron-omni-redis
   dataPvcName: nemotron-omni-redis-data
-  image: redis:7-alpine
+  image: redis:8.10.3-alpine
   imagePullPolicy: IfNotPresent
   storage: 64Gi
   accessModes:

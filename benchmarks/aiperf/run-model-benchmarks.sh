@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-readonly EXPECTED_AIPERF_VERSION="0.11.0"
-readonly AIPERF_SOURCE_COMMIT="38687855e98044fcf12ee48c6794128f10b6780b"
+readonly EXPECTED_AIPERF_VERSION="0.13.0"
+readonly AIPERF_SOURCE_COMMIT="794f8bb75f8582f22e412d7e650fc71ca2a3d21a"
 readonly MOONCAKE_BLOCK_SIZE="512"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"

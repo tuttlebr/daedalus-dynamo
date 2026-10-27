@@ -1,7 +1,7 @@
 model:
   name: qwen36-35b-vllm-agg
   id: nvidia/Qwen3.6-35B-A3B-NVFP4
-  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0
   imagePullPolicy: IfNotPresent
   backendFramework: vllm
   deploymentMode: direct
@@ -71,7 +71,7 @@ redis:
   enabled: true
   name: qwen35b-redis
   dataPvcName: qwen35b-redis-data
-  image: redis:7-alpine
+  image: redis:8.10.3-alpine
   imagePullPolicy: IfNotPresent
   storage: 64Gi
   accessModes:

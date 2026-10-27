@@ -1,9 +1,9 @@
 model:
   name: poolside21-vllm-agg
   id: poolside/Laguna-S-2.1-NVFP4
-  # Dynamo 1.4.1 carries vLLM 0.26.0 and publishes an ARM64 runtime. Laguna
+  # Dynamo 1.6.0 carries vLLM 0.31.0 and publishes an ARM64 runtime. Laguna
   # requires vLLM 0.25.0 or newer, while Spark's Grace CPU requires ARM64.
-  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0
   imagePullPolicy: IfNotPresent
   backendFramework: vllm
   deploymentMode: direct
@@ -130,7 +130,7 @@ redis:
   enabled: true
   name: poolside21nvfp4-gb10-redis
   dataPvcName: poolside21nvfp4-gb10-redis-data
-  image: redis:7-alpine
+  image: redis:8.10.3-alpine
   imagePullPolicy: IfNotPresent
   storage: 128Gi
   accessModes:

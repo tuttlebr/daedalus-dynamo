@@ -4,13 +4,13 @@ model:
   annotations:
     nvidia.com/enable-grove: 'false'
   id: Qwen/Qwen3.8-27B-FP8
-  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1@sha256:a6bb45ad652f01d08b5a18b54b9fa9e80584ce18ee1ba1e5a760a8f228872fe5
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0@sha256:c957d97ccb8b225d7671f39afc6b340d910f0c58f8d17837cce6078c77344cd0
   imagePullPolicy: IfNotPresent
   backendFramework: vllm
   deploymentMode: direct
-  runtimeVersionOverride: 1.4.1
+  runtimeVersionOverride: 1.6.0
 frontend:
-  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1@sha256:a6bb45ad652f01d08b5a18b54b9fa9e80584ce18ee1ba1e5a760a8f228872fe5
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0@sha256:c957d97ccb8b225d7671f39afc6b340d910f0c58f8d17837cce6078c77344cd0
   replicas: 1
   resources:
     requests:
@@ -28,9 +28,16 @@ frontend:
   - --reasoning-parser
   - qwen3
 modelexpress:
+  # Preserve write access to the existing root-owned cache.
+  securityContext:
+    runAsUser: 0
+    runAsNonRoot: false
+  modelRevision: 017b9c7af6b5689d5dd426a76e0bc077eb5ca20a
   nodeSelector:
     kubernetes.io/hostname: daedalus-03
 worker:
+  annotations:
+    nvidia.com/deployment-strategy: Recreate
   replicas: 1
   scalingAdapter:
     enabled: false
@@ -82,7 +89,7 @@ redis:
   enabled: true
   name: qwen38-27b-l40s-redis
   dataPvcName: qwen38-27b-l40s-redis-data
-  image: redis:7-alpine
+  image: redis:8.10.3-alpine
   imagePullPolicy: IfNotPresent
   storage: 1Gi
   accessModes:

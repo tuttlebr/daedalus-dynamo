@@ -5,6 +5,12 @@ chart and model-specific values files. The root [`Makefile`](./Makefile) is the
 primary entrypoint for building images, rendering charts, deploying releases,
 and uninstalling releases from model config paths.
 
+The live stack was upgraded on October 27, 2026: Dynamo/operator/Planner 1.6.0,
+Grove alpha.17, KAI 0.18.6, LWS 1.0.0 and agentgateway 1.6.0. Both active
+models use stable Dynamo 1.6.0; Planner remains disabled for these fixed-capacity
+profiles. Pinned versions, replay instructions and validation are in
+[the stack upgrade notes](./docs/stack-upgrade-20261027.md).
+
 | Model config | Model | Runtime |
 | --- | --- | --- |
 | `values/glm47flash.yaml` | `unsloth/GLM-4.7-Flash-NVFP4` | vLLM |
@@ -63,8 +69,8 @@ in the shell for later `make` commands because every gateway apply reconciles
 the image stored in `AgentgatewayParameters`:
 
 ```bash
-export GATEWAY_IMAGE=registry.example.com/daedalus/agentgateway:v1.4.1
-export IMAGE=registry.example.com/daedalus/dynamo-vllm-runtime:1.4.1
+export GATEWAY_IMAGE=registry.example.com/daedalus/agentgateway:v1.6.0
+export IMAGE=registry.example.com/daedalus/dynamo-vllm-runtime:1.6.0
 docker login registry.example.com
 ```
 
@@ -231,10 +237,11 @@ GB10. Uninstall retains both releases' model-cache PVCs for reuse.
 
 The custom ARM64 runtime pins NVIDIA's model-card vLLM revision
 `77154ca6116ae34cbfe314beef1016bde9b63989`, Dynamo
-`1.6.0.dev20261019`, and b12x `1.5.1`. This is a preview runtime; the stable
-shared image predates the required Bolt and LiLiCorr support.
+stable `1.6.0`, ModelExpress `0.7.0`, and b12x `1.5.1`. The vLLM engine remains
+a development revision required by this checkpoint, with a guarded import
+adapter for stable Dynamo. See the runtime notes for that compatibility limit.
 
-Validated on the cluster on 2026-10-20: text, image input, concurrent requests,
+Historical validation on the cluster on 2026-10-20: text, image input, concurrent requests,
 and streaming text plus automatic and forced tool round trips through both
 Chat Completions and Responses. A 130,992-token prompt passed through Dynamo
 and the authenticated gateway; a 128,392-token prompt passed through Switchyard's
@@ -258,7 +265,7 @@ and [vLLM b12x hardware support](https://github.com/vllm-project/vllm/blob/77154
 [`values/qwen38-27b-l40s.yaml`](./values/qwen38-27b-l40s.yaml) is a separate
 fixed-capacity release named `qwen38-27b-vllm-l40s`. It preserves the existing
 TP2 `qwen27b.yaml` recipe and existing model endpoints. The worker and frontend
-pin the Dynamo 1.4.1 image by digest; the worker selects model revision
+pin the Dynamo 1.6.0 image by digest; the worker selects model revision
 `017b9c7af6b5689d5dd426a76e0bc077eb5ca20a` with `--revision` and serves the
 model ID `Qwen/Qwen3.8-27B-FP8`.
 
@@ -739,7 +746,7 @@ Useful Makefile variables:
 | `SKIP_SECRET` | `0` | Skip HF token secret check/update during `make deploy`. |
 | `GATEWAY` | `1` | Apply shared inference gateway resources, model route, and model catalog during `make deploy`. |
 | `INSTALL_GATEWAY` | `0` | Install or upgrade Gateway API, GAIE, and agentgateway before applying gateway resources. |
-| `GATEWAY_IMAGE` | internal `daedalus-agentgateway:v1.4.1` | Hardened agentgateway image built by `make gateway-image`. |
+| `GATEWAY_IMAGE` | internal `daedalus-agentgateway:v1.6.0` | Hardened agentgateway image built by `make gateway-image`. |
 | `GATEWAY_REPLICAS` | `2` | Static proxy replica floor, aligned with the HPA minimum. |
 | `GATEWAY_NOFILE_LIMIT` | `131072` | Verified proxy `RLIMIT_NOFILE` soft limit. |
 | `GATEWAY_HPA_MIN_REPLICAS` / `GATEWAY_HPA_MAX_REPLICAS` | `2` / `8` | Proxy HPA range. |

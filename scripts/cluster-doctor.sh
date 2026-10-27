@@ -30,7 +30,7 @@ SERVING_MODE="${SERVING_MODE:-agg}"
 TRANSPORT_PROFILE="${TRANSPORT_PROFILE:-tcp}"
 MIN_GPU_MEMORY_MIB="${MIN_GPU_MEMORY_MIB:-40959}"
 DOCTOR_MODEL_CONFIG="${DOCTOR_MODEL_CONFIG:-values/qwen35b.yaml}"
-DOCTOR_PROBE_IMAGE="${DOCTOR_PROBE_IMAGE:-nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1}"
+DOCTOR_PROBE_IMAGE="${DOCTOR_PROBE_IMAGE:-nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0}"
 DOCTOR_RUN_NODE_PROBE="${DOCTOR_RUN_NODE_PROBE:-auto}" # auto | job | off
 DOCTOR_PROBE_NODE_SELECTOR="${DOCTOR_PROBE_NODE_SELECTOR:-nvidia.com/gpu.present=true}"
 DOCTOR_PROBE_GPU="${DOCTOR_PROBE_GPU:-1}"
@@ -41,7 +41,7 @@ AGENTGATEWAY_NAMESPACE="${AGENTGATEWAY_NAMESPACE:-agentgateway-system}"
 MIN_GATEWAY_REPLICAS="${MIN_GATEWAY_REPLICAS:-2}"
 MIN_NOFILE_LIMIT="${MIN_NOFILE_LIMIT:-131072}"
 GATEWAY_FD_METRICS_PORT="${GATEWAY_FD_METRICS_PORT:-9090}"
-GROVE_MIN_RECOVERY_VERSION="${GROVE_VERSION:-v0.1.0-alpha.12-rc1}"
+GROVE_MIN_RECOVERY_VERSION="${GROVE_VERSION:-v0.1.0-alpha.17}"
 GROVE_TERMINATION_DELAY="${GROVE_TERMINATION_DELAY:-15m}"
 
 INTERCONNECT="${REPO_ROOT}/scripts/check_interconnect.py"
@@ -455,7 +455,7 @@ check_gateway_resilience() {
   if [[ "${tcproute_served}" == "true" ]]; then
     ok "gateway:api-compat" "TCPRoute v1alpha2 is served for the agentgateway controller"
   else
-    fail "gateway:api-compat" "TCPRoute v1alpha2 is not served; agentgateway v1.4.1 cannot finish informer sync"
+    fail "gateway:api-compat" "TCPRoute v1alpha2 compatibility endpoint is not served; run make install-gateway"
   fi
 
   if ! kubectl get deployment "${GATEWAY_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then

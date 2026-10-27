@@ -2,10 +2,10 @@
 set -euo pipefail
 
 AGENTGATEWAY_NAMESPACE="${AGENTGATEWAY_NAMESPACE:-agentgateway-system}"
-GATEWAY_API_VERSION="${GATEWAY_API_VERSION:-v1.5.0}"
-GATEWAY_API_CHANNEL="${GATEWAY_API_CHANNEL:-experimental}"
-GAIE_VERSION="${GAIE_VERSION:-v1.5.0}"
-AGENTGATEWAY_VERSION="${AGENTGATEWAY_VERSION:-v1.4.1}"
+GATEWAY_API_VERSION="${GATEWAY_API_VERSION:-v1.6.3}"
+GATEWAY_API_CHANNEL="${GATEWAY_API_CHANNEL:-standard}"
+GAIE_VERSION="${GAIE_VERSION:-v1.6.2}"
+AGENTGATEWAY_VERSION="${AGENTGATEWAY_VERSION:-v1.6.0}"
 AGENTGATEWAY_CONTROLLER_REPLICAS="${AGENTGATEWAY_CONTROLLER_REPLICAS:-2}"
 AGENTGATEWAY_CONTROLLER_MAX_REPLICAS="${AGENTGATEWAY_CONTROLLER_MAX_REPLICAS:-4}"
 AGENTGATEWAY_CONTROLLER_CPU_REQUEST="${AGENTGATEWAY_CONTROLLER_CPU_REQUEST:-250m}"
@@ -49,9 +49,8 @@ else
   echo "==> Preserving newer Gateway API ${current_gateway_api_version}; validating agentgateway compatibility endpoints"
 fi
 
-# Agentgateway v1.4.1 watches TCPRoute through the v1alpha2 client. Gateway API
-# v1.6 retains the schema but disables that served version, so preserve newer
-# CRDs and re-enable only the compatibility endpoint instead of downgrading.
+# Preserve the TCPRoute v1alpha2 endpoint used by existing clients. Gateway API
+# v1.6 retains the schema but disables that served version by default.
 ensure_crd_version_served tcproutes.gateway.networking.k8s.io v1alpha2
 
 echo "==> Installing Gateway API Inference Extension ${GAIE_VERSION}"

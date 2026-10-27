@@ -14,12 +14,12 @@ ROOT = Path(__file__).resolve().parents[1]
 CHART = ROOT / "charts" / "dynamo-model"
 MODEL_VALUES = sorted((ROOT / "values").glob("*.yaml"))
 SHARED_RUNTIME_IMAGE = (
-    "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1"
+    "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0"
 )
-GB10_RUNTIME_IMAGE = "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1"
+GB10_RUNTIME_IMAGE = "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0"
 QWEN38_L40S_RUNTIME_IMAGE = (
-    "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1@sha256:"
-    "a6bb45ad652f01d08b5a18b54b9fa9e80584ce18ee1ba1e5a760a8f228872fe5"
+    "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0@sha256:"
+    "c957d97ccb8b225d7671f39afc6b340d910f0c58f8d17837cce6078c77344cd0"
 )
 QWEN38_GB10_RUNTIME_IMAGE = (
     "daedalus.ddns.me:5050/btuttle/daedalus-dynamo-qwen38-gb10:"
@@ -27,7 +27,7 @@ QWEN38_GB10_RUNTIME_IMAGE = (
 )
 NEMOTRON35_BOLT_RUNTIME_IMAGE = (
     "daedalus.ddns.me:5050/btuttle/daedalus-dynamo-nemotron35bolt-gb10:"
-    "1.6.0dev20261019-vllm77154ca-mamba-prefill-20261026-2"
+    "1.6.0-vllm77154ca-mamba-prefill-20261027-compat1"
 )
 NEMOTRON35_LIGHTNING_RUNTIME_IMAGE = (
     "nvcr.io/nvidia/ai-dynamo/vllm-runtime:"
@@ -227,7 +227,7 @@ class ModelChartRenderTests(unittest.TestCase):
         self.assertEqual(worker["resources"]["requests"]["memory"], "48Gi")
         for component in ("Frontend", "VllmWorker"):
             service = services[component]
-            self.assertEqual(service["runtimeVersionOverride"], "1.4.1")
+            self.assertEqual(service["runtimeVersionOverride"], "1.6.0")
             self.assertEqual(
                 service["extraPodSpec"]["mainContainer"]["image"],
                 QWEN38_L40S_RUNTIME_IMAGE,
@@ -601,7 +601,7 @@ class ModelChartRenderTests(unittest.TestCase):
         planner_container = services["Planner"]["extraPodSpec"]["mainContainer"]
         self.assertEqual(
             planner_container["image"],
-            "nvcr.io/nvidia/ai-dynamo/dynamo-planner:1.4.0",
+            "nvcr.io/nvidia/ai-dynamo/dynamo-planner:1.6.0",
         )
         self.assertEqual(
             planner_container["command"], ["python3", "-m", "dynamo.planner"]

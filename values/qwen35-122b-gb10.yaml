@@ -4,7 +4,7 @@ model:
   # The repository's source-built vLLM image is amd64-only. Use NVIDIA's
   # multi-architecture Dynamo image so this profile can run on Spark's ARM64
   # Grace CPU while retaining the Dynamo worker entrypoint.
-  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0
   imagePullPolicy: IfNotPresent
   backendFramework: vllm
   deploymentMode: direct
@@ -126,7 +126,7 @@ redis:
   enabled: true
   name: qwen35-122b-gb10-redis
   dataPvcName: qwen35-122b-gb10-redis-data
-  image: redis:7-alpine
+  image: redis:8.10.3-alpine
   imagePullPolicy: IfNotPresent
   storage: 128Gi
   accessModes:

@@ -28,7 +28,7 @@ redis:
   enabled: true
   name: dynamo-redis
   dataPvcName: dynamo-redis-data
-  image: redis:7-alpine
+  image: redis:8.10.3-alpine
   imagePullPolicy: IfNotPresent
   storage: 256Gi
   accessModes:
@@ -46,16 +46,22 @@ redis:
     minAvailable: 1
 
 modelexpress:
+  # Existing cache volumes were populated by the earlier root-based image.
+  securityContext:
+    runAsUser: 0
+    runAsNonRoot: false
   enabled: true
   # Pin every model-cache consumer when using a node-local RWO volume.
   nodeSelector: {}
   tolerations: []
-  image: nvcr.io/nvidia/ai-dynamo/modelexpress-server:0.4.1
+  image: nvcr.io/nvidia/ai-dynamo/modelexpress-server:0.7.0
   imagePullPolicy: IfNotPresent
   port: 8000
   logLevel: info
   metadataBackend: redis
   downloadStrategy: server-only
+  # Optional Hugging Face revision for the cache server download.
+  modelRevision: ""
   resetRegistryOnStart: true
   waitForCacheReady: true
   resources:
@@ -97,6 +103,7 @@ frontend:
       memory: 2Gi
 
 worker:
+  annotations: {}
   componentName: VllmWorker
   replicas: 1
   scalingAdapter:
@@ -154,7 +161,7 @@ worker:
 
 planner:
   enabled: true
-  image: nvcr.io/nvidia/ai-dynamo/dynamo-planner:1.4.0
+  image: nvcr.io/nvidia/ai-dynamo/dynamo-planner:1.6.0
   imagePullPolicy: IfNotPresent
   environment: kubernetes
   mode: agg

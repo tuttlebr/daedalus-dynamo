@@ -44,7 +44,7 @@ INSTALL_GATEWAY ?= 0
 GATEWAY_REQUEST_TIMEOUT ?= 300s
 GATEWAY_PORT ?= 32359
 GATEWAY_NODE_PORT ?= 32359
-AGENTGATEWAY_VERSION ?= v1.4.1
+AGENTGATEWAY_VERSION ?= v1.6.0
 AGENTGATEWAY_IMAGE ?= cr.agentgateway.dev/agentgateway:$(AGENTGATEWAY_VERSION)
 GATEWAY_DOCKERFILE ?= Dockerfile.agentgateway
 GATEWAY_IMAGE ?= daedalus.ddns.me:5050/btuttle/daedalus-agentgateway:$(AGENTGATEWAY_VERSION)
@@ -72,8 +72,8 @@ GATEWAY_FD_METRICS_PORT ?= 9090
 PROMETHEUS_RELEASE ?= kube-prometheus-stack
 MODEL_CATALOG_IMAGE ?= python:3.12-alpine
 EXPECTED_CONTEXT ?= kubernetes-admin@kubernetes
-GROVE_VERSION ?= v0.1.0-alpha.12-rc1
-DYNAMO_PLATFORM_VERSION ?= 1.4.0
+GROVE_VERSION ?= v0.1.0-alpha.17
+DYNAMO_PLATFORM_VERSION ?= 1.6.0
 GROVE_TERMINATION_DELAY ?= 15m
 SCHEDULING_RECOVERY_TIMEOUT ?= 45m
 
@@ -82,7 +82,7 @@ KUBECTL ?= kubectl
 DOCKER ?= docker
 PYTHON ?= python3
 
-BASE_IMAGE ?= nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1
+BASE_IMAGE ?= nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0
 DOCKER_BUILD_ARGS ?=
 
 MODEL_IMAGE_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*image:[[:space:]]*//p' "$(MODEL_CONFIG)" 2>/dev/null | head -1 | tr -d '"')
@@ -121,7 +121,7 @@ SKIP_GATEWAY_BUILD ?= 0
 SKIP_GATEWAY_PUSH ?= 0
 PLANNER_COMPAT ?= 0
 DIST_DIR ?= dist
-AIPERF_VERSION ?= 0.11.0
+AIPERF_VERSION ?= 0.13.0
 AIPERF_IMAGE ?= $(REGISTRY)/daedalus-dynamo-aiperf:$(AIPERF_VERSION)
 AIPERF_IMAGE_PULL_POLICY ?= Always
 AIPERF_IMAGE_PULL_SECRET ?=

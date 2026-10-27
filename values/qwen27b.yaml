@@ -1,7 +1,7 @@
 model:
   name: qwen36-27b-vllm-agg
   id: Qwen/Qwen3.8-27B-FP8
-  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0
   imagePullPolicy: IfNotPresent
   backendFramework: vllm
   deploymentMode: direct
@@ -79,7 +79,7 @@ redis:
   enabled: true
   name: qwen27b-redis
   dataPvcName: qwen27b-redis-data
-  image: redis:7-alpine
+  image: redis:8.10.3-alpine
   imagePullPolicy: IfNotPresent
   storage: 64Gi
   accessModes:

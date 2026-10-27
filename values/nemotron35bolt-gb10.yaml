@@ -4,7 +4,7 @@
 model:
   name: nemotron35bolt-vllm-gb10
   id: nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB
-  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-nemotron35bolt-gb10:1.6.0dev20261019-vllm77154ca-mamba-prefill-20261026-2
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-nemotron35bolt-gb10:1.6.0-vllm77154ca-mamba-prefill-20261027-compat1
   imagePullPolicy: IfNotPresent
   backendFramework: vllm
   deploymentMode: direct
@@ -14,8 +14,8 @@ model:
   buildPlatform: linux/arm64
 
 frontend:
-  # The checkpoint correction is worker-only; keep the working frontend image.
-  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-nemotron35bolt-gb10:1.6.0dev20261019-vllm77154ca-1
+  # Stable Dynamo 1.6 with the model-required vLLM engine.
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-nemotron35bolt-gb10:1.6.0-vllm77154ca-mamba-prefill-20261027
   replicas: 1
   nodeSelector:
     nvidia.com/gpu.product: NVIDIA-GB10
@@ -35,6 +35,11 @@ frontend:
       memory: 4Gi
 
 modelexpress:
+  # Preserve write access to the existing root-owned cache.
+  securityContext:
+    runAsUser: 0
+    runAsNonRoot: false
+  modelRevision: c6cc2e8ffa353403213d6b9b18aaf8eb684d705a
   nodeSelector:
     nvidia.com/gpu.product: NVIDIA-GB10
   tolerations:
@@ -143,7 +148,7 @@ redis:
   enabled: true
   name: nemotron35bolt-gb10-redis
   dataPvcName: nemotron35bolt-gb10-redis-data
-  image: redis:7-alpine
+  image: redis:8.10.3-alpine
   imagePullPolicy: IfNotPresent
   storage: 1Gi
   accessModes:

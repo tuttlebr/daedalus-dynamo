@@ -7,14 +7,14 @@ model:
   annotations:
     nvidia.com/enable-grove: "false"
   id: Intel/Qwen3.6-35B-A3B-int4-mixed-AutoRound
-  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1@sha256:a6bb45ad652f01d08b5a18b54b9fa9e80584ce18ee1ba1e5a760a8f228872fe5
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0@sha256:c957d97ccb8b225d7671f39afc6b340d910f0c58f8d17837cce6078c77344cd0
   imagePullPolicy: IfNotPresent
   backendFramework: vllm
   deploymentMode: direct
-  runtimeVersionOverride: "1.4.1"
+  runtimeVersionOverride: "1.6.0"
 
 frontend:
-  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.4.1@sha256:a6bb45ad652f01d08b5a18b54b9fa9e80584ce18ee1ba1e5a760a8f228872fe5
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0@sha256:c957d97ccb8b225d7671f39afc6b340d910f0c58f8d17837cce6078c77344cd0
   replicas: 1
   resources:
     requests:
@@ -98,7 +98,7 @@ redis:
   enabled: true
   name: qwen36-35b-int4-a30-redis
   dataPvcName: qwen36-35b-int4-a30-redis-data
-  image: redis:7-alpine@sha256:6ba19c50b56777f5c11c58eff8ddb69d0d5f27ba131cffb63f180ccfd43c66af
+  image: redis:8.10.3-alpine@sha256:896f241f438ab6a210cfb24f573b84bea721a4cbe67f1b4fd07eb638b3b02a7b
   imagePullPolicy: IfNotPresent
   storage: 1Gi
   accessModes:

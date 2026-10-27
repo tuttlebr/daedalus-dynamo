@@ -2,8 +2,8 @@ FROM ghcr.io/astral-sh/uv:0.10.4-python3.12-trixie-slim
 
 LABEL org.opencontainers.image.title="Daedalus Dynamo AIPerf client" \
       org.opencontainers.image.description="Multi-turn prefix-reuse benchmark for inference-gateway models" \
-      org.opencontainers.image.version="0.11.0" \
-      io.daedalus.aiperf.source-commit="38687855e98044fcf12ee48c6794128f10b6780b"
+      org.opencontainers.image.version="0.13.0" \
+      io.daedalus.aiperf.source-commit="794f8bb75f8582f22e412d7e650fc71ca2a3d21a"
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \

@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: daedalus-dynamo-aiperf:0.11.0
+    image: daedalus-dynamo-aiperf:0.13.0
     init: true
     user: "${AIPERF_UID:-65532}:${AIPERF_GID:-65532}"
     extra_hosts:

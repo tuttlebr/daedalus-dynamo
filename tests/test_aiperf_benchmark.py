@@ -48,7 +48,7 @@ class AIPerfBenchmarkTests(unittest.TestCase):
                 [
                     "make", "--no-print-directory", "benchmark-agentic-render",
                     "AIPERF_RUN_ID=unit-k8s-render",
-                    "AIPERF_IMAGE=registry.example.com/aiperf:0.11.0",
+                    "AIPERF_IMAGE=registry.example.com/aiperf:0.13.0",
                     f"KUBECTL={fake_kubectl}",
                     *variables,
                 ],
@@ -144,12 +144,12 @@ class AIPerfBenchmarkTests(unittest.TestCase):
         dockerfile = (BENCHMARK_DIR / "Dockerfile").read_text()
         script = SCRIPT.read_text()
 
-        self.assertIn('"aiperf==0.11.0"', pyproject)
-        self.assertIn('org.opencontainers.image.version="0.11.0"', dockerfile)
-        self.assertIn('EXPECTED_AIPERF_VERSION="0.11.0"', script)
+        self.assertIn('"aiperf==0.13.0"', pyproject)
+        self.assertIn('org.opencontainers.image.version="0.13.0"', dockerfile)
+        self.assertIn('EXPECTED_AIPERF_VERSION="0.13.0"', script)
         self.assertIn('MOONCAKE_BLOCK_SIZE="512"', script)
         self.assertIn(
-            'AIPERF_SOURCE_COMMIT="38687855e98044fcf12ee48c6794128f10b6780b"',
+            'AIPERF_SOURCE_COMMIT="794f8bb75f8582f22e412d7e650fc71ca2a3d21a"',
             script,
         )
         self.assertIn("output_length_evidence", script)
@@ -218,7 +218,7 @@ class AIPerfBenchmarkTests(unittest.TestCase):
                 import json, os, sys
                 from pathlib import Path
                 if sys.argv[1] == '--version':
-                    print('0.11.0')
+                    print('0.13.0')
                 elif sys.argv[1] == 'synthesize':
                     output = Path(sys.argv[sys.argv.index('--output') + 1])
                     output.mkdir(parents=True, exist_ok=True)
@@ -421,7 +421,7 @@ class AIPerfBenchmarkTests(unittest.TestCase):
                     "NAMESPACE": "daedalus-dynamo",
                     "GATEWAY_NAME": "inference-gateway",
                     "GATEWAY_PORT": "32359",
-                    "AIPERF_IMAGE": "registry.example.com/aiperf:0.11.0",
+                    "AIPERF_IMAGE": "registry.example.com/aiperf:0.13.0",
                     "AIPERF_ENDPOINT_URL": (
                         "http://inference-gateway.daedalus-dynamo."
                         "svc.cluster.local:32359"

@@ -134,7 +134,7 @@ redis:
   enabled: true
   name: qwen38-flash-next-gb10-redis
   dataPvcName: qwen38-flash-next-gb10-redis-data
-  image: redis:7-alpine
+  image: redis:8.10.3-alpine
   imagePullPolicy: IfNotPresent
   storage: 1Gi
   accessModes:

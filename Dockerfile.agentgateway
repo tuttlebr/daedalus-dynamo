@@ -1,4 +1,4 @@
-ARG AGENTGATEWAY_IMAGE="cr.agentgateway.dev/agentgateway:v1.4.1"
+ARG AGENTGATEWAY_IMAGE="cr.agentgateway.dev/agentgateway:v1.6.0"
 
 FROM alpine:3.22 AS entrypoint-builder
 
