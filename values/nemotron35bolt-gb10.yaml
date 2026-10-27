@@ -50,6 +50,9 @@ modelexpress:
 
 worker:
   replicas: 1
+  # Allow five minutes of failed engine canaries during cold long-prefill work.
+  # Readiness still withdraws promptly; a genuine hang takes longer to restart.
+  livenessFailureThreshold: 30
   scalingAdapter:
     enabled: false
   gpu: "1"

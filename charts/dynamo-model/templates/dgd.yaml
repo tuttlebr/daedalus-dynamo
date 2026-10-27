@@ -330,7 +330,7 @@ spec:
           port: system
         periodSeconds: 10
         timeoutSeconds: 5
-        failureThreshold: 6
+        failureThreshold: {{ default 6 .Values.worker.livenessFailureThreshold }}
       readinessProbe:
         httpGet:
           path: /health

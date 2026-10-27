@@ -95,6 +95,12 @@
     "worker": {
       "type": "object",
       "properties": {
+        "livenessFailureThreshold": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 6,
+          "description": "Consecutive failed worker liveness probes before restart; probes run every 10 seconds."
+        },
         "nodeGpuMemoryGt": {
           "$ref": "#/definitions/gpuMemoryBoundary"
         },
