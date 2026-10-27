@@ -74,6 +74,31 @@ loads the snapshot and tokenizer by absolute local path, so a missing or
 invalid prepared cache fails before starting the engine. It does not download
 an alternative revision or fall back to ModelExpress.
 
+## Empty-argument tool framing
+
+The post-renderer also mounts a content-addressed, immutable ConfigMap containing
+[the frontend launcher](./frontend_tool_framing.py). It checks the installed
+XGrammar version and source hash before registering a Qwen grammar wrapper in
+the frontend process, then starts the existing Dynamo frontend with its original
+arguments. It does not edit installed packages or change the worker image.
+
+For a strict empty-object parameter schema, the wrapper accepts Qwen's native
+empty-call closing tag as well as the existing blank-line form. It preserves the
+parameter schema and other tool-call constraints. Nonempty schemas, unknown
+schema shapes and other model grammars retain their original behavior. This
+correction does not change a required tool choice to automatic selection or
+insert a dummy tool argument. A runtime/library upgrade requires reviewing and
+qualifying the compatibility code again; an unexpected version fails startup.
+
+For a change confined to this launcher, compare the rendered DGD with the
+captured release first. Only the frontend command and ConfigMap mount may
+change; the worker, ModelExpress, services, routes and PVCs must remain equal.
+Such a frontend-only rollout does not require pausing the worker or reloading
+weights. Capture the previous Helm revision and restore that frontend if its
+startup or required empty-argument tool check fails. Verify that the worker UID
+and existing client paths survive both deployment and rollback. Broader model
+changes still require the drain procedure below.
+
 ## Review the same-release transition
 
 Use an explicit verified Kubernetes context for every operation. Before any

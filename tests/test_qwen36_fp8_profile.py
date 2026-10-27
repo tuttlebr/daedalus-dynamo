@@ -502,6 +502,60 @@ class OfficialFp8ProfileTests(unittest.TestCase):
                     POST.adapt(objects, self.production_pin)
                 self.assertEqual(objects, before)
 
+    def test_framing_mount_preserves_worker_and_existing_resources(self):
+        before = POST.adapt(self.candidate, self.production_pin)
+        original = copy.deepcopy(before)
+        source = "# synthetic launcher\n"
+        patched = POST.adapt_frontend_framing(before, source)
+        self.assertEqual(before, original)
+        prior, after = graph(before), graph(patched)
+        expected = copy.deepcopy(prior)
+        expected["spec"]["services"]["Frontend"] = copy.deepcopy(
+            after["spec"]["services"]["Frontend"]
+        )
+        self.assertEqual(after, expected)
+        self.assertEqual(patched[:-1], [after if x is prior else x for x in before])
+        config = patched[-1]
+        digest = hashlib.sha256(source.encode()).hexdigest()[:16]
+        self.assertTrue(config["immutable"])
+        self.assertEqual(config["data"], {f"frontend_tool_framing_{digest}.py": source})
+        frontend = after["spec"]["services"]["Frontend"]
+        self.assertIn(
+            f"exec python3 /opt/dynamo-compat/frontend_tool_framing_{digest}.py",
+            container(frontend)["args"][0],
+        )
+        self.assertTrue(container(frontend)["volumeMounts"][0]["readOnly"])
+        self.assertEqual(
+            frontend["extraPodSpec"]["volumes"][0]["configMap"]["name"],
+            config["metadata"]["name"],
+        )
+        changed = POST.adapt_frontend_framing(before, source + "# updated\n")
+        self.assertNotEqual(changed[-1]["metadata"]["name"], config["metadata"]["name"])
+        self.assertNotEqual(
+            container(graph(changed)["spec"]["services"]["Frontend"])["args"],
+            container(frontend)["args"],
+        )
+
+    def test_framing_rejects_unpinned_images_and_unexpected_frontends(self):
+        before = POST.adapt(self.candidate, self.production_pin)
+        cases = []
+        wrong_image = copy.deepcopy(before)
+        container(graph(wrong_image)["spec"]["services"]["Frontend"])["image"] = (
+            "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0"
+        )
+        cases.append(wrong_image)
+        wrong_entry = copy.deepcopy(before)
+        container(graph(wrong_entry)["spec"]["services"]["Frontend"])["args"] = [
+            "exec python3 -m unrelated.frontend"
+        ]
+        cases.append(wrong_entry)
+        cases.append(POST.adapt_frontend_framing(before, "# synthetic\n"))
+        for objects in cases:
+            original = copy.deepcopy(objects)
+            with self.subTest(objects=len(objects)), self.assertRaises(ValueError):
+                POST.adapt_frontend_framing(objects, "# synthetic\n")
+            self.assertEqual(objects, original)
+
 
 if __name__ == "__main__":
     unittest.main()
