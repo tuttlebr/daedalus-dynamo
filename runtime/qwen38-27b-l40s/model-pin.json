@@ -1,0 +1,299 @@
+{
+  "graph": "qwen38-27b-vllm-l40s",
+  "model": "Qwen/Qwen3.8-27B-FP8",
+  "revision": "017b9c7af6b5689d5dd426a76e0bc077eb5ca20a",
+  "cache": "qwen38-27b-l40s-model-cache",
+  "snapshot": "/model/.model-express/cache/models--Qwen--Qwen3.8-27B-FP8/snapshots/017b9c7af6b5689d5dd426a76e0bc077eb5ca20a",
+  "supporting_files": [
+    {
+      "file": "config.json",
+      "sha256": "74227dd615bf1ea975aa676bdf355a0379858c12f394b5365cd9dfa5fc2c70bc"
+    },
+    {
+      "file": "generation_config.json",
+      "sha256": "e70c136c1b78ddc1fb0905bac8e733a4dc448d4f852a5dd75143fffc70be550e"
+    },
+    {
+      "file": "tokenizer_config.json",
+      "sha256": "b11349aafa7cdc6a320767cf7ceb29ed82f7eda5d65e8e0819e76f0ce947bf27"
+    },
+    {
+      "file": "tokenizer.json",
+      "sha256": "0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3"
+    },
+    {
+      "file": "chat_template.jinja",
+      "sha256": "c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041"
+    },
+    {
+      "file": "model.safetensors.index.json",
+      "sha256": "f0838c766951bdfe76d6afbdb2771a8f67aaa2231dedb3d33cebd817729843a2"
+    }
+  ],
+  "weight_files": [
+    {
+      "file": "layers-0.safetensors",
+      "size": 383865448
+    },
+    {
+      "file": "layers-1.safetensors",
+      "size": 383865448
+    },
+    {
+      "file": "layers-10.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-11.safetensors",
+      "size": 372313760
+    },
+    {
+      "file": "layers-12.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-13.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-14.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-15.safetensors",
+      "size": 372313760
+    },
+    {
+      "file": "layers-16.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-17.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-18.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-19.safetensors",
+      "size": 372313760
+    },
+    {
+      "file": "layers-2.safetensors",
+      "size": 383865448
+    },
+    {
+      "file": "layers-20.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-21.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-22.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-23.safetensors",
+      "size": 372313760
+    },
+    {
+      "file": "layers-24.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-25.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-26.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-27.safetensors",
+      "size": 372313760
+    },
+    {
+      "file": "layers-28.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-29.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-3.safetensors",
+      "size": 372313744
+    },
+    {
+      "file": "layers-30.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-31.safetensors",
+      "size": 372313760
+    },
+    {
+      "file": "layers-32.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-33.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-34.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-35.safetensors",
+      "size": 372313760
+    },
+    {
+      "file": "layers-36.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-37.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-38.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-39.safetensors",
+      "size": 372313760
+    },
+    {
+      "file": "layers-4.safetensors",
+      "size": 383865448
+    },
+    {
+      "file": "layers-40.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-41.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-42.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-43.safetensors",
+      "size": 372313760
+    },
+    {
+      "file": "layers-44.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-45.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-46.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-47.safetensors",
+      "size": 372313760
+    },
+    {
+      "file": "layers-48.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-49.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-5.safetensors",
+      "size": 383865448
+    },
+    {
+      "file": "layers-50.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-51.safetensors",
+      "size": 372313760
+    },
+    {
+      "file": "layers-52.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-53.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-54.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-55.safetensors",
+      "size": 372313760
+    },
+    {
+      "file": "layers-56.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-57.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-58.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-59.safetensors",
+      "size": 372313760
+    },
+    {
+      "file": "layers-6.safetensors",
+      "size": 383865448
+    },
+    {
+      "file": "layers-60.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-61.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-62.safetensors",
+      "size": 383865472
+    },
+    {
+      "file": "layers-63.safetensors",
+      "size": 372313760
+    },
+    {
+      "file": "layers-7.safetensors",
+      "size": 372313744
+    },
+    {
+      "file": "layers-8.safetensors",
+      "size": 383865448
+    },
+    {
+      "file": "layers-9.safetensors",
+      "size": 383865448
+    },
+    {
+      "file": "mtp.safetensors",
+      "size": 477202224
+    },
+    {
+      "file": "outside.safetensors",
+      "size": 6007102112
+    }
+  ]
+}

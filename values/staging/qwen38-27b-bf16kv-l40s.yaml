@@ -1,0 +1,35 @@
+# Overlay values/qwen38-27b-l40s.yaml and use qwen38_dense_postrender.py.
+# Staging keeps all gateway/catalog aliases on Bolt until separate promotion.
+worker:
+  replicas: 1
+  extraEnv:
+    - name: DYN_HEALTH_CHECK_REQUEST_TIMEOUT
+      value: "120"
+  vllmArgs:
+    - --load-format safetensors
+    - --revision 017b9c7af6b5689d5dd426a76e0bc077eb5ca20a
+    - --tokenizer-revision 017b9c7af6b5689d5dd426a76e0bc077eb5ca20a
+    - --quantization fp8
+    - --dtype bfloat16
+    - --served-model-name "${MODEL_NAME}"
+    - --frontend-decoding
+    - --trust-remote-code
+    - --dyn-tool-call-parser qwen3_coder
+    - --dyn-reasoning-parser qwen3
+    - --dyn-enable-structural-tag
+    - --reasoning-parser qwen3
+    - --tensor-parallel-size 1
+    - --pipeline-parallel-size 1
+    - --data-parallel-size 1
+    - --max-model-len 131072
+    - --max-num-seqs 4
+    - --max-num-batched-tokens 4096
+    - --gpu-memory-utilization 0.90
+    # BF16 avoids uncalibrated FP8 KV scales. Full attention alone needs 8GiB
+    # at 131072 tokens; this adds room for recurrent state and block alignment.
+    - --kv-cache-memory-bytes 9663676416
+    - --enable-chunked-prefill
+    - --scheduling-policy priority
+    - --enable-prefix-caching
+    - --prefix-caching-hash-algo sha256
+    - --kv-cache-dtype auto
