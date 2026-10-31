@@ -64,7 +64,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--url",
-        default=os.environ.get("ENDPOINT_URL", "https://daedalus.ddns.me:32359"),
+        default=os.environ.get("ENDPOINT_URL", "http://daedalus.ddns.me:32360"),
         help="Endpoint base URL or full /v1/chat/completions URL.",
     )
     parser.add_argument(

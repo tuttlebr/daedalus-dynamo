@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import unittest
 from pathlib import Path
@@ -48,9 +49,13 @@ class GatewayRenderTests(unittest.TestCase):
         self.assertIn(("Service", "inference-gateway-fd-metrics"), by_kind_name)
         self.assertIn(("ConfigMap", "inference-gateway-fd-metrics"), by_kind_name)
 
-    def test_public_gateway_requires_tls_and_all_listeners_require_api_key(self) -> None:
+    def test_public_http_and_existing_https_listeners_require_api_key(self) -> None:
         documents = render("base")
         gateway = next(d for d in documents if d["kind"] == "Gateway")
+        http = next(d for d in gateway["spec"]["listeners"] if d["name"] == "http")
+        self.assertEqual(http["port"], 32360)
+        self.assertEqual(http["protocol"], "HTTP")
+        self.assertNotIn("tls", http)
         listener = next(d for d in gateway["spec"]["listeners"] if d["name"] == "https")
         self.assertEqual(listener["port"], 32359)
         self.assertEqual(listener["protocol"], "HTTPS")
@@ -77,6 +82,8 @@ class GatewayRenderTests(unittest.TestCase):
         self.assertEqual(public["type"], "LoadBalancer")
         self.assertEqual(public["ports"], [
             {"$patch": "replace"},
+            {"name": "listener-32360", "port": 32360, "protocol": "TCP",
+             "targetPort": 32360, "nodePort": 32360},
             {"name": "listener-32359", "port": 32359, "protocol": "TCP",
              "targetPort": 32359, "nodePort": 32359},
         ])
@@ -90,6 +97,18 @@ class GatewayRenderTests(unittest.TestCase):
             "name": "internal-http", "port": listener["port"],
             "targetPort": listener["port"], "protocol": "TCP",
         }])
+
+    def test_public_port_cannot_drift_through_environment_overrides(self) -> None:
+        for variable in ("GATEWAY_PORT", "GATEWAY_NODE_PORT"):
+            with self.subTest(variable=variable):
+                result = subprocess.run(
+                    ["scripts/render-inference-gateway.sh", "base"],
+                    cwd=ROOT, env={**os.environ, variable: "32359"},
+                    capture_output=True, text=True, check=False,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("must both remain 32360", result.stderr)
 
     def test_monitoring_contains_headroom_and_availability_alerts(self) -> None:
         documents = render("monitoring")

@@ -87,11 +87,40 @@ class MakeCliTests(unittest.TestCase):
         path = "values/meta/muse-glimmer-30b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml"
         enabled = run_make("-n", "deploy", path, "SKIP_SECRET=1")
         self.assertEqual(enabled.returncode, 0, enabled.stderr)
-        self.assertIn('elif [[ "true" =~', enabled.stdout)
+        self.assertIn('if [[ "true" =~', enabled.stdout)
         self.assertIn(f'gateway-route-apply "{path}"', enabled.stdout)
         disabled = run_make("-n", "deploy", path, "SKIP_SECRET=1", "GATEWAY=0")
         self.assertEqual(disabled.returncode, 0, disabled.stderr)
-        self.assertIn('elif [[ "0" =~', disabled.stdout)
+        self.assertIn('if [[ "0" =~', disabled.stdout)
+
+    def test_all_model_install_paths_default_to_shared_fixed_gateway(self) -> None:
+        path = "values/meta/muse-glimmer-30b-nvfp4/l40s/tp1-pp1-dp1.yaml"
+        for action in ("deploy", "install", "upgrade"):
+            with self.subTest(action=action):
+                result = run_make("-n", action, path, "SKIP_SECRET=1")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('if [[ "1" =~', result.stdout)
+                self.assertIn('GATEWAY_PORT="32360"', result.stdout)
+                self.assertIn('GATEWAY_NODE_PORT="32360"', result.stdout)
+                self.assertIn(f'gateway-route-apply "{path}"', result.stdout)
+                self.assertIn('scripts/render-inference-gateway.sh route', result.stdout)
+                self.assertIn('scripts/render-inference-gateway.sh catalog', result.stdout)
+                model_install = result.stdout.index('helm upgrade --install "mx-muse-')
+                self.assertLess(result.stdout.index('scripts/render-inference-gateway.sh base'),
+                                model_install)
+                self.assertLess(model_install,
+                                result.stdout.index('scripts/render-inference-gateway.sh route'))
+        disabled = run_make("-n", "deploy", path, "SKIP_SECRET=1", "GATEWAY=0")
+        self.assertEqual(disabled.returncode, 0, disabled.stderr)
+        self.assertNotIn('scripts/render-inference-gateway.sh', disabled.stdout)
+
+    def test_make_rejects_public_port_drift(self) -> None:
+        for variable in ("GATEWAY_PORT", "GATEWAY_NODE_PORT"):
+            with self.subTest(variable=variable):
+                self.assert_failed_with(
+                    run_make("-n", "gateway-base", f"{variable}=32359"),
+                    "must both remain 32360",
+                )
 
     def test_models_lists_checked_in_config_paths(self) -> None:
         completed = run_make("models")

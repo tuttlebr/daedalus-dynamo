@@ -6,8 +6,12 @@ mode="${1:-all}"
 APP_LABEL_VALUE="${APP_LABEL_VALUE:-daedalus-dynamo-demo}"
 GATEWAY_NAME="${GATEWAY_NAME:-inference-gateway}"
 GATEWAY_REQUEST_TIMEOUT="${GATEWAY_REQUEST_TIMEOUT:-300s}"
-GATEWAY_PORT="${GATEWAY_PORT:-32359}"
-GATEWAY_NODE_PORT="${GATEWAY_NODE_PORT:-32359}"
+GATEWAY_PORT="${GATEWAY_PORT:-32360}"
+GATEWAY_NODE_PORT="${GATEWAY_NODE_PORT:-32360}"
+if [[ "${GATEWAY_PORT}:${GATEWAY_NODE_PORT}" != 32360:32360 ]]; then
+  echo "ERROR: the inference gateway Service port and NodePort must both remain 32360" >&2
+  exit 1
+fi
 GATEWAY_INTERNAL_PORT="${GATEWAY_INTERNAL_PORT:-8000}"
 GATEWAY_LOAD_BALANCER_IP="${GATEWAY_LOAD_BALANCER_IP:-192.168.1.12}"
 GATEWAY_IMAGE_REGISTRY="${GATEWAY_IMAGE_REGISTRY:-daedalus.ddns.me:5050}"
@@ -230,6 +234,12 @@ spec:
           protocol: TCP
           targetPort: ${GATEWAY_PORT}
           nodePort: ${GATEWAY_NODE_PORT}
+        # Keep existing LAN clients working while 32360 is the canonical endpoint.
+        - name: listener-32359
+          port: 32359
+          protocol: TCP
+          targetPort: 32359
+          nodePort: 32359
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
@@ -246,8 +256,11 @@ spec:
       kind: AgentgatewayParameters
       name: ${GATEWAY_NAME}-params
   listeners:
-    - name: https
+    - name: http
       port: ${GATEWAY_PORT}
+      protocol: HTTP
+    - name: https
+      port: 32359
       protocol: HTTPS
       tls:
         mode: Terminate

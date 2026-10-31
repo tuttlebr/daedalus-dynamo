@@ -69,8 +69,8 @@ kubectl apply --server-side -f "$run_dir/lws.yaml"
 kubectl rollout status deployment/lws-controller-manager -n lws-system --timeout=5m
 
 bash scripts/install-inference-gateway.sh
-kubectl patch agentgatewayparameters inference-gateway-params -n daedalus-dynamo \
-  --type=merge -p '{"spec":{"image":{"tag":"v1.6.0"}}}'
+# Reconcile the fixed public ports and compatibility listener on every replay.
+make --no-print-directory gateway-base gateway-monitoring
 kubectl rollout status deployment/inference-gateway -n daedalus-dynamo --timeout=5m
 
 curl -fsSL "https://helm.ngc.nvidia.com/nvidia/charts/gpu-operator-$GPU_OPERATOR_VERSION.tgz" \

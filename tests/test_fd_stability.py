@@ -19,10 +19,10 @@ SPEC.loader.exec_module(stability)
 
 
 class FDStabilityTests(unittest.TestCase):
-    def test_secure_defaults_and_custom_endpoint_override(self) -> None:
+    def test_fixed_http_defaults_and_custom_endpoint_override(self) -> None:
         with patch.dict("os.environ", {}, clear=True), patch.object(sys, "argv", ["client"]):
             args = stability.parse_args()
-        self.assertEqual(args.url, "https://daedalus.ddns.me:32359")
+        self.assertEqual(args.url, "http://daedalus.ddns.me:32360")
         self.assertEqual(args.connect_ip, "192.168.1.12")
         with patch.dict("os.environ", {}, clear=True), patch.object(
             sys, "argv", ["client", "--url", "https://example.org"]

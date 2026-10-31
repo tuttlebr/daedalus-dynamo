@@ -50,11 +50,15 @@ NAMESPACE ?= daedalus-dynamo
 APP_LABEL_VALUE ?= daedalus-dynamo-demo
 HF_TOKEN_SECRET ?= hf-token-secret
 GATEWAY_NAME ?= inference-gateway
-GATEWAY ?= $(if $(RECIPE_GATEWAY),$(RECIPE_GATEWAY),$(if $(RECIPE_RELEASE),0,1))
+GATEWAY ?= $(if $(RECIPE_GATEWAY),$(RECIPE_GATEWAY),1)
 INSTALL_GATEWAY ?= 0
 GATEWAY_REQUEST_TIMEOUT ?= 300s
-GATEWAY_PORT ?= 32359
-GATEWAY_NODE_PORT ?= 32359
+GATEWAY_PORT ?= 32360
+GATEWAY_NODE_PORT ?= 32360
+# The shared LAN endpoint is a deployment contract, not a per-model option.
+ifneq ($(GATEWAY_PORT):$(GATEWAY_NODE_PORT),32360:32360)
+$(error The inference gateway Service port and NodePort must both remain 32360)
+endif
 GATEWAY_INTERNAL_PORT ?= 8000
 AGENTGATEWAY_VERSION ?= v1.6.0
 AGENTGATEWAY_IMAGE ?= cr.agentgateway.dev/agentgateway:$(AGENTGATEWAY_VERSION)
@@ -139,7 +143,7 @@ AIPERF_IMAGE_PULL_POLICY ?= Always
 AIPERF_IMAGE_PULL_SECRET ?=
 AIPERF_API_KEY_SECRET ?= inference-gateway-api-keys
 AIPERF_API_KEY_SECRET_KEY ?= switchyard
-AIPERF_ENDPOINT_URL ?= https://daedalus.ddns.me:$(GATEWAY_PORT)
+AIPERF_ENDPOINT_URL ?= http://daedalus.ddns.me:$(GATEWAY_PORT)
 AIPERF_CONNECT_IP ?= auto
 AIPERF_RESULTS_DIR ?= artifacts/aiperf
 AIPERF_RUN_ID ?= $(shell date -u +%Y%m%dT%H%M%SZ)
@@ -257,7 +261,7 @@ help:
 		'  TAKE_OWNERSHIP=1                  Pass --take-ownership to Helm 3.17+.' \
 		'  SKIP_BUILD=1 SKIP_PUSH=1          Skip image steps during deploy.' \
 		'  SKIP_SECRET=1                     Skip HF token secret check/update during deploy.' \
-		'  GATEWAY=0                         Skip inference-gateway resources during deploy.' \
+		'  GATEWAY=0                         Keep deploy/install/upgrade private (no model route).' \
 		'  INSTALL_GATEWAY=1                 Install/upgrade Gateway API, GAIE, and agentgateway first.' \
 		'  GATEWAY_REPLICAS=2                Minimum gateway deployment replica count.' \
 		'  GATEWAY_NOFILE_LIMIT=131072       Gateway process RLIMIT_NOFILE soft limit.' \
@@ -439,6 +443,9 @@ dry-run: check-model check-helm
 
 .PHONY: upgrade install
 upgrade install: check-model check-helm
+	@if [[ "$(GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
+		$(MAKE) --no-print-directory gateway-base gateway-monitoring; \
+	fi
 	@echo "==> Helm upgrade/install $(RELEASE) from $(MODEL_CONFIG) into namespace $(NAMESPACE)"
 	@$(HELM) upgrade --install "$(RELEASE)" "$(CHART)" \
 		--namespace "$(NAMESPACE)" \
@@ -448,6 +455,10 @@ upgrade install: check-model check-helm
 		$(TAKE_OWNERSHIP_ARG) \
 		$(HELM_ARGS) \
 		$(HELM_UPGRADE_ARGS)
+	@if [[ "$(GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
+		$(MAKE) --no-print-directory gateway-route-apply "$(MODEL_CONFIG)"; \
+		$(MAKE) --no-print-directory gateway-catalog-apply; \
+	fi
 
 .PHONY: deploy
 deploy: check-model
@@ -465,16 +476,10 @@ deploy: check-model
 	fi
 	@if [[ "$(INSTALL_GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
 		$(MAKE) --no-print-directory install-gateway; \
-	elif [[ "$(GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
-		$(MAKE) --no-print-directory gateway-base gateway-monitoring; \
 	fi
 	@$(MAKE) --no-print-directory upgrade "$(MODEL_CONFIG)"
 	@if [[ "$(PLANNER_COMPAT)" =~ ^(1|true|yes)$$ ]]; then \
 		$(MAKE) --no-print-directory planner-compat "$(MODEL_CONFIG)"; \
-	fi
-	@if [[ "$(GATEWAY)" =~ ^(1|true|yes)$$ ]]; then \
-		$(MAKE) --no-print-directory gateway-route-apply "$(MODEL_CONFIG)"; \
-		$(MAKE) --no-print-directory gateway-catalog-apply; \
 	fi
 
 .PHONY: uninstall delete

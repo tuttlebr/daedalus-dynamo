@@ -16,10 +16,13 @@ make deploy values/qwen/qwen3-8b-nvfp4/l40s/tp1-pp1-dp1.yaml
 ```
 
 `make deploy` ensures the shared Model Express runtime ConfigMap, uses the existing
-HF token secret, and installs the chosen release. It defaults to no gateway route
-for catalog recipes unless `recipe.gateway: true` opts a serving recipe in. Muse
-Spark is opted in for Switchyard. `GATEWAY=0` or `GATEWAY=1` explicitly overrides
-the recipe. To connect an already deployed model to the existing shared gateway:
+HF token secret, and installs the chosen release. Deploy, install, and upgrade
+default to publishing the model through the shared HTTP gateway at
+`http://192.168.1.12:32360/v1`, with the existing bearer key. The Service port and
+NodePort are fixed at `32360`; HTTPS on `32359` and the internal service on `8000`
+remain available for existing clients. `GATEWAY=0` or `recipe.gateway: false`
+keeps an explicitly private deployment off the gateway. `GATEWAY=1` overrides
+that recipe setting. To connect an already deployed model to the shared gateway:
 
 ```bash
 make gateway-route-apply values/meta/muse-glimmer-30b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml

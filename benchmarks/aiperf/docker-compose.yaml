@@ -9,7 +9,7 @@ services:
     extra_hosts:
       - "daedalus.ddns.me:${ENDPOINT_CONNECT_IP:-192.168.1.234}"
     environment:
-      ENDPOINT_URL: "${ENDPOINT_URL:-https://daedalus.ddns.me:32359}"
+      ENDPOINT_URL: "${ENDPOINT_URL:-http://daedalus.ddns.me:32360}"
       GPU_TELEMETRY: "${GPU_TELEMETRY-192.168.1.235:32400/metrics}"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       TURNS: "${TURNS:-5}"

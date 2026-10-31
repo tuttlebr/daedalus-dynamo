@@ -53,11 +53,10 @@ make benchmark-agentic
 The Make target checks `EXPECTED_CONTEXT` and the in-cluster gateway Service
 before building or sending traffic. It builds and pushes the pinned client
 image and creates a Job with `backoffLimit: 0`. The Job uses
-`https://daedalus.ddns.me:32359`, a pod-local hostname mapping directly to
-the gateway Service's ClusterIP, and verified TLS. Both discovery and generation
-stay inside the cluster; they do not traverse the public endpoint or LAN VIP.
-The URL retains the hostname because the existing certificate only covers
-`daedalus.ddns.me`, not the Service FQDN. It loads `OPENAI_API_KEY` from Secret
+`http://daedalus.ddns.me:32360`, a pod-local hostname mapping directly to
+the gateway Service's ClusterIP, and HTTP on fixed port `32360`. Both discovery
+and generation stay inside the cluster; they do not traverse the public endpoint
+or LAN VIP. It loads `OPENAI_API_KEY` from Secret
 `inference-gateway-api-keys`, key `switchyard`, for model discovery and
 generation. The default `AIPERF_CONNECT_IP=auto` looks up `GATEWAY_NAME` in
 `NAMESPACE` on each render or run and fails if that lookup fails. Set an explicit
@@ -112,9 +111,9 @@ export OPENAI_API_KEY="$(kubectl get secret inference-gateway-api-keys \
   -n daedalus-dynamo -o jsonpath='{.data.switchyard}' | base64 --decode)"
 ```
 
-Keep the HTTPS hostname in the URL. Docker's `--add-host` provides the LAN
-NodePort IP override for both discovery and generation while preserving certificate
-verification:
+Docker's `--add-host` provides the LAN NodePort IP override for both discovery
+and generation. Existing TLS clients may explicitly select
+`https://daedalus.ddns.me:32359`; certificate verification remains enabled:
 
 ```bash
 docker build \
@@ -123,7 +122,7 @@ docker build \
 
 docker run --rm \
   --add-host daedalus.ddns.me:192.168.1.234 \
-  -e ENDPOINT_URL=https://daedalus.ddns.me:32359 \
+  -e ENDPOINT_URL=http://daedalus.ddns.me:32360 \
   -e OPENAI_API_KEY \
   daedalus-dynamo-aiperf:0.13.0 \
   --list-models
@@ -135,7 +134,7 @@ prints redacted AIPerf commands without generating inference traffic:
 ```bash
 docker run --rm \
   --add-host daedalus.ddns.me:192.168.1.234 \
-  -e ENDPOINT_URL=https://daedalus.ddns.me:32359 \
+  -e ENDPOINT_URL=http://daedalus.ddns.me:32360 \
   -e OPENAI_API_KEY \
   daedalus-dynamo-aiperf:0.13.0 \
   --dry-run
@@ -152,14 +151,14 @@ mkdir -p artifacts/aiperf
 docker run --rm --init \
   --user "$(id -u):$(id -g)" \
   --add-host daedalus.ddns.me:192.168.1.234 \
-  -e ENDPOINT_URL=https://daedalus.ddns.me:32359 \
+  -e ENDPOINT_URL=http://daedalus.ddns.me:32360 \
   -e OPENAI_API_KEY \
   -v "$PWD/artifacts/aiperf:/artifacts" \
   daedalus-dynamo-aiperf:0.13.0
 ```
 
 The equivalent Compose workflow maps the hostname to node `192.168.1.234`
-and uses the existing fixed NodePort `32359`. Set `ENDPOINT_CONNECT_IP` to
+and uses the fixed HTTP NodePort `32360`. Set `ENDPOINT_CONNECT_IP` to
 select another cluster node's LAN IP:
 
 ```bash

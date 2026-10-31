@@ -14,7 +14,7 @@ from typing import Any
 from urllib.parse import SplitResult, urlsplit
 
 
-DEFAULT_ENDPOINT = "https://daedalus.ddns.me:32359"
+DEFAULT_ENDPOINT = "http://daedalus.ddns.me:32360"
 
 
 def parse_args() -> argparse.Namespace:

@@ -63,7 +63,7 @@ class AIPerfBenchmarkTests(unittest.TestCase):
                 "#!/usr/bin/env python3\n"
                 "import json, os, sys\n"
                 "assert 'Authorization: Bearer ' + os.environ['OPENAI_API_KEY'] in sys.argv\n"
-                "assert sys.argv[-1] == 'https://daedalus.ddns.me:32359/v1/models'\n"
+                "assert sys.argv[-1] == 'http://daedalus.ddns.me:32360/v1/models'\n"
                 "print(json.dumps({'data': [{'id': 'example/model'}]}))\n"
                 "print('200')\n"
             )
@@ -72,7 +72,7 @@ class AIPerfBenchmarkTests(unittest.TestCase):
             env.update(
                 {
                     "PATH": directory + os.pathsep + env["PATH"],
-                    "ENDPOINT_URL": "https://daedalus.ddns.me:32359",
+                    "ENDPOINT_URL": "http://daedalus.ddns.me:32360",
                     "OPENAI_API_KEY": "unit-private-key",
                     "MODELS": "",
                     "ARTIFACTS_DIR": directory,
@@ -285,7 +285,7 @@ class AIPerfBenchmarkTests(unittest.TestCase):
         }
         self.assertEqual(
             environment["ENDPOINT_URL"]["value"],
-            "https://daedalus.ddns.me:32359",
+            "http://daedalus.ddns.me:32360",
         )
         self.assertEqual(
             pod_spec["hostAliases"],
@@ -361,7 +361,7 @@ class AIPerfBenchmarkTests(unittest.TestCase):
                     elif [[ "$1" == "get" && "$2" == "namespace" ]]; then
                       exit 0
                     elif [[ "$1" == "get" && "$2" == "service" ]]; then
-                      if [[ "$*" == *jsonpath* ]]; then printf '%s' '32359'; fi
+                      if [[ "$*" == *jsonpath* ]]; then printf '%s' '32360'; fi
                     elif [[ "$1" == "create" ]]; then
                       printf '%s\\n' 'job.batch/aiperf-agentic-unit-k8s-run created'
                     elif [[ "$1" == "get" && "$2" == "job" ]]; then
@@ -420,11 +420,11 @@ class AIPerfBenchmarkTests(unittest.TestCase):
                     "EXPECTED_CONTEXT": "test-context",
                     "NAMESPACE": "daedalus-dynamo",
                     "GATEWAY_NAME": "inference-gateway",
-                    "GATEWAY_PORT": "32359",
+                    "GATEWAY_PORT": "32360",
                     "AIPERF_IMAGE": "registry.example.com/aiperf:0.13.0",
                     "AIPERF_ENDPOINT_URL": (
                         "http://inference-gateway.daedalus-dynamo."
-                        "svc.cluster.local:32359"
+                        "svc.cluster.local:32360"
                     ),
                     "AIPERF_RUN_ID": "unit-k8s-run",
                     "AIPERF_RESULTS_DIR": str(relative_results),

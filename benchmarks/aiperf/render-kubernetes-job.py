@@ -134,7 +134,7 @@ def main() -> None:
             "underscores, and hyphens"
         )
 
-    endpoint_url = env("AIPERF_ENDPOINT_URL", "https://daedalus.ddns.me:32359")
+    endpoint_url = env("AIPERF_ENDPOINT_URL", "http://daedalus.ddns.me:32360")
     endpoint = urlsplit(endpoint_url)
     try:
         _ = endpoint.port
@@ -322,7 +322,7 @@ def main() -> None:
         pod_spec["imagePullSecrets"] = [{"name": image_pull_secret}]
     if connect_ip:
         # Route discovery and generation straight to the local Service while
-        # retaining the certificate's hostname for verified TLS.
+        # retaining the URL hostname (and TLS identity for HTTPS overrides).
         pod_spec["hostAliases"] = [{"ip": connect_ip, "hostnames": [endpoint.hostname]}]
 
     name = job_name(run_id)

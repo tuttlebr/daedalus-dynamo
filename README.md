@@ -46,9 +46,10 @@ checks the existing Hugging Face secret, and installs the selected model release
 Prebuilt runtime recipes skip local image builds. The special Qwen Flash Next
 NVMe recipe builds its custom ARM64 image unless explicitly overridden.
 
-New recipes default to `GATEWAY=0`; they do not advertise new models on existing
-client routes. A recipe can opt in with `recipe.gateway: true`; Muse Spark does
-this for Switchyard. Validate other deployments before adding their gateway route:
+`make deploy`, `make install`, and `make upgrade` route models through the shared
+HTTP gateway on fixed port `32360` by default and refresh `/v1/models`.
+Use `GATEWAY=0` (or `recipe.gateway: false`) only for an explicitly private
+deployment. To add a route for an already deployed model:
 
 ```bash
 make gateway-route-apply values/qwen/qwen3-8b-nvfp4/l40s/tp1-pp1-dp1.yaml
@@ -154,8 +155,17 @@ does not create registry credentials.
 The gateway uses the existing `daedalus/daedalus-tls` certificate Secret and
 `daedalus-dynamo/inference-gateway-api-keys` authentication Secret. Provision
 these before installation. The checked-in certificate grant permits the
-`daedalus-dynamo` gateway to reference that certificate. Clients use verified
-HTTPS with a bearer key on port `32359`.
+`daedalus-dynamo` gateway to reference that certificate. The standard endpoint is
+`http://192.168.1.12:32360/v1` (or any cluster node's LAN IP on port `32360`).
+Both the Service port and NodePort are pinned to `32360`; Make and the renderer
+reject conflicting port overrides. The controller-owned Service receives this
+mapping from `AgentgatewayParameters`, so reconciliation and stack upgrades
+retain it. All model routes share this gateway.
+
+Existing verified HTTPS clients keep using `https://daedalus.ddns.me:32359/v1`.
+Both public listeners require the existing bearer key. Switchyard continues to
+use `http://inference-gateway-internal.daedalus-dynamo.svc.cluster.local:8000/v1`.
+The internal listener remains exposed only through its ClusterIP Service.
 
 Install or upgrade Gateway API, Gateway API Inference Extension, agentgateway,
 and the shared hardened gateway:
@@ -208,12 +218,11 @@ The render target reads the gateway Service's ClusterIP without changing the
 cluster. The live target verifies
 `EXPECTED_CONTEXT`, builds and pushes `AIPERF_IMAGE`, then creates one
 non-retrying Job in `NAMESPACE`. The Job discovers models from
-`https://daedalus.ddns.me:32359/v1/models`, using a pod-local hostname mapping
+`http://daedalus.ddns.me:32360/v1/models`, using a pod-local hostname mapping
 directly to the gateway Service's ClusterIP and `OPENAI_API_KEY` from Secret
 `inference-gateway-api-keys`, key `switchyard`. The model list is not derived
-from checked-in values files. The hostname supplies the existing certificate's
-TLS identity; inference traffic stays inside the cluster and does not use public
-DNS or the LAN VIP. `AIPERF_CONNECT_IP=auto` resolves the current ClusterIP on
+from checked-in values files. Inference traffic stays inside the cluster and
+does not use public DNS or the LAN VIP. `AIPERF_CONNECT_IP=auto` resolves the current ClusterIP on
 each run. An explicit local IP selects a different path; an empty value opts
 into normal DNS resolution.
 

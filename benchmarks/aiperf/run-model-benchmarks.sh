@@ -8,7 +8,7 @@ readonly MOONCAKE_BLOCK_SIZE="512"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 AIPERF_BIN="${AIPERF_BIN:-aiperf}"
 AGENTIC_CONFIG="${AGENTIC_CONFIG:-${SCRIPT_DIR}/agentic-code-config.json}"
-ENDPOINT_URL="${ENDPOINT_URL:-https://daedalus.ddns.me:32359}"
+ENDPOINT_URL="${ENDPOINT_URL:-http://daedalus.ddns.me:32360}"
 GPU_TELEMETRY="${GPU_TELEMETRY-192.168.1.235:32400/metrics}"
 ARTIFACTS_DIR="${ARTIFACTS_DIR:-/artifacts}"
 RUN_ID="${RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
@@ -42,13 +42,13 @@ an OpenAI-compatible inference gateway.
 Usage:
   run-model-benchmarks.sh [--dry-run] [--list-models] [--help]
 
-The default endpoint is https://daedalus.ddns.me:32359. The script discovers model
+The default endpoint is http://daedalus.ddns.me:32360. The script discovers model
 IDs from /v1/models unless MODELS is a comma-separated override.
 Use make benchmark-agentic for a pod pinned to the gateway ClusterIP, or the
-Compose runner for local NodePort access. The hostname is retained for TLS.
+Compose runner for local access to HTTP NodePort 32360.
 
 Important environment variables:
-  ENDPOINT_URL              Gateway base URL (default: https://daedalus.ddns.me:32359)
+  ENDPOINT_URL              Gateway base URL (default: http://daedalus.ddns.me:32360)
   GPU_TELEMETRY             DCGM endpoint (default: 192.168.1.235:32400/metrics);
                             set empty to disable GPU telemetry collection
   OPENAI_API_KEY            Bearer token required by the default gateway
