@@ -1,0 +1,19 @@
+# Muse emits ATEM reasoning and tool channels. Use its packaged vLLM parsers.
+# These are frontend arguments; worker engine arguments do not parse responses.
+frontend:
+  extraArgs:
+    - --dyn-chat-processor
+    - vllm
+    - --enable-auto-tool-choice
+    - --tool-call-parser
+    - muse_glimmer
+    - --reasoning-parser
+    - muse_glimmer
+    - --trust-remote-code
+  resources:
+    requests:
+      cpu: "1"
+      memory: 8Gi
+    limits:
+      cpu: "4"
+      memory: 8Gi

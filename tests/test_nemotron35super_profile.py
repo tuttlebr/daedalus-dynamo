@@ -11,7 +11,7 @@ import unittest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-VALUES = ROOT / "values/staging/nemotron35super-gb10.yaml"
+VALUES = ROOT / "tests/fixtures/retired-values/staging/nemotron35super-gb10.yaml"
 NAME = "nemotron35super-gb10-stage"
 
 

@@ -12,30 +12,30 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 CHART = ROOT / "charts" / "dynamo-model"
-MODEL_VALUES = sorted((ROOT / "values").glob("*.yaml"))
+MODEL_VALUES = sorted((ROOT / "tests/fixtures/retired-values").glob("*.yaml"))
 SHARED_RUNTIME_IMAGE = (
-    "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0"
+    "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.1"
 )
-GB10_RUNTIME_IMAGE = "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0"
+GB10_RUNTIME_IMAGE = "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.1"
 QWEN38_L40S_RUNTIME_IMAGE = (
-    "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0@sha256:"
-    "c957d97ccb8b225d7671f39afc6b340d910f0c58f8d17837cce6078c77344cd0"
+    "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.1@sha256:"
+    "5899e7bdd3528ab09a17ec87e2abe1949f8a0386a0a49f3b24dbd52d8211dc5d"
 )
 QWEN38_GB10_RUNTIME_IMAGE = (
     "daedalus.ddns.me:5050/btuttle/daedalus-dynamo-qwen38-gb10:"
-    "1.5.1-vllm0.31.0-2"
+    "1.6.1-vllm0.31.0-1"
 )
 NEMOTRON35_BOLT_RUNTIME_IMAGE = (
     "daedalus.ddns.me:5050/btuttle/daedalus-dynamo-nemotron35bolt-gb10:"
-    "1.6.0-vllm77154ca-mamba-prefill-20261027-compat1"
+    "1.6.1-vllm77154ca-mamba-prefill-20261028"
 )
 NEMOTRON35_LIGHTNING_RUNTIME_IMAGE = (
     "nvcr.io/nvidia/ai-dynamo/vllm-runtime:"
-    "1.5.0-nemotron-3.5-lightning-dev.1"
+    "1.6.1"
 )
 MUSE_GLIMMER_RUNTIME_IMAGE = (
     "nvcr.io/nvidia/ai-dynamo/vllm-runtime:"
-    "1.5.0-deepseek-v4-pro-0813-dev.1"
+    "1.6.1"
 )
 
 
@@ -132,7 +132,7 @@ class ModelChartRenderTests(unittest.TestCase):
                 self.assertTrue(override["spec"]["services"])
 
     def test_nemotronnano_uses_a_queue_first_latency_guardrail(self) -> None:
-        documents = render(ROOT / "values" / "nemotronnano.yaml")
+        documents = render(ROOT / "tests/fixtures/retired-values" / "nemotronnano.yaml")
         deployment = next(
             document
             for document in documents
@@ -164,7 +164,7 @@ class ModelChartRenderTests(unittest.TestCase):
 
         for values_name, expected in cases.items():
             with self.subTest(values=values_name):
-                documents = render(ROOT / "values" / values_name)
+                documents = render(ROOT / "tests/fixtures/retired-values" / values_name)
                 deployment = next(
                     document
                     for document in documents
@@ -184,7 +184,7 @@ class ModelChartRenderTests(unittest.TestCase):
                 self.assertEqual(gpu_memory["values"], [expected[1]])
 
         documents = render(
-            ROOT / "values" / "qwen27b.yaml",
+            ROOT / "tests/fixtures/retired-values" / "qwen27b.yaml",
             set_strings={"worker.nodeGpuMemoryLt": "40959"},
         )
         deployment = next(
@@ -206,7 +206,7 @@ class ModelChartRenderTests(unittest.TestCase):
         self.assertEqual(gpu_memory["values"], ["40959"])
 
     def test_qwen38_27b_l40s_is_a_pinned_fixed_text_only_tp1_release(self) -> None:
-        documents = render(ROOT / "values" / "qwen38-27b-l40s.yaml")
+        documents = render(ROOT / "tests/fixtures/retired-values" / "qwen38-27b-l40s.yaml")
         deployment = next(
             document
             for document in documents
@@ -227,7 +227,7 @@ class ModelChartRenderTests(unittest.TestCase):
         self.assertEqual(worker["resources"]["requests"]["memory"], "48Gi")
         for component in ("Frontend", "VllmWorker"):
             service = services[component]
-            self.assertEqual(service["runtimeVersionOverride"], "1.6.0")
+            self.assertEqual(service["runtimeVersionOverride"], "1.6.1")
             self.assertEqual(
                 service["extraPodSpec"]["mainContainer"]["image"],
                 QWEN38_L40S_RUNTIME_IMAGE,
@@ -313,7 +313,7 @@ class ModelChartRenderTests(unittest.TestCase):
             self.assertEqual(claims[name]["accessModes"], ["ReadWriteOnce"])
             self.assertEqual(claims[name]["resources"]["requests"]["storage"], size)
         # This is an additional profile, not a conversion of the TP2 recipe.
-        original = yaml.safe_load((ROOT / "values" / "qwen27b.yaml").read_text())
+        original = yaml.safe_load((ROOT / "tests/fixtures/retired-values" / "qwen27b.yaml").read_text())
         self.assertEqual(original["worker"]["gpu"], "2")
         self.assertIn("--tensor-parallel-size 2", original["worker"]["vllmArgs"])
         self.assertNotEqual(original["model"]["name"], deployment["metadata"]["name"])
@@ -344,7 +344,7 @@ class ModelChartRenderTests(unittest.TestCase):
         result = subprocess.run(
             [
                 "helm", "template", "annotation-type-check", str(CHART),
-                "--values", str(ROOT / "values" / "qwen38-27b-l40s.yaml"),
+                "--values", str(ROOT / "tests/fixtures/retired-values" / "qwen38-27b-l40s.yaml"),
                 "--set-json", 'model.annotations={"nvidia.com/enable-grove":false}',
             ],
             capture_output=True,
@@ -356,7 +356,7 @@ class ModelChartRenderTests(unittest.TestCase):
         self.assertIn("string", result.stderr)
 
     def test_frontend_receives_configured_cli_flags(self) -> None:
-        documents = render(ROOT / "values" / "gemma431b.yaml")
+        documents = render(ROOT / "tests/fixtures/retired-values" / "gemma431b.yaml")
         deployment = next(
             document
             for document in documents
@@ -372,7 +372,7 @@ class ModelChartRenderTests(unittest.TestCase):
     def test_frontend_extra_args_preserve_literal_argv_tokens(self) -> None:
         template_path = "/templates/a template's $(literal).jinja"
         documents = render(
-            ROOT / "values" / "gemma431b.yaml",
+            ROOT / "tests/fixtures/retired-values" / "gemma431b.yaml",
             set_strings={
                 "frontend.extraArgs[0]": "--chat-template",
                 "frontend.extraArgs[1]": template_path,
@@ -395,7 +395,7 @@ class ModelChartRenderTests(unittest.TestCase):
         subprocess.run(["bash", "-n"], input=script, text=True, check=True)
 
     def test_muse_glimmer_starts_one_l40s_worker_with_frontend_parser_fallback(self) -> None:
-        documents = render(ROOT / "values" / "muse-glimmer-l40s.yaml")
+        documents = render(ROOT / "tests/fixtures/retired-values" / "muse-glimmer-l40s.yaml")
         deployment = next(
             document
             for document in documents
@@ -435,7 +435,7 @@ class ModelChartRenderTests(unittest.TestCase):
         self.assertIn("--enable-auto-tool-choice", argv)
 
     def test_modelexpress_resets_only_registry_metadata_before_download(self) -> None:
-        documents = render(ROOT / "values" / "gemma431b.yaml")
+        documents = render(ROOT / "tests/fixtures/retired-values" / "gemma431b.yaml")
         deployment = next(
             document
             for document in documents
@@ -466,7 +466,7 @@ class ModelChartRenderTests(unittest.TestCase):
         )
 
     def test_qwen35_uses_native_modelopt_support_in_vllm_023(self) -> None:
-        documents = render(ROOT / "values" / "qwen35b.yaml")
+        documents = render(ROOT / "tests/fixtures/retired-values" / "qwen35b.yaml")
         deployment = next(
             document
             for document in documents
@@ -481,7 +481,7 @@ class ModelChartRenderTests(unittest.TestCase):
         self.assertNotIn("Applying vLLM 0.22.0", worker_script)
 
     def test_qwen35_122b_gb10_uses_arm64_profile_with_model_context(self) -> None:
-        documents = render(ROOT / "values" / "qwen35-122b-gb10.yaml")
+        documents = render(ROOT / "tests/fixtures/retired-values" / "qwen35-122b-gb10.yaml")
         deployment = next(
             document
             for document in documents
@@ -524,7 +524,7 @@ class ModelChartRenderTests(unittest.TestCase):
         self.assertNotIn("--speculative-config", worker_script)
 
     def test_qwen38_gb10_keeps_all_local_cache_consumers_on_spark(self) -> None:
-        documents = render(ROOT / "values" / "qwen38-flash-next-gb10.yaml")
+        documents = render(ROOT / "tests/fixtures/retired-values" / "qwen38-flash-next-gb10.yaml")
         deployment = next(d for d in documents if d["kind"] == "DynamoGraphDeployment")
         services = deployment["spec"]["services"]
         self.assertNotIn("Planner", services)
@@ -536,9 +536,9 @@ class ModelChartRenderTests(unittest.TestCase):
                                "value": "true", "effect": "NoSchedule"},
                               services[name]["extraPodSpec"]["tolerations"])
         for name in ("Frontend", "VllmWorker"):
-            self.assertEqual(services[name]["runtimeVersionOverride"], "1.5.1")
+            self.assertEqual(services[name]["runtimeVersionOverride"], "1.6.1")
         self.assertEqual(services["Frontend"]["extraPodSpec"]["mainContainer"]["image"],
-                         "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.1")
+                         "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.1")
         self.assertEqual(services["VllmWorker"]["extraPodSpec"]["mainContainer"]["image"],
                          QWEN38_GB10_RUNTIME_IMAGE)
         cache = next(d for d in documents if d["kind"] == "PersistentVolumeClaim"
@@ -556,7 +556,7 @@ class ModelChartRenderTests(unittest.TestCase):
         self.assertNotIn("--speculative-config", main["args"][0])
 
     def test_cluster_sized_shared_resources_and_planner(self) -> None:
-        documents = render(ROOT / "values" / "gemma431b.yaml")
+        documents = render(ROOT / "tests/fixtures/retired-values" / "gemma431b.yaml")
         deployment = next(
             document
             for document in documents
@@ -601,7 +601,7 @@ class ModelChartRenderTests(unittest.TestCase):
         planner_container = services["Planner"]["extraPodSpec"]["mainContainer"]
         self.assertEqual(
             planner_container["image"],
-            "nvcr.io/nvidia/ai-dynamo/dynamo-planner:1.6.0",
+            "nvcr.io/nvidia/ai-dynamo/dynamo-planner:1.6.1",
         )
         self.assertEqual(
             planner_container["command"], ["python3", "-m", "dynamo.planner"]
@@ -690,7 +690,7 @@ class ModelChartRenderTests(unittest.TestCase):
 
     def test_nemotron35lightning_gb10_uses_trtllm_and_modelexpress(self) -> None:
         documents = render(
-            ROOT / "values" / "nemotron35lightning-gb10.yaml"
+            ROOT / "tests/fixtures/retired-values" / "nemotron35lightning-gb10.yaml"
         )
         deployment = next(
             document
@@ -735,7 +735,7 @@ class ModelChartRenderTests(unittest.TestCase):
         self,
     ) -> None:
         documents = render(
-            ROOT / "values" / "nemotron35lightning-l40s.yaml"
+            ROOT / "tests/fixtures/retired-values" / "nemotron35lightning-l40s.yaml"
         )
         deployment = next(
             document
@@ -773,7 +773,7 @@ class ModelChartRenderTests(unittest.TestCase):
         self.assertEqual(planner_config["max_gpu_budget"], 2)
 
     def test_glm47flash_uses_vllm_flags_and_model_context(self) -> None:
-        documents = render(ROOT / "values" / "glm47flash.yaml")
+        documents = render(ROOT / "tests/fixtures/retired-values" / "glm47flash.yaml")
         deployment = next(
             document
             for document in documents
@@ -808,7 +808,7 @@ class ModelChartRenderTests(unittest.TestCase):
         self.assertNotIn("--kv-cache-dtype fp8", worker_script)
 
     def test_poolside_uses_sanitized_managed_chat_template(self) -> None:
-        documents = render(ROOT / "values" / "poolside21nvfp4.yaml")
+        documents = render(ROOT / "tests/fixtures/retired-values" / "poolside21nvfp4.yaml")
         config_map = next(
             document
             for document in documents

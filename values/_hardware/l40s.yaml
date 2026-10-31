@@ -1,0 +1,8 @@
+# A TP2 worker requests two GPUs in ONE pod; Kubernetes places it on one node.
+worker:
+  nodeSelector:
+    nvidia.com/gpu.product: NVIDIA-L40S
+    kubernetes.io/arch: amd64
+  vllmOptions:
+    distributed-executor-backend: mp
+    disable-custom-all-reduce: true

@@ -1,0 +1,73 @@
+# 48 GiB embedding table stays file-backed on Spark local NVMe; no cross-node workers.
+extends:
+- ../model.yaml
+- ../../../_hardware/dgx-spark.yaml
+recipe:
+  release: mx-qwen38-flash-next-spark-tp1-offload
+  hardware: dgx-spark
+  parallelism:
+    tp: 1
+    pp: 1
+    dp: 1
+  buildRequired: true
+  qualification: requires-custom-image-build-and-nvme-gpu-validation
+model:
+  name: mx-qwen38-flash-next-spark-tp1-offload
+worker:
+  gpu: '1'
+  memoryRequest: 88Gi
+  sharedMemorySize: 16Gi
+  workingDir: /workspace
+  securityContext:
+    runAsUser: 0
+    capabilities:
+      add:
+      - IPC_LOCK
+      - SYS_RESOURCE
+  startupProbe:
+    path: /live
+    periodSeconds: 30
+    timeoutSeconds: 20
+    failureThreshold: 120
+  extraEnv:
+  - name: DYN_HEALTH_CHECK_REQUEST_TIMEOUT
+    value: "120"
+  - name: VLLM_PLE_MMAP
+    value: '1'
+  - name: VLLM_PLE_MMAP_DIR
+    value: /model/.model-express/cache/models--nvidia--Qwen3.8-Flash-Next-NVFP4/snapshots/fc694b54fb0174e0913e6adf86691ef85a4ead47
+  - name: VLLM_PLE_MMAP_WORKERS
+    value: '8'
+  - name: VLLM_PLE_MMAP_MADVISE
+    value: random
+  - name: VLLM_PLE_MMAP_FAST_ROWS
+    value: '0'
+  - name: VLLM_PLE_MMAP_PREWARM
+    value: '0'
+  - name: VLLM_QSA_EXACT_TOPK
+    value: '1'
+  - name: VLLM_SSM_CONV_STATE_LAYOUT
+    value: DS
+  - name: VLLM_WORKER_MULTIPROC_METHOD
+    value: spawn
+  - name: NCCL_IB_DISABLE
+    value: '1'
+  - name: TRITON_CACHE_DIR
+    value: /tmp/.triton-cache
+  - name: VLLM_CACHE_ROOT
+    value: /tmp/vllm-cache
+frontend:
+  nodeSelector:
+    nvidia.com/gpu.product: NVIDIA-GB10
+modelexpress:
+  nodeSelector:
+    nvidia.com/gpu.product: NVIDIA-GB10
+modelCache:
+  name: mx-qwen38-flash-next-spark-tp1-offload-cache
+  storage: 192Gi
+  storageClassName: local-fast
+  accessModes:
+  - ReadWriteOnce
+redis:
+  name: mx-qwen38-flash-next-spark-tp1-offload-redis
+  dataPvcName: mx-qwen38-flash-next-spark-tp1-offload-redis-data

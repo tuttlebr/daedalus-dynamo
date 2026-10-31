@@ -3,18 +3,24 @@ from __future__ import annotations
 import copy
 import json
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+from model_values import resolve, values_path  # noqa: E402
+
 CHART = ROOT / "charts/dynamo-model"
-BOLT = ROOT / "values/nemotron35bolt-gb10.yaml"
+BOLT = ROOT / "tests/fixtures/retired-values/nemotron35bolt-gb10.yaml"
 PROFILES = sorted(
     path
-    for path in (ROOT / "values").rglob("*.yaml")
-    if "model" in (yaml.safe_load(path.read_text()) or {})
+    for path in (ROOT / "tests/fixtures/retired-values").rglob("*.yaml")
+    if not any(part.startswith("_") for part in path.relative_to(ROOT / "tests/fixtures/retired-values").parts)
+    and path.name != "model.yaml"
+    and "model" in (yaml.safe_load(path.read_text()) or {})
 )
 
 
@@ -27,7 +33,7 @@ def render(profile: Path, override=None):
         "--namespace",
         "daedalus-dynamo",
         "--values",
-        str(profile),
+        values_path(profile),
     ]
     if override is not None:
         command.extend(
@@ -46,7 +52,7 @@ def objects(completed):
 
 def worker(documents, profile):
     graph = next(item for item in documents if item["kind"] == "DynamoGraphDeployment")
-    values = yaml.safe_load(profile.read_text())
+    values = resolve(profile)
     component = values.get("worker", {}).get("componentName", "VllmWorker")
     return graph["spec"]["services"][component]
 

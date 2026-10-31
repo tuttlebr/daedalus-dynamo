@@ -17,7 +17,7 @@ gateway routes and unrelated backends remain intact.
 
 The worker pins the official revision in
 [model-pin.json](./model-pin.json), the safetensors loader, FP8 quantization,
-the Triton MoE backend and the Dynamo 1.6.0 image digest. The worker
+the Triton MoE backend and the Dynamo 1.6.1 image digest. The worker
 and frontend use the existing Python processing and Qwen tool/reasoning parser
 combination. There is no speculative decoding or MTP. All consumers stay on
 `daedalus-03`; the frontend retains its 4 GiB memory request and 8 GiB limit.

@@ -115,6 +115,12 @@ spec:
         - name: {{ .Values.modelCache.name | quote }}
           mountPoint: {{ .Values.modelCache.mountPath | quote }}
       extraPodSpec:
+        {{- if .Values.modelexpress.runtimeConfigMap }}
+        volumes:
+          - name: modelexpress-runtime
+            configMap:
+              name: {{ .Values.modelexpress.runtimeConfigMap | quote }}
+        {{- end }}
         {{- with .Values.modelexpress.nodeSelector }}
         nodeSelector:
           {{- toYaml . | nindent 10 }}
@@ -124,6 +130,12 @@ spec:
           {{- toYaml . | nindent 10 }}
         {{- end }}
         mainContainer:
+          {{- if .Values.modelexpress.runtimeConfigMap }}
+          volumeMounts:
+            - name: modelexpress-runtime
+              mountPath: /opt/modelexpress-runtime
+              readOnly: true
+          {{- end }}
           {{- with .Values.modelexpress.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
@@ -133,6 +145,20 @@ spec:
           resources:
             {{- toYaml .Values.modelexpress.resources | nindent 12 }}
           env:
+            {{- if .Values.modelexpress.runtimeConfigMap }}
+            - name: MODEL_REVISION
+              value: {{ .Values.modelexpress.modelRevision | quote }}
+            - name: MODEL_EXPRESS_URL
+              value: {{ printf "http://%s-modelexpress:%v" (include "dynamo-model.name" .) .Values.modelexpress.port | quote }}
+            - name: MX_CLIENT_CONFIG_PATH
+              value: {{ printf "%s/.model-express/config.yaml" .Values.modelCache.mountPath | quote }}
+            - name: MX_RESET_REGISTRY
+              value: {{ .Values.modelexpress.resetRegistryOnStart | quote }}
+            - name: MX_WAIT_FOR_CACHE_READY
+              value: {{ .Values.modelexpress.waitForCacheReady | quote }}
+            - name: MX_DOWNLOAD_STRATEGY
+              value: {{ .Values.modelexpress.downloadStrategy | quote }}
+            {{- end }}
             - name: MODEL_EXPRESS_SERVER_PORT
               value: {{ .Values.modelexpress.port | quote }}
             - name: MODEL_EXPRESS_LOG_LEVEL
@@ -161,6 +187,10 @@ spec:
           args:
             - |
               set -euo pipefail
+
+              {{- if .Values.modelexpress.runtimeConfigMap }}
+              exec /bin/bash /opt/modelexpress-runtime/server.sh
+              {{- else }}
 
               echo "Waiting for Redis metadata backend..."
               for i in $(seq 1 60); do
@@ -248,6 +278,7 @@ spec:
 
               echo "Server PID: $SERVER_PID"
               wait "$SERVER_PID"
+              {{- end }}
     {{- end }}
     {{- if .Values.planner.enabled }}
     Planner:
@@ -344,14 +375,21 @@ spec:
       sharedMemory:
         size: {{ .Values.worker.sharedMemorySize | quote }}
       extraPodSpec:
-        {{- if .Values.worker.customJinjaTemplate.enabled }}
+        {{- if or .Values.worker.customJinjaTemplate.enabled .Values.modelexpress.runtimeConfigMap }}
         volumes:
+          {{- if .Values.modelexpress.runtimeConfigMap }}
+          - name: modelexpress-runtime
+            configMap:
+              name: {{ .Values.modelexpress.runtimeConfigMap | quote }}
+          {{- end }}
+          {{- if .Values.worker.customJinjaTemplate.enabled }}
           - name: custom-jinja-template
             configMap:
               name: {{ include "dynamo-model.customJinjaTemplateConfigMapName" . | quote }}
               items:
                 - key: chat-template.jinja
                   path: chat-template.jinja
+          {{- end }}
         {{- end }}
         {{- with .Values.worker.nodeSelector }}
         nodeSelector:
@@ -380,12 +418,19 @@ spec:
         mainContainer:
           image: {{ .Values.model.image | quote }}
           imagePullPolicy: {{ .Values.model.imagePullPolicy }}
-          {{- if .Values.worker.customJinjaTemplate.enabled }}
+          {{- if or .Values.worker.customJinjaTemplate.enabled .Values.modelexpress.runtimeConfigMap }}
           volumeMounts:
+            {{- if .Values.modelexpress.runtimeConfigMap }}
+            - name: modelexpress-runtime
+              mountPath: /opt/modelexpress-runtime
+              readOnly: true
+            {{- end }}
+            {{- if .Values.worker.customJinjaTemplate.enabled }}
             - name: custom-jinja-template
               mountPath: {{ required "worker.customJinjaTemplate.mountPath is required when enabled" .Values.worker.customJinjaTemplate.mountPath | quote }}
               subPath: chat-template.jinja
               readOnly: true
+            {{- end }}
           {{- end }}
           {{- if .Values.worker.workingDir }}
           workingDir: {{ .Values.worker.workingDir | quote }}
@@ -410,6 +455,12 @@ spec:
               value: {{ .Values.modelCache.cachePath | quote }}
             - name: MODEL_EXPRESS_URL
               value: {{ printf "http://%s-modelexpress:%v" (include "dynamo-model.name" .) .Values.modelexpress.port | quote }}
+            {{- if .Values.modelexpress.runtimeConfigMap }}
+            - name: MODEL_REVISION
+              value: {{ .Values.modelexpress.modelRevision | quote }}
+            - name: MX_WAIT_FOR_CACHE_READY
+              value: {{ .Values.modelexpress.waitForCacheReady | quote }}
+            {{- end }}
             - name: MODEL_EXPRESS_HOST
               value: {{ printf "%s-modelexpress" (include "dynamo-model.name" .) | quote }}
             - name: MODEL_EXPRESS_PORT
@@ -443,6 +494,10 @@ spec:
               fi
               echo "Worker RLIMIT_NOFILE soft=$(ulimit -S -n) hard=$(ulimit -H -n)"
 
+              {{- if .Values.modelexpress.runtimeConfigMap }}
+              source /opt/modelexpress-runtime/wait-cache.sh
+              {{- else }}
+
               echo "Waiting for ModelExpress at ${MODEL_EXPRESS_HOST}:${MODEL_EXPRESS_PORT}..."
               for i in $(seq 1 180); do
                 if timeout 1 bash -c "</dev/tcp/${MODEL_EXPRESS_HOST}/${MODEL_EXPRESS_PORT}" 2> /dev/null; then
@@ -465,6 +520,8 @@ spec:
                 sleep 5
               done
               echo "Model cache is ready at $MODEL_READY_LINK."
+              {{- end }}
+
               {{- end }}
 
               {{- if .Values.worker.applyVllmModelOptLmHeadPatch }}
@@ -592,6 +649,15 @@ spec:
               {{- else }}
               exec python3 -m dynamo.vllm \
                 --model "${MODEL_NAME}" \
+                {{- range $key, $value := .Values.worker.vllmOptions }}
+                {{- if kindIs "bool" $value }}
+                {{- if $value }}
+                --{{ $key }} \
+                {{- end }}
+                {{- else if ne $value nil }}
+                --{{ $key }} {{ (kindIs "map" $value | ternary (toJson $value) (toString $value)) | replace "'" "'\"'\"'" | squote }} \
+                {{- end }}
+                {{- end }}
                 {{- range .Values.worker.vllmArgs }}
                 {{ . }} \
                 {{- end }}

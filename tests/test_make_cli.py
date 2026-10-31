@@ -10,7 +10,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-QWEN_CONFIG = ROOT / "values" / "qwen27b.yaml"
+QWEN_CONFIG = ROOT / "tests/fixtures/retired-values" / "qwen27b.yaml"
 QWEN_MODEL_ID = yaml.safe_load(QWEN_CONFIG.read_text(encoding="utf-8"))["model"]["id"]
 
 
@@ -32,11 +32,11 @@ class MakeCliTests(unittest.TestCase):
         self.assertIn(message, completed.stdout + completed.stderr)
 
     def test_render_uses_positional_config_and_filename_stem(self) -> None:
-        completed = run_make("-n", "render", "values/qwen27b.yaml")
+        completed = run_make("-n", "render", "tests/fixtures/retired-values/qwen27b.yaml")
 
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertIn('helm template "qwen27b"', completed.stdout)
-        self.assertIn('-f "values/qwen27b.yaml"', completed.stdout)
+        self.assertIn('-f "tests/fixtures/retired-values/qwen27b.yaml"', completed.stdout)
         self.assertNotIn("Nothing to be done", completed.stdout + completed.stderr)
 
     def test_absolute_yml_path_and_release_override_are_supported(self) -> None:
@@ -56,7 +56,7 @@ class MakeCliTests(unittest.TestCase):
         completed = run_make(
             "-n",
             "deploy",
-            "values/qwen27b.yaml",
+            "tests/fixtures/retired-values/qwen27b.yaml",
             "SKIP_BUILD=1",
             "SKIP_PUSH=1",
             "SKIP_SECRET=1",
@@ -65,17 +65,17 @@ class MakeCliTests(unittest.TestCase):
 
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertIn(
-            'make --no-print-directory upgrade "values/qwen27b.yaml"',
+            'make --no-print-directory upgrade "tests/fixtures/retired-values/qwen27b.yaml"',
             completed.stdout,
         )
         self.assertIn('helm upgrade --install "qwen27b"', completed.stdout)
-        self.assertIn('-f "values/qwen27b.yaml"', completed.stdout)
+        self.assertIn('-f "tests/fixtures/retired-values/qwen27b.yaml"', completed.stdout)
 
     def test_route_name_can_be_retained_for_a_renamed_config(self) -> None:
         completed = run_make(
             "-n",
             "gateway-route-apply",
-            "values/qwen27b.yaml",
+            "tests/fixtures/retired-values/qwen27b.yaml",
             "MODEL_ROUTE_NAME=retained-route",
         )
 
@@ -83,20 +83,30 @@ class MakeCliTests(unittest.TestCase):
         self.assertIn('MODEL_ROUTE_NAME="retained-route"', completed.stdout)
         self.assertIn(f'MODEL_ID="{QWEN_MODEL_ID}"', completed.stdout)
 
+    def test_recipe_can_enable_gateway_and_caller_can_override(self) -> None:
+        path = "values/meta/muse-glimmer-30b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml"
+        enabled = run_make("-n", "deploy", path, "SKIP_SECRET=1")
+        self.assertEqual(enabled.returncode, 0, enabled.stderr)
+        self.assertIn('elif [[ "true" =~', enabled.stdout)
+        self.assertIn(f'gateway-route-apply "{path}"', enabled.stdout)
+        disabled = run_make("-n", "deploy", path, "SKIP_SECRET=1", "GATEWAY=0")
+        self.assertEqual(disabled.returncode, 0, disabled.stderr)
+        self.assertIn('elif [[ "0" =~', disabled.stdout)
+
     def test_models_lists_checked_in_config_paths(self) -> None:
         completed = run_make("models")
 
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertIn("values/qwen27b.yaml", completed.stdout.splitlines())
+        self.assertIn("values/qwen/qwen3-8b-nvfp4/l40s/tp1-pp1-dp1.yaml", completed.stdout.splitlines())
         self.assertNotIn("qwen27b", completed.stdout.splitlines())
 
     def test_spark_build_selects_model_dockerfile_context_and_platform(self) -> None:
-        completed = run_make("-n", "build", "values/qwen38-flash-next-gb10.yaml")
+        completed = run_make("-n", "build", "tests/fixtures/retired-values/qwen38-flash-next-gb10.yaml")
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertIn('-f "runtime/qwen38-flash-next-gb10/Dockerfile"', completed.stdout)
         self.assertIn('"runtime/qwen38-flash-next-gb10"', completed.stdout)
         self.assertIn('--platform "linux/arm64"', completed.stdout)
-        overridden = run_make("-n", "build", "values/qwen38-flash-next-gb10.yaml",
+        overridden = run_make("-n", "build", "tests/fixtures/retired-values/qwen38-flash-next-gb10.yaml",
                               "DOCKERFILE=custom.Dockerfile", "CONTEXT=custom-context",
                               "BUILD_PLATFORM=linux/amd64")
         self.assertEqual(overridden.returncode, 0, overridden.stderr)
@@ -109,7 +119,7 @@ class MakeCliTests(unittest.TestCase):
         )
         self.assert_failed_with(
             run_make(
-                "render", "values/qwen27b.yaml", "values/qwen35b.yaml"
+                "render", "tests/fixtures/retired-values/qwen27b.yaml", "tests/fixtures/retired-values/qwen35b.yaml"
             ),
             "Usage: make render <model-config.yaml>",
         )
@@ -120,7 +130,7 @@ class MakeCliTests(unittest.TestCase):
             "Model config must end in .yaml or .yml",
         )
         self.assert_failed_with(
-            run_make("render", "values/does-not-exist.yaml"),
+            run_make("render", "tests/fixtures/retired-values/does-not-exist.yaml"),
             "Model config does not exist",
         )
 

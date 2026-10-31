@@ -1,0 +1,11 @@
+# Checkpoint publisher: nvidia; builder: qwen.
+extends:
+- ../../_shared/vllm.yaml
+model:
+  id: nvidia/Qwen3-8B-NVFP4
+modelexpress:
+  modelRevision: ccd10a893cbca613259517c3efe08e151ddf2b8e
+worker:
+  vllmOptions:
+    revision: ccd10a893cbca613259517c3efe08e151ddf2b8e
+    linear-backend: marlin

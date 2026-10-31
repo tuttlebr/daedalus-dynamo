@@ -6,7 +6,7 @@ from importlib.metadata import version
 from pathlib import Path
 
 
-if version("ai-dynamo") != "1.6.0" or version("vllm") != "0.32.0rc1.dev100+g77154ca61":
+if version("ai-dynamo") != "1.6.1" or version("vllm") != "0.32.0rc1.dev100+g77154ca61":
     raise SystemExit("Revalidate this adapter when either runtime changes")
 
 path = Path("/usr/local/lib/python3.12/dist-packages/dynamo/vllm/embedding_worker_processes.py")

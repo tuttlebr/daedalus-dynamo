@@ -9,7 +9,7 @@ from test_model_chart_render import QWEN38_L40S_RUNTIME_IMAGE, ROOT, render
 
 class A30StagingProfileTests(unittest.TestCase):
     def test_isolated_int4_text_worker_and_retained_storage(self) -> None:
-        documents = render(ROOT / "values" / "staging" / "qwen36-35b-int4-a30.yaml")
+        documents = render(ROOT / "tests/fixtures/retired-values" / "staging" / "qwen36-35b-int4-a30.yaml")
         deployment = next(d for d in documents if d["kind"] == "DynamoGraphDeployment")
         self.assertEqual(deployment["metadata"]["name"], "qwen36-35b-int4-a30")
         self.assertEqual(

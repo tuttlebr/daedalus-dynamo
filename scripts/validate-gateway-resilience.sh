@@ -43,8 +43,7 @@ fi
 PYTHONPYCACHEPREFIX="${tmp_dir}/pycache" \
   python3 -m unittest discover -s tests -p 'test_*.py'
 
-shopt -s nullglob
-model_configs=(values/*.yaml values/*.yml)
+mapfile -t model_configs < <(python3 scripts/model_values.py list values)
 for model_config in "${model_configs[@]}"; do
   make --no-print-directory lint "${model_config}" >/dev/null
 done

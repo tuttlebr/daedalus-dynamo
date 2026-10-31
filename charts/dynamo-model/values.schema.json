@@ -69,6 +69,7 @@
     "modelexpress": {
       "type": "object",
       "properties": {
+        "runtimeConfigMap": { "type": "string", "maxLength": 253 },
         "nodeSelector": { "type": "object", "additionalProperties": { "type": "string" } },
         "tolerations": { "type": "array", "items": { "type": "object" } },
         "imagePullPolicy": { "$ref": "#/definitions/imagePullPolicy" },
@@ -154,6 +155,11 @@
         "nofileLimit": {
           "type": "string",
           "pattern": "^[1-9][0-9]{4,}$"
+        },
+        "vllmOptions": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+          "additionalProperties": { "type": ["string", "number", "boolean", "object", "null"] }
         },
         "vllmArgs": {
           "type": "array",

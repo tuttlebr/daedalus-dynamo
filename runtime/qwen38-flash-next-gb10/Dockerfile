@@ -5,9 +5,11 @@ USER root
 ARG SP=/usr/local/lib/python3.12/dist-packages
 ARG PKG=${SP}/vllm/models/qwen4_exp/nvidia
 
-# Keep the model-capable engine supplied by the base. Installing the [vllm]
-# extra would replace this model-capable engine with Dynamo's default version.
-RUN pip install --no-cache-dir ai-dynamo==1.5.1 modelexpress==0.4.1 blake3 uvloop \
+# Keep the pinned engine and GB10 patches supplied by this build. Dynamo 1.6.1
+# already supports vLLM 0.31 scheduler queues; no local Dynamo adapter is needed.
+# Keep AI Simulate's gRPC tooling within the base telemetry's protobuf < 7 bound.
+RUN pip install --no-cache-dir ai-dynamo==1.6.1 modelexpress==0.7.0 blake3 uvloop \
+      protobuf==6.33.6 grpcio-tools==1.76.0 grpcio==1.84.0 \
  && python3 -c 'from importlib.metadata import version; assert version("vllm").split("+")[0] == "0.31.0"'
 
 COPY vllm_ple_mmap.py ${SP}/vllm_ple_mmap.py
@@ -27,7 +29,6 @@ RUN python3 /tmp/gb10-patches/patch_mamba_block_size.py ${SP} \
  && python3 /tmp/gb10-patches/patch_load_pread.py ${SP} \
  && python3 /tmp/gb10-patches/patch_embed_chunked_copy.py ${SP} \
  && python3 /tmp/gb10-patches/patch_mtp_name_prefilter.py ${SP} \
- && python3 /tmp/gb10-patches/patch_dynamo_vllm031.py ${SP} \
  && rm -r /tmp/gb10-patches
 
 LABEL io.daedalus.gb10.patch-source="https://github.com/blazux/qwen3.8-flash-DGX" \

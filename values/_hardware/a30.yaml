@@ -1,0 +1,8 @@
+worker:
+  nodeSelector:
+    nvidia.com/gpu.product: NVIDIA-A30
+    kubernetes.io/arch: amd64
+  vllmOptions:
+    distributed-executor-backend: mp
+    # FP8 KV cache needs separate kernel qualification on Ampere. Keep BF16.
+    kv-cache-dtype: auto

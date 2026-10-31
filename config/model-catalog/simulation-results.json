@@ -1,0 +1,1971 @@
+{
+  "planner_image": "nvcr.io/nvidia/ai-dynamo/dynamo-planner:1.6.1@sha256:7a3f07ce406c988c3c7ce30578fa1880831bb9408454daafdcb0a6f7ad1dabff",
+  "aisimulate_version": "0.13.0",
+  "execution": "CPU-only offline engine",
+  "qualification": "HYBRID estimates, not GPU measurements; simulator data version differs from runtime",
+  "workload": "4096 input / 512 output tokens, concurrency 1; input shortened for smaller context",
+  "results": [
+    {
+      "recipe": "values/google/diffusiongemma-26b-a4b-it-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/diffusiongemma-26B-A4B-it-NVFP4",
+      "revision": "ec4ff3df205028f4e81c954c2227f9312b3ec2ea",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No bundled GB10 hardware/performance profile."
+    },
+    {
+      "recipe": "values/google/diffusiongemma-26b-a4b-it-nvfp4/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/diffusiongemma-26B-A4B-it-NVFP4",
+      "revision": "ec4ff3df205028f4e81c954c2227f9312b3ec2ea",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: DiffusionGemmaForBlockDiffusion"
+    },
+    {
+      "recipe": "values/google/diffusiongemma-26b-a4b-it-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/diffusiongemma-26B-A4B-it-NVFP4",
+      "revision": "ec4ff3df205028f4e81c954c2227f9312b3ec2ea",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: DiffusionGemmaForBlockDiffusion"
+    },
+    {
+      "recipe": "values/google/gemma-4-26b-a4b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Gemma-4-26B-A4B-NVFP4",
+      "revision": "a19cfe00be84568a6867111c9a68c9c44fdcffe6",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/google/gemma-4-26b-a4b-nvfp4/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Gemma-4-26B-A4B-NVFP4",
+      "revision": "a19cfe00be84568a6867111c9a68c9c44fdcffe6",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 197.504025,
+        "mean_tpot_ms": 6.757868187866933,
+        "output_throughput_tok_s": 140.2442074411138,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/google/gemma-4-26b-a4b-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Gemma-4-26B-A4B-NVFP4",
+      "revision": "a19cfe00be84568a6867111c9a68c9c44fdcffe6",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 184.25670000000005,
+        "mean_tpot_ms": 4.854156232876712,
+        "output_throughput_tok_s": 192.139502765896,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/google/gemma-4-31b-it-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Gemma-4-31B-IT-NVFP4",
+      "revision": "4135a98a9b728a548947683219633b25682223ac",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/google/gemma-4-31b-it-nvfp4/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Gemma-4-31B-IT-NVFP4",
+      "revision": "4135a98a9b728a548947683219633b25682223ac",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 1,
+      "reason": "Missing measured/empirical operation coverage for this shape."
+    },
+    {
+      "recipe": "values/google/gemma-4-31b-it-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Gemma-4-31B-IT-NVFP4",
+      "revision": "4135a98a9b728a548947683219633b25682223ac",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 933.5268130000012,
+        "mean_tpot_ms": 23.022426109589063,
+        "output_throughput_tok_s": 40.321353135973574,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/meta/llama-3-1-70b-instruct-fp8/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Llama-3.1-70B-Instruct-FP8",
+      "revision": "07a08be3d8a8f5254c2aba375b79743bca8fd491",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/meta/llama-3-1-70b-instruct-fp8/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Llama-3.1-70B-Instruct-FP8",
+      "revision": "07a08be3d8a8f5254c2aba375b79743bca8fd491",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 1497.171986000001,
+        "mean_tpot_ms": 62.26580481800391,
+        "output_throughput_tok_s": 15.368453457167359,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/meta/llama-3-1-8b-instruct-fp8/a30/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Llama-3.1-8B-Instruct-FP8",
+      "revision": "42d9515ebd69eea3a87351d079c671c3c5ff0a31",
+      "hardware": "a30",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/meta/llama-3-1-8b-instruct-fp8/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Llama-3.1-8B-Instruct-FP8",
+      "revision": "42d9515ebd69eea3a87351d079c671c3c5ff0a31",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/meta/llama-3-1-8b-instruct-fp8/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Llama-3.1-8B-Instruct-FP8",
+      "revision": "42d9515ebd69eea3a87351d079c671c3c5ff0a31",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 220.36251099999998,
+        "mean_tpot_ms": 14.424344727984355,
+        "output_throughput_tok_s": 67.44649332387526,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/meta/llama-3-1-8b-instruct-fp8/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Llama-3.1-8B-Instruct-FP8",
+      "revision": "42d9515ebd69eea3a87351d079c671c3c5ff0a31",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 233.65651099999954,
+        "mean_tpot_ms": 7.490951185909971,
+        "output_throughput_tok_s": 126.06078901348882,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/meta/llama-3-1-8b-instruct-nvfp4/a30/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Llama-3.1-8B-Instruct-NVFP4",
+      "revision": "bdb54e24298451af785c0ac63c1b485e9b7400a2",
+      "hardware": "a30",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/meta/llama-3-1-8b-instruct-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Llama-3.1-8B-Instruct-NVFP4",
+      "revision": "bdb54e24298451af785c0ac63c1b485e9b7400a2",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/meta/llama-3-1-8b-instruct-nvfp4/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Llama-3.1-8B-Instruct-NVFP4",
+      "revision": "bdb54e24298451af785c0ac63c1b485e9b7400a2",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 430.49856099999977,
+        "mean_tpot_ms": 10.942542086105659,
+        "output_throughput_tok_s": 85.01964531757775,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/meta/llama-3-1-8b-instruct-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Llama-3.1-8B-Instruct-NVFP4",
+      "revision": "bdb54e24298451af785c0ac63c1b485e9b7400a2",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 338.8494379999999,
+        "mean_tpot_ms": 6.506696395303325,
+        "output_throughput_tok_s": 139.74671414642802,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/meta/llama-3-3-70b-instruct-fp8/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Llama-3.3-70B-Instruct-FP8",
+      "revision": "fde04ee76a27704c88f569542ef023b57d4d0362",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/meta/llama-3-3-70b-instruct-fp8/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Llama-3.3-70B-Instruct-FP8",
+      "revision": "fde04ee76a27704c88f569542ef023b57d4d0362",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 1497.171986000001,
+        "mean_tpot_ms": 62.26580481800391,
+        "output_throughput_tok_s": 15.368453457167359,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/meta/llama-3-3-70b-instruct-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Llama-3.3-70B-Instruct-NVFP4",
+      "revision": "f792b707002f2c613e0729c6b37bbcedc4efa94e",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/meta/llama-3-3-70b-instruct-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Llama-3.3-70B-Instruct-NVFP4",
+      "revision": "f792b707002f2c613e0729c6b37bbcedc4efa94e",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 2760.7396,
+        "mean_tpot_ms": 47.361371602739695,
+        "output_throughput_tok_s": 18.989407126746144,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/meta/llama-4-scout-17b-16e-instruct-fp8/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Llama-4-Scout-17B-16E-Instruct-FP8",
+      "revision": "3c0175a5a4a66f8e139faf93ddeb7d2741ff3560",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "missing-model-config",
+      "reason": "No bundled GB10 hardware/performance profile."
+    },
+    {
+      "recipe": "values/meta/llama-4-scout-17b-16e-instruct-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Llama-4-Scout-17B-16E-Instruct-NVFP4",
+      "revision": "9417590c9bc99b359f3ac66d1346ecd54249888e",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "missing-model-config",
+      "reason": "No bundled GB10 hardware/performance profile."
+    },
+    {
+      "recipe": "values/meta/llama-4-scout-17b-16e-instruct-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Llama-4-Scout-17B-16E-Instruct-NVFP4",
+      "revision": "9417590c9bc99b359f3ac66d1346ecd54249888e",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "missing-model-config",
+      "reason": "HF config returned HTTP 401; access must be granted before simulation."
+    },
+    {
+      "recipe": "values/meta/muse-glimmer-30b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Muse-Glimmer-30B-NVFP4",
+      "revision": "47818374517751c48c55cde2621594926b1888b6",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/meta/muse-glimmer-30b-nvfp4/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Muse-Glimmer-30B-NVFP4",
+      "revision": "47818374517751c48c55cde2621594926b1888b6",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 661.8259649999982,
+        "mean_tpot_ms": 47.107445598825834,
+        "output_throughput_tok_s": 20.70047607916327,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/meta/muse-glimmer-30b-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Muse-Glimmer-30B-NVFP4",
+      "revision": "47818374517751c48c55cde2621594926b1888b6",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 670.0752089999991,
+        "mean_tpot_ms": 24.98606683757339,
+        "output_throughput_tok_s": 38.10103443338845,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/microsoft/phi-4-multimodal-instruct-fp8/a30/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Phi-4-multimodal-instruct-FP8",
+      "revision": "d822efce23f65f86c165aeed435cc27092e21d60",
+      "hardware": "a30",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: Phi4MMForCausalLM"
+    },
+    {
+      "recipe": "values/microsoft/phi-4-multimodal-instruct-fp8/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Phi-4-multimodal-instruct-FP8",
+      "revision": "d822efce23f65f86c165aeed435cc27092e21d60",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No bundled GB10 hardware/performance profile."
+    },
+    {
+      "recipe": "values/microsoft/phi-4-multimodal-instruct-fp8/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Phi-4-multimodal-instruct-FP8",
+      "revision": "d822efce23f65f86c165aeed435cc27092e21d60",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: Phi4MMForCausalLM"
+    },
+    {
+      "recipe": "values/microsoft/phi-4-multimodal-instruct-fp8/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Phi-4-multimodal-instruct-FP8",
+      "revision": "d822efce23f65f86c165aeed435cc27092e21d60",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: Phi4MMForCausalLM"
+    },
+    {
+      "recipe": "values/microsoft/phi-4-multimodal-instruct-nvfp4/a30/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Phi-4-multimodal-instruct-NVFP4",
+      "revision": "617cfabb9ad6c2c6e318fd21c1961536b84f65a1",
+      "hardware": "a30",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: Phi4MMForCausalLM"
+    },
+    {
+      "recipe": "values/microsoft/phi-4-multimodal-instruct-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Phi-4-multimodal-instruct-NVFP4",
+      "revision": "617cfabb9ad6c2c6e318fd21c1961536b84f65a1",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No bundled GB10 hardware/performance profile."
+    },
+    {
+      "recipe": "values/microsoft/phi-4-multimodal-instruct-nvfp4/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Phi-4-multimodal-instruct-NVFP4",
+      "revision": "617cfabb9ad6c2c6e318fd21c1961536b84f65a1",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: Phi4MMForCausalLM"
+    },
+    {
+      "recipe": "values/microsoft/phi-4-multimodal-instruct-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Phi-4-multimodal-instruct-NVFP4",
+      "revision": "617cfabb9ad6c2c6e318fd21c1961536b84f65a1",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: Phi4MMForCausalLM"
+    },
+    {
+      "recipe": "values/microsoft/phi-4-reasoning-plus-fp8/a30/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Phi-4-reasoning-plus-FP8",
+      "revision": "18abf8a59bd8ff0b79ec712863a153becc6cdaeb",
+      "hardware": "a30",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: Phi3ForCausalLM"
+    },
+    {
+      "recipe": "values/microsoft/phi-4-reasoning-plus-fp8/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Phi-4-reasoning-plus-FP8",
+      "revision": "18abf8a59bd8ff0b79ec712863a153becc6cdaeb",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No bundled GB10 hardware/performance profile."
+    },
+    {
+      "recipe": "values/microsoft/phi-4-reasoning-plus-fp8/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Phi-4-reasoning-plus-FP8",
+      "revision": "18abf8a59bd8ff0b79ec712863a153becc6cdaeb",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: Phi3ForCausalLM"
+    },
+    {
+      "recipe": "values/microsoft/phi-4-reasoning-plus-fp8/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Phi-4-reasoning-plus-FP8",
+      "revision": "18abf8a59bd8ff0b79ec712863a153becc6cdaeb",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: Phi3ForCausalLM"
+    },
+    {
+      "recipe": "values/microsoft/phi-4-reasoning-plus-nvfp4/a30/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Phi-4-reasoning-plus-NVFP4",
+      "revision": "cb950fd61cdbfa8e0f467ace3087c7d32ea8a47b",
+      "hardware": "a30",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: Phi3ForCausalLM"
+    },
+    {
+      "recipe": "values/microsoft/phi-4-reasoning-plus-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Phi-4-reasoning-plus-NVFP4",
+      "revision": "cb950fd61cdbfa8e0f467ace3087c7d32ea8a47b",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No bundled GB10 hardware/performance profile."
+    },
+    {
+      "recipe": "values/microsoft/phi-4-reasoning-plus-nvfp4/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Phi-4-reasoning-plus-NVFP4",
+      "revision": "cb950fd61cdbfa8e0f467ace3087c7d32ea8a47b",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: Phi3ForCausalLM"
+    },
+    {
+      "recipe": "values/microsoft/phi-4-reasoning-plus-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Phi-4-reasoning-plus-NVFP4",
+      "revision": "cb950fd61cdbfa8e0f467ace3087c7d32ea8a47b",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: Phi3ForCausalLM"
+    },
+    {
+      "recipe": "values/mistralai/mistral-medium-3-5-128b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Mistral-Medium-3.5-128B-NVFP4",
+      "revision": "b8c66d2098edd8c9c26bde2b2ff41b5967e111ae",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No bundled GB10 hardware/performance profile."
+    },
+    {
+      "recipe": "values/nvidia/llama-3-3-nemotron-super-49b-v1-5-fp8/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Llama-3_3-Nemotron-Super-49B-v1_5-FP8",
+      "revision": "04822723e77e036ddf2d24e83c6d469d3b009252",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/nvidia/llama-3-3-nemotron-super-49b-v1-5-fp8/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Llama-3_3-Nemotron-Super-49B-v1_5-FP8",
+      "revision": "04822723e77e036ddf2d24e83c6d469d3b009252",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 1,
+      "reason": "resolve_attention_lane_order: no entry for sm_version=89 in 'vllm'/'0.24.0'\naisimulate predict failed: ValueError: insufficient model metadata; missing: kv_size_per_token_bytes\naisimulate: execution process exited with status 1\n"
+    },
+    {
+      "recipe": "values/nvidia/llama-3-3-nemotron-super-49b-v1-fp8/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Llama-3_3-Nemotron-Super-49B-v1-FP8",
+      "revision": "bc7d3c23b806e89a68f7399989fffae112c36054",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/nvidia/llama-3-3-nemotron-super-49b-v1-fp8/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Llama-3_3-Nemotron-Super-49B-v1-FP8",
+      "revision": "bc7d3c23b806e89a68f7399989fffae112c36054",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 1,
+      "reason": "resolve_attention_lane_order: no entry for sm_version=89 in 'vllm'/'0.24.0'\naisimulate predict failed: ValueError: insufficient model metadata; missing: kv_size_per_token_bytes\naisimulate: execution process exited with status 1\n"
+    },
+    {
+      "recipe": "values/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning-fp8/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8",
+      "revision": "0acd4b1c237eab45d3977b1b46631919e9a75774",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No bundled GB10 hardware/performance profile."
+    },
+    {
+      "recipe": "values/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning-fp8/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8",
+      "revision": "0acd4b1c237eab45d3977b1b46631919e9a75774",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: NemotronH_Nano_Omni_Reasoning_V3"
+    },
+    {
+      "recipe": "values/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning-fp8/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8",
+      "revision": "0acd4b1c237eab45d3977b1b46631919e9a75774",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: NemotronH_Nano_Omni_Reasoning_V3"
+    },
+    {
+      "recipe": "values/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4",
+      "revision": "16993199e436da4ba75ddc410855f87e0d996ee6",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No bundled GB10 hardware/performance profile."
+    },
+    {
+      "recipe": "values/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning-nvfp4/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4",
+      "revision": "16993199e436da4ba75ddc410855f87e0d996ee6",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: NemotronH_Nano_Omni_Reasoning_V3"
+    },
+    {
+      "recipe": "values/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4",
+      "revision": "16993199e436da4ba75ddc410855f87e0d996ee6",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: NemotronH_Nano_Omni_Reasoning_V3"
+    },
+    {
+      "recipe": "values/nvidia/nvidia-nemotron-3-5-lightning-30b-a3b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4",
+      "revision": "bee7596271d1495f6992ae224aefde4410e816b8",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/nvidia/nvidia-nemotron-3-5-lightning-30b-a3b-nvfp4/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4",
+      "revision": "bee7596271d1495f6992ae224aefde4410e816b8",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 1,
+      "reason": "Mixed quantization still selects native FP4 in the estimator; Marlin mapping not modeled."
+    },
+    {
+      "recipe": "values/nvidia/nvidia-nemotron-3-5-lightning-30b-a3b-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4",
+      "revision": "bee7596271d1495f6992ae224aefde4410e816b8",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 1,
+      "reason": "Mixed quantization still selects native FP4 in the estimator; Marlin mapping not modeled."
+    },
+    {
+      "recipe": "values/nvidia/nvidia-nemotron-3-5-super-vl-120b-a12b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4",
+      "revision": "da5b2650a835292c678994a1fa3fb653250fb508",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No bundled GB10 hardware/performance profile."
+    },
+    {
+      "recipe": "values/nvidia/nvidia-nemotron-3-5-super-vl-120b-a12b-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4",
+      "revision": "da5b2650a835292c678994a1fa3fb653250fb508",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: NemotronH_Omni_Reasoning_V3"
+    },
+    {
+      "recipe": "values/nvidia/nvidia-nemotron-3-nano-30b-a3b-fp8/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-FP8",
+      "revision": "9bee19446c0dfd01f356e10979d225b2a6621944",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/nvidia/nvidia-nemotron-3-nano-30b-a3b-fp8/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-FP8",
+      "revision": "9bee19446c0dfd01f356e10979d225b2a6621944",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 221.21439800000005,
+        "mean_tpot_ms": 4.407679166340511,
+        "output_throughput_tok_s": 206.99092006676426,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/nvidia/nvidia-nemotron-3-nano-30b-a3b-fp8/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-FP8",
+      "revision": "9bee19446c0dfd01f356e10979d225b2a6621944",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 246.12384600000007,
+        "mean_tpot_ms": 3.1468857103718237,
+        "output_throughput_tok_s": 276.13248181525734,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/nvidia/nvidia-nemotron-3-nano-30b-a3b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4",
+      "revision": "6efb4a2a1c1fa277ce7b3df7a1416255011b1c99",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/nvidia/nvidia-nemotron-3-nano-30b-a3b-nvfp4/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4",
+      "revision": "6efb4a2a1c1fa277ce7b3df7a1416255011b1c99",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 238.82144200000027,
+        "mean_tpot_ms": 4.17031808610567,
+        "output_throughput_tok_s": 216.0470659613434,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/nvidia/nvidia-nemotron-3-nano-30b-a3b-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4",
+      "revision": "6efb4a2a1c1fa277ce7b3df7a1416255011b1c99",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 252.67108200000004,
+        "mean_tpot_ms": 3.153955320939335,
+        "output_throughput_tok_s": 274.6276869096177,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/nvidia/nvidia-nemotron-3-super-120b-a12b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4",
+      "revision": "ff433f5493e25d631c9f12b5d55c674229923d02",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/qwen/qwen2-5-vl-7b-instruct-fp8/a30/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen2.5-VL-7B-Instruct-FP8",
+      "revision": "470c50cb578da41329eb79bba128da173a0eeb31",
+      "hardware": "a30",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: Qwen2_5_VLForConditionalGeneration"
+    },
+    {
+      "recipe": "values/qwen/qwen2-5-vl-7b-instruct-fp8/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen2.5-VL-7B-Instruct-FP8",
+      "revision": "470c50cb578da41329eb79bba128da173a0eeb31",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No bundled GB10 hardware/performance profile."
+    },
+    {
+      "recipe": "values/qwen/qwen2-5-vl-7b-instruct-fp8/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen2.5-VL-7B-Instruct-FP8",
+      "revision": "470c50cb578da41329eb79bba128da173a0eeb31",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: Qwen2_5_VLForConditionalGeneration"
+    },
+    {
+      "recipe": "values/qwen/qwen2-5-vl-7b-instruct-fp8/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Qwen2.5-VL-7B-Instruct-FP8",
+      "revision": "470c50cb578da41329eb79bba128da173a0eeb31",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: Qwen2_5_VLForConditionalGeneration"
+    },
+    {
+      "recipe": "values/qwen/qwen2-5-vl-7b-instruct-nvfp4/a30/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen2.5-VL-7B-Instruct-NVFP4",
+      "revision": "d13bb1f2d8fbbd9f16cbb7688c8d6b6932d797d7",
+      "hardware": "a30",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: Qwen2_5_VLForConditionalGeneration"
+    },
+    {
+      "recipe": "values/qwen/qwen2-5-vl-7b-instruct-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen2.5-VL-7B-Instruct-NVFP4",
+      "revision": "d13bb1f2d8fbbd9f16cbb7688c8d6b6932d797d7",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No bundled GB10 hardware/performance profile."
+    },
+    {
+      "recipe": "values/qwen/qwen2-5-vl-7b-instruct-nvfp4/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen2.5-VL-7B-Instruct-NVFP4",
+      "revision": "d13bb1f2d8fbbd9f16cbb7688c8d6b6932d797d7",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: Qwen2_5_VLForConditionalGeneration"
+    },
+    {
+      "recipe": "values/qwen/qwen2-5-vl-7b-instruct-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Qwen2.5-VL-7B-Instruct-NVFP4",
+      "revision": "d13bb1f2d8fbbd9f16cbb7688c8d6b6932d797d7",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: Qwen2_5_VLForConditionalGeneration"
+    },
+    {
+      "recipe": "values/qwen/qwen3-14b-fp8/a30/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-14B-FP8",
+      "revision": "b30b0a0ff7b2f14259b859681a8e2b1c2f2b8117",
+      "hardware": "a30",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/qwen/qwen3-14b-fp8/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-14B-FP8",
+      "revision": "b30b0a0ff7b2f14259b859681a8e2b1c2f2b8117",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/qwen/qwen3-14b-fp8/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-14B-FP8",
+      "revision": "b30b0a0ff7b2f14259b859681a8e2b1c2f2b8117",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 398.54488099999986,
+        "mean_tpot_ms": 26.771568622309196,
+        "output_throughput_tok_s": 36.366693317398855,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/qwen/qwen3-14b-fp8/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-14B-FP8",
+      "revision": "b30b0a0ff7b2f14259b859681a8e2b1c2f2b8117",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 398.71438299999966,
+        "mean_tpot_ms": 14.396115362035186,
+        "output_throughput_tok_s": 66.02082028745984,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/qwen/qwen3-14b-nvfp4/a30/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-14B-NVFP4",
+      "revision": "bc39319a4dc265d9bbb9a9731bc52c4988d9ece7",
+      "hardware": "a30",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/qwen/qwen3-14b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-14B-NVFP4",
+      "revision": "bc39319a4dc265d9bbb9a9731bc52c4988d9ece7",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/qwen/qwen3-14b-nvfp4/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-14B-NVFP4",
+      "revision": "bc39319a4dc265d9bbb9a9731bc52c4988d9ece7",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 823.3665570000005,
+        "mean_tpot_ms": 20.62648309393345,
+        "output_throughput_tok_s": 45.05654298613175,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/qwen/qwen3-14b-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-14B-NVFP4",
+      "revision": "bc39319a4dc265d9bbb9a9731bc52c4988d9ece7",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 615.8977470000004,
+        "mean_tpot_ms": 11.48587669471625,
+        "output_throughput_tok_s": 78.94922604083015,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/qwen/qwen3-30b-a3b-nvfp4/a30/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-30B-A3B-NVFP4",
+      "revision": "2538ded2a4edb247b4d2b4a8ba24e44bd4c017c3",
+      "hardware": "a30",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/qwen/qwen3-30b-a3b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-30B-A3B-NVFP4",
+      "revision": "2538ded2a4edb247b4d2b4a8ba24e44bd4c017c3",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/qwen/qwen3-30b-a3b-nvfp4/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-30B-A3B-NVFP4",
+      "revision": "2538ded2a4edb247b4d2b4a8ba24e44bd4c017c3",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 196.08094899999966,
+        "mean_tpot_ms": 5.285645048923676,
+        "output_throughput_tok_s": 176.73177304447165,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/qwen/qwen3-30b-a3b-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-30B-A3B-NVFP4",
+      "revision": "2538ded2a4edb247b4d2b4a8ba24e44bd4c017c3",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 203.33279399999992,
+        "mean_tpot_ms": 4.703080906066535,
+        "output_throughput_tok_s": 196.42392316521926,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/qwen/qwen3-32b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-32B-NVFP4",
+      "revision": "16426c6eb87be9e27c14cc9fb318f9c7a5f8588c",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/qwen/qwen3-32b-nvfp4/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-32B-NVFP4",
+      "revision": "16426c6eb87be9e27c14cc9fb318f9c7a5f8588c",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 1860.7783940000024,
+        "mean_tpot_ms": 43.18766264970649,
+        "output_throughput_tok_s": 21.39602904029664,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/qwen/qwen3-32b-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-32B-NVFP4",
+      "revision": "16426c6eb87be9e27c14cc9fb318f9c7a5f8588c",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 1301.960850999999,
+        "mean_tpot_ms": 23.591077,
+        "output_throughput_tok_s": 38.33195733161002,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/qwen/qwen3-5-122b-a10b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3.5-122B-A10B-NVFP4",
+      "revision": "98915d837c4e7c87ac8296d02e89de19b3207e6d",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/qwen/qwen3-6-27b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3.6-27B-NVFP4",
+      "revision": "0893e1606ff3d5f97a441f405d5fc541a6bdf404",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/qwen/qwen3-6-27b-nvfp4/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3.6-27B-NVFP4",
+      "revision": "0893e1606ff3d5f97a441f405d5fc541a6bdf404",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 1245.550927000002,
+        "mean_tpot_ms": 38.33925608023487,
+        "output_throughput_tok_s": 24.571780592022687,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/qwen/qwen3-6-27b-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3.6-27B-NVFP4",
+      "revision": "0893e1606ff3d5f97a441f405d5fc541a6bdf404",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 966.4688380000005,
+        "mean_tpot_ms": 20.053998465753413,
+        "output_throughput_tok_s": 45.65696154832427,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/qwen/qwen3-6-35b-a3b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3.6-35B-A3B-NVFP4",
+      "revision": "1355db6a052410cfd62085d94b58866fd0f2c3c5",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/qwen/qwen3-6-35b-a3b-nvfp4/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3.6-35B-A3B-NVFP4",
+      "revision": "1355db6a052410cfd62085d94b58866fd0f2c3c5",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 185.2243630000002,
+        "mean_tpot_ms": 5.0996499530332775,
+        "output_throughput_tok_s": 183.4372310643815,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/qwen/qwen3-6-35b-a3b-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3.6-35B-A3B-NVFP4",
+      "revision": "1355db6a052410cfd62085d94b58866fd0f2c3c5",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 187.2345859999998,
+        "mean_tpot_ms": 3.70076042661449,
+        "output_throughput_tok_s": 246.35244839141822,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/qwen/qwen3-8-27b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3.8-27B-NVFP4",
+      "revision": "482ca0f3832238542f8f5295dde86b5f22711d80",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/qwen/qwen3-8-27b-nvfp4/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3.8-27B-NVFP4",
+      "revision": "482ca0f3832238542f8f5295dde86b5f22711d80",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 1,
+      "reason": "Mixed quantization still selects native FP4 in the estimator; Marlin mapping not modeled."
+    },
+    {
+      "recipe": "values/qwen/qwen3-8-27b-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3.8-27B-NVFP4",
+      "revision": "482ca0f3832238542f8f5295dde86b5f22711d80",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 1,
+      "reason": "Mixed quantization still selects native FP4 in the estimator; Marlin mapping not modeled."
+    },
+    {
+      "recipe": "values/qwen/qwen3-8b-fp8/a30/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-8B-FP8",
+      "revision": "2cebc4c89e25abc17668c81b01dceaf3d8b914d5",
+      "hardware": "a30",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/qwen/qwen3-8b-fp8/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-8B-FP8",
+      "revision": "2cebc4c89e25abc17668c81b01dceaf3d8b914d5",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/qwen/qwen3-8b-fp8/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-8B-FP8",
+      "revision": "2cebc4c89e25abc17668c81b01dceaf3d8b914d5",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 226.9530720000002,
+        "mean_tpot_ms": 16.142433050880623,
+        "output_throughput_tok_s": 60.40773074961387,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/qwen/qwen3-8b-fp8/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-8B-FP8",
+      "revision": "2cebc4c89e25abc17668c81b01dceaf3d8b914d5",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 253.67187399999997,
+        "mean_tpot_ms": 8.485340156555772,
+        "output_throughput_tok_s": 111.55460131885161,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/qwen/qwen3-8b-nvfp4/a30/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-8B-NVFP4",
+      "revision": "ccd10a893cbca613259517c3efe08e151ddf2b8e",
+      "hardware": "a30",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/qwen/qwen3-8b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-8B-NVFP4",
+      "revision": "ccd10a893cbca613259517c3efe08e151ddf2b8e",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No queryable vLLM performance database for A30."
+    },
+    {
+      "recipe": "values/qwen/qwen3-8b-nvfp4/l40s/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-8B-NVFP4",
+      "revision": "ccd10a893cbca613259517c3efe08e151ddf2b8e",
+      "hardware": "l40s",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 428.15236400000015,
+        "mean_tpot_ms": 12.297439258317016,
+        "output_throughput_tok_s": 76.27965272332351,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/qwen/qwen3-8b-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-8B-NVFP4",
+      "revision": "ccd10a893cbca613259517c3efe08e151ddf2b8e",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "predicted-estimate",
+      "summary": {
+        "completed_requests": 4,
+        "mean_ttft_ms": 349.2791680000005,
+        "mean_tpot_ms": 7.746610015655568,
+        "output_throughput_tok_s": 118.85425741960121,
+        "prediction_provenance": {
+          "aggregated": {
+            "data_identity": null,
+            "data_version": "0.24.0",
+            "data_version_unavailable_reason": null,
+            "estimator": "op_level",
+            "timing_source": "aic"
+          }
+        },
+        "kv_cache_precision": {
+          "aggregated": {
+            "dtype": "bfloat16",
+            "source": "user_override"
+          }
+        }
+      }
+    },
+    {
+      "recipe": "values/qwen/qwen3-next-80b-a3b-instruct-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-Next-80B-A3B-Instruct-NVFP4",
+      "revision": "8fb2682f136cf94d932a498f18cb1e428832a912",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No bundled GB10 hardware/performance profile."
+    },
+    {
+      "recipe": "values/qwen/qwen3-next-80b-a3b-instruct-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-Next-80B-A3B-Instruct-NVFP4",
+      "revision": "8fb2682f136cf94d932a498f18cb1e428832a912",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: Qwen3NextForCausalLM"
+    },
+    {
+      "recipe": "values/qwen/qwen3-next-80b-a3b-thinking-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-Next-80B-A3B-Thinking-NVFP4",
+      "revision": "2adcdd3e2482cd6fa1676b4f8e6f459a28796f08",
+      "hardware": "dgx-spark",
+      "tp": 1,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "No bundled GB10 hardware/performance profile."
+    },
+    {
+      "recipe": "values/qwen/qwen3-next-80b-a3b-thinking-nvfp4/l40s/tp2-pp1-dp1.yaml",
+      "model": "nvidia/Qwen3-Next-80B-A3B-Thinking-NVFP4",
+      "revision": "2adcdd3e2482cd6fa1676b4f8e6f459a28796f08",
+      "hardware": "l40s",
+      "tp": 2,
+      "runtime_vllm_version": "0.31.0",
+      "performance_qualified": false,
+      "status": "unsupported-or-failed",
+      "exit_code": 2,
+      "reason": "Unsupported estimator architecture: Qwen3NextForCausalLM"
+    }
+  ],
+  "output_root": "artifacts/portability-20261030/simulations"
+}

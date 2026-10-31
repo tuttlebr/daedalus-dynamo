@@ -1,0 +1,11 @@
+# Checkpoint publisher: nvidia; builder: qwen.
+extends:
+- ../../_shared/vllm.yaml
+model:
+  id: nvidia/Qwen2.5-VL-7B-Instruct-FP8
+modelexpress:
+  modelRevision: 470c50cb578da41329eb79bba128da173a0eeb31
+worker:
+  vllmOptions:
+    revision: 470c50cb578da41329eb79bba128da173a0eeb31
+    language-model-only: true

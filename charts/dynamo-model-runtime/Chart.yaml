@@ -1,0 +1,6 @@
+apiVersion: v2
+name: dynamo-model-runtime
+description: Shared, model-independent Model Express startup contract
+type: application
+version: 0.1.0
+appVersion: "1"

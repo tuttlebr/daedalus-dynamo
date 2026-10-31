@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.name | quote }}
+  labels:
+    app.kubernetes.io/name: dynamo-model-runtime
+    app.kubernetes.io/instance: {{ .Release.Name | quote }}
+immutable: true
+data:
+  server.sh: |
+{{ .Files.Get "files/server.sh" | indent 4 }}
+  wait-cache.sh: |
+{{ .Files.Get "files/wait-cache.sh" | indent 4 }}

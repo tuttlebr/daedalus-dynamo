@@ -1,0 +1,10 @@
+# Checkpoint publisher: nvidia; builder: nvidia.
+extends:
+- ../../_shared/vllm.yaml
+model:
+  id: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-FP8
+modelexpress:
+  modelRevision: 9bee19446c0dfd01f356e10979d225b2a6621944
+worker:
+  vllmOptions:
+    revision: 9bee19446c0dfd01f356e10979d225b2a6621944

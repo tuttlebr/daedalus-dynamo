@@ -1,0 +1,13 @@
+# Checkpoint publisher: nvidia; builder: meta.
+extends:
+- ../../_shared/vllm.yaml
+- _tuning.yaml
+model:
+  id: nvidia/Muse-Glimmer-30B-NVFP4
+modelexpress:
+  modelRevision: 47818374517751c48c55cde2621594926b1888b6
+worker:
+  vllmOptions:
+    revision: 47818374517751c48c55cde2621594926b1888b6
+    linear-backend: marlin
+    language-model-only: true

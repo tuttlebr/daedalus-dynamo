@@ -1,0 +1,11 @@
+# Checkpoint publisher: nvidia; builder: microsoft.
+extends:
+- ../../_shared/vllm.yaml
+model:
+  id: nvidia/Phi-4-multimodal-instruct-NVFP4
+modelexpress:
+  modelRevision: 617cfabb9ad6c2c6e318fd21c1961536b84f65a1
+worker:
+  vllmOptions:
+    revision: 617cfabb9ad6c2c6e318fd21c1961536b84f65a1
+    linear-backend: marlin

@@ -1,0 +1,58 @@
+# Common serving and cache policy. Model definitions and hardware override it.
+model:
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.1
+  imagePullPolicy: IfNotPresent
+  backendFramework: vllm
+  deploymentMode: direct
+  runtimeVersionOverride: "1.6.1"
+  annotations:
+    nvidia.com/enable-grove: "false"
+modelexpress:
+  runtimeConfigMap: dynamo-modelexpress-runtime-v1
+  modelRevision: ""
+modelCache:
+  accessModes: [ReadWriteMany]
+  storageClassName: nfs-client
+redis:
+  storage: 1Gi
+  storageClassName: nfs-client
+planner:
+  enabled: false
+worker:
+  replicas: 1
+  livenessFailureThreshold: 30
+  scalingAdapter:
+    enabled: false
+  cpuRequest: "2"
+  memoryRequest: 12Gi
+  sharedMemorySize: 4Gi
+  extraEnv:
+    - name: DYN_HEALTH_CHECK_REQUEST_TIMEOUT
+      value: "120"
+    - name: NCCL_IB_DISABLE
+      value: "1"
+    - name: VLLM_WORKER_MULTIPROC_METHOD
+      value: spawn
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+  vllmArgs:
+    - --served-model-name "${MODEL_NAME}"
+  vllmOptions:
+    load-format: safetensors
+    frontend-decoding: true
+    trust-remote-code: true
+    dtype: bfloat16
+    tensor-parallel-size: 1
+    pipeline-parallel-size: 1
+    data-parallel-size: 1
+    max-model-len: 8192
+    max-num-seqs: 1
+    max-num-batched-tokens: 2048
+    gpu-memory-utilization: 0.90
+    kv-cache-dtype: auto
+    enforce-eager: true
+    enable-chunked-prefill: true
+    enable-prefix-caching: true
+    seed: 42

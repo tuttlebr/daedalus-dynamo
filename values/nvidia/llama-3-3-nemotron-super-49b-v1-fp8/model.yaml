@@ -1,0 +1,10 @@
+# Checkpoint publisher: nvidia; builder: nvidia.
+extends:
+- ../../_shared/vllm.yaml
+model:
+  id: nvidia/Llama-3_3-Nemotron-Super-49B-v1-FP8
+modelexpress:
+  modelRevision: bc7d3c23b806e89a68f7399989fffae112c36054
+worker:
+  vllmOptions:
+    revision: bc7d3c23b806e89a68f7399989fffae112c36054

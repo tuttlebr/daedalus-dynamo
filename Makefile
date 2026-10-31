@@ -3,7 +3,7 @@ SHELL := /bin/bash
 
 CHART ?= charts/dynamo-model
 VALUES_DIR ?= values
-MODEL_CONFIGS := $(sort $(wildcard $(VALUES_DIR)/*.yaml) $(wildcard $(VALUES_DIR)/*.yml))
+MODEL_CONFIGS = $(shell python3 scripts/model_values.py list "$(VALUES_DIR)")
 MODEL_ACTIONS := check-model build push image lint render template dry-run upgrade install deploy uninstall delete status history gateway gateway-route gateway-route-apply gateway-unroute planner-compat
 REQUESTED_ACTION := $(firstword $(MAKECMDGOALS))
 
@@ -33,17 +33,29 @@ override MODEL_CONFIG :=
 override MODEL_STEM :=
 endif
 
-RELEASE ?= $(MODEL_STEM)
+# Layered recipes resolve before metadata extraction and Helm invocation.
+MODEL_VALUES_FILE := $(if $(MODEL_CONFIG),$(shell python3 scripts/model_values.py path "$(MODEL_CONFIG)"),)
+ifneq ($(strip $(MODEL_CONFIG)),)
+ifeq ($(strip $(MODEL_VALUES_FILE)),)
+$(error Could not resolve values: $(MODEL_CONFIG))
+endif
+endif
+RECIPE_RELEASE := $(if $(MODEL_CONFIG),$(shell python3 scripts/model_values.py get "$(MODEL_CONFIG)" recipe.release),)
+MODEL_RUNTIME_CONFIGMAP := $(if $(RECIPE_RELEASE),$(shell python3 scripts/model_values.py get "$(MODEL_CONFIG)" modelexpress.runtimeConfigMap),)
+RECIPE_BUILD_REQUIRED := $(if $(RECIPE_RELEASE),$(shell python3 scripts/model_values.py get "$(MODEL_CONFIG)" recipe.buildRequired),)
+RECIPE_GATEWAY := $(if $(RECIPE_RELEASE),$(shell python3 scripts/model_values.py get "$(MODEL_CONFIG)" recipe.gateway),)
+RELEASE ?= $(if $(RECIPE_RELEASE),$(RECIPE_RELEASE),$(MODEL_STEM))
 
 NAMESPACE ?= daedalus-dynamo
 APP_LABEL_VALUE ?= daedalus-dynamo-demo
 HF_TOKEN_SECRET ?= hf-token-secret
 GATEWAY_NAME ?= inference-gateway
-GATEWAY ?= 1
+GATEWAY ?= $(if $(RECIPE_GATEWAY),$(RECIPE_GATEWAY),$(if $(RECIPE_RELEASE),0,1))
 INSTALL_GATEWAY ?= 0
 GATEWAY_REQUEST_TIMEOUT ?= 300s
 GATEWAY_PORT ?= 32359
 GATEWAY_NODE_PORT ?= 32359
+GATEWAY_INTERNAL_PORT ?= 8000
 AGENTGATEWAY_VERSION ?= v1.6.0
 AGENTGATEWAY_IMAGE ?= cr.agentgateway.dev/agentgateway:$(AGENTGATEWAY_VERSION)
 GATEWAY_DOCKERFILE ?= Dockerfile.agentgateway
@@ -73,7 +85,7 @@ PROMETHEUS_RELEASE ?= kube-prometheus-stack
 MODEL_CATALOG_IMAGE ?= python:3.12-alpine
 EXPECTED_CONTEXT ?= kubernetes-admin@kubernetes
 GROVE_VERSION ?= v0.1.0-alpha.17
-DYNAMO_PLATFORM_VERSION ?= 1.6.0
+DYNAMO_PLATFORM_VERSION ?= 1.6.1
 GROVE_TERMINATION_DELAY ?= 15m
 SCHEDULING_RECOVERY_TIMEOUT ?= 45m
 
@@ -82,15 +94,15 @@ KUBECTL ?= kubectl
 DOCKER ?= docker
 PYTHON ?= python3
 
-BASE_IMAGE ?= nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0
+BASE_IMAGE ?= nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.1
 DOCKER_BUILD_ARGS ?=
 
-MODEL_IMAGE_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*image:[[:space:]]*//p' "$(MODEL_CONFIG)" 2>/dev/null | head -1 | tr -d '"')
-MODEL_DGD_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*name:[[:space:]]*//p' "$(MODEL_CONFIG)" 2>/dev/null | head -1 | tr -d '"')
-MODEL_ID_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*id:[[:space:]]*//p' "$(MODEL_CONFIG)" 2>/dev/null | head -1 | tr -d '"')
-MODEL_DOCKERFILE_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*buildDockerfile:[[:space:]]*//p' "$(MODEL_CONFIG)" 2>/dev/null | head -1 | tr -d '"')
-MODEL_CONTEXT_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*buildContext:[[:space:]]*//p' "$(MODEL_CONFIG)" 2>/dev/null | head -1 | tr -d '"')
-MODEL_PLATFORM_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*buildPlatform:[[:space:]]*//p' "$(MODEL_CONFIG)" 2>/dev/null | head -1 | tr -d '"')
+MODEL_IMAGE_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*image:[[:space:]]*//p' "$(MODEL_VALUES_FILE)" 2>/dev/null | head -1 | tr -d '"')
+MODEL_DGD_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*name:[[:space:]]*//p' "$(MODEL_VALUES_FILE)" 2>/dev/null | head -1 | tr -d '"')
+MODEL_ID_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*id:[[:space:]]*//p' "$(MODEL_VALUES_FILE)" 2>/dev/null | head -1 | tr -d '"')
+MODEL_DOCKERFILE_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*buildDockerfile:[[:space:]]*//p' "$(MODEL_VALUES_FILE)" 2>/dev/null | head -1 | tr -d '"')
+MODEL_CONTEXT_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*buildContext:[[:space:]]*//p' "$(MODEL_VALUES_FILE)" 2>/dev/null | head -1 | tr -d '"')
+MODEL_PLATFORM_FROM_CONFIG := $(shell sed -n '/^model:[[:space:]]*$$/,/^[^[:space:]][^:]*:/s/^[[:space:]]*buildPlatform:[[:space:]]*//p' "$(MODEL_VALUES_FILE)" 2>/dev/null | head -1 | tr -d '"')
 DOCKERFILE ?= $(if $(MODEL_DOCKERFILE_FROM_CONFIG),$(MODEL_DOCKERFILE_FROM_CONFIG),Dockerfile)
 CONTEXT ?= $(if $(MODEL_CONTEXT_FROM_CONFIG),$(MODEL_CONTEXT_FROM_CONFIG),.)
 BUILD_PLATFORM ?= $(MODEL_PLATFORM_FROM_CONFIG)
@@ -98,7 +110,7 @@ MODEL_IMAGE_REPOSITORY := $(shell printf '%s\n' '$(MODEL_IMAGE_FROM_CONFIG)' | s
 MODEL_IMAGE_TAG := $(shell printf '%s\n' '$(MODEL_IMAGE_FROM_CONFIG)' | sed 's/^.*://')
 MODEL_DGD ?= $(MODEL_DGD_FROM_CONFIG)
 MODEL_ID ?= $(MODEL_ID_FROM_CONFIG)
-MODEL_ROUTE_NAME ?= daedalus-dynamo-$(MODEL_STEM)
+MODEL_ROUTE_NAME ?= daedalus-dynamo-$(if $(RECIPE_RELEASE),$(RECIPE_RELEASE),$(MODEL_STEM))
 
 REGISTRY ?= daedalus.ddns.me:5050/btuttle
 IMAGE_REPOSITORY ?= $(if $(MODEL_IMAGE_REPOSITORY),$(MODEL_IMAGE_REPOSITORY),$(REGISTRY)/daedalus-dynamo-vllm-runtime)
@@ -114,8 +126,8 @@ HELM_PACKAGE_ARGS ?=
 HELM_COMPAT_HOOK_ENABLED ?= false
 TAKE_OWNERSHIP ?= 0
 CREATE_NAMESPACE ?= 1
-SKIP_BUILD ?= 0
-SKIP_PUSH ?= 0
+SKIP_BUILD ?= $(if $(filter true,$(RECIPE_BUILD_REQUIRED)),0,$(if $(RECIPE_RELEASE),1,0))
+SKIP_PUSH ?= $(if $(filter true,$(RECIPE_BUILD_REQUIRED)),0,$(if $(RECIPE_RELEASE),1,0))
 SKIP_SECRET ?= 0
 SKIP_GATEWAY_BUILD ?= 0
 SKIP_GATEWAY_PUSH ?= 0
@@ -219,15 +231,15 @@ help:
 		'  $(MODEL_CONFIGS)' \
 		'' \
 		'Model actions:' \
-		'  make build values/qwen35b.yaml       Build the model runtime image.' \
-		'  make push values/qwen35b.yaml        Push the model runtime image.' \
-		'  make deploy values/qwen35b.yaml      Build, push, ensure HF token secret, then Helm upgrade/install.' \
-		'  make upgrade values/qwen35b.yaml     Helm upgrade/install only.' \
-		'  make gateway values/qwen35b.yaml     Apply inference-gateway resources and model route.' \
-		'  make render values/qwen35b.yaml      Render the Helm manifests.' \
-		'  make lint values/qwen35b.yaml        Lint the chart with the model values.' \
-		'  make uninstall values/qwen35b.yaml   Helm uninstall the model release.' \
-		'  make status values/qwen35b.yaml      Show Helm release status.' \
+		'  make build values/qwen/qwen3-8b-nvfp4/l40s/tp1-pp1-dp1.yaml       Build the model runtime image.' \
+		'  make push values/qwen/qwen3-8b-nvfp4/l40s/tp1-pp1-dp1.yaml        Push the model runtime image.' \
+		'  make deploy values/qwen/qwen3-8b-nvfp4/l40s/tp1-pp1-dp1.yaml      Build, push, ensure HF token secret, then Helm upgrade/install.' \
+		'  make upgrade values/qwen/qwen3-8b-nvfp4/l40s/tp1-pp1-dp1.yaml     Helm upgrade/install only.' \
+		'  make gateway values/qwen/qwen3-8b-nvfp4/l40s/tp1-pp1-dp1.yaml     Apply inference-gateway resources and model route.' \
+		'  make render values/qwen/qwen3-8b-nvfp4/l40s/tp1-pp1-dp1.yaml      Render the Helm manifests.' \
+		'  make lint values/qwen/qwen3-8b-nvfp4/l40s/tp1-pp1-dp1.yaml        Lint the chart with the model values.' \
+		'  make uninstall values/qwen/qwen3-8b-nvfp4/l40s/tp1-pp1-dp1.yaml   Helm uninstall the model release.' \
+		'  make status values/qwen/qwen3-8b-nvfp4/l40s/tp1-pp1-dp1.yaml      Show Helm release status.' \
 		'' \
 		'Shared actions:' \
 		'  make models                        List checked-in model config paths.' \
@@ -267,7 +279,7 @@ models:
 
 .PHONY: check-model
 check-model:
-	@test -f "$(MODEL_CONFIG)" || { \
+	@test -f "$(MODEL_VALUES_FILE)" || { \
 		echo "ERROR: model config does not exist: $(MODEL_CONFIG)"; \
 		exit 2; \
 	}
@@ -398,7 +410,7 @@ secret: namespace
 .PHONY: lint
 lint: check-model check-helm
 	@$(HELM) lint "$(CHART)" \
-		-f "$(MODEL_CONFIG)" \
+		-f "$(MODEL_VALUES_FILE)" \
 		$(HELM_MODEL_ARGS) \
 		$(HELM_ARGS) \
 		$(HELM_LINT_ARGS)
@@ -407,7 +419,7 @@ lint: check-model check-helm
 render template: check-model check-helm
 	@$(HELM) template "$(RELEASE)" "$(CHART)" \
 		--namespace "$(NAMESPACE)" \
-		-f "$(MODEL_CONFIG)" \
+		-f "$(MODEL_VALUES_FILE)" \
 		$(HELM_MODEL_ARGS) \
 		$(HELM_ARGS) \
 		$(HELM_TEMPLATE_ARGS)
@@ -417,7 +429,7 @@ dry-run: check-model check-helm
 	@$(HELM) upgrade --install "$(RELEASE)" "$(CHART)" \
 		--namespace "$(NAMESPACE)" \
 		$(CREATE_NAMESPACE_ARG) \
-		-f "$(MODEL_CONFIG)" \
+		-f "$(MODEL_VALUES_FILE)" \
 		$(HELM_MODEL_ARGS) \
 		$(TAKE_OWNERSHIP_ARG) \
 		--dry-run=client \
@@ -431,7 +443,7 @@ upgrade install: check-model check-helm
 	@$(HELM) upgrade --install "$(RELEASE)" "$(CHART)" \
 		--namespace "$(NAMESPACE)" \
 		$(CREATE_NAMESPACE_ARG) \
-		-f "$(MODEL_CONFIG)" \
+		-f "$(MODEL_VALUES_FILE)" \
 		$(HELM_MODEL_ARGS) \
 		$(TAKE_OWNERSHIP_ARG) \
 		$(HELM_ARGS) \
@@ -439,6 +451,9 @@ upgrade install: check-model check-helm
 
 .PHONY: deploy
 deploy: check-model
+	@if [[ "$(MODEL_RUNTIME_CONFIGMAP)" == dynamo-modelexpress-runtime-v1 ]]; then \
+		$(MAKE) --no-print-directory runtime-install; \
+	fi
 	@if [[ ! "$(SKIP_BUILD)" =~ ^(1|true|yes)$$ ]]; then \
 		$(MAKE) --no-print-directory build "$(MODEL_CONFIG)"; \
 	fi
@@ -520,6 +535,7 @@ gateway-base: namespace
 		GATEWAY_REQUEST_TIMEOUT="$(GATEWAY_REQUEST_TIMEOUT)" \
 		GATEWAY_PORT="$(GATEWAY_PORT)" \
 		GATEWAY_NODE_PORT="$(GATEWAY_NODE_PORT)" \
+		GATEWAY_INTERNAL_PORT="$(GATEWAY_INTERNAL_PORT)" \
 		GATEWAY_IMAGE_REGISTRY="$(GATEWAY_IMAGE_REGISTRY)" \
 		GATEWAY_IMAGE_REPOSITORY="$(GATEWAY_IMAGE_REPOSITORY)" \
 		GATEWAY_IMAGE_TAG="$(GATEWAY_IMAGE_TAG)" \
@@ -620,3 +636,11 @@ check-scheduling-resilience: check-kubectl check-helm check-python
 		DYNAMO_PLATFORM_VERSION="$(DYNAMO_PLATFORM_VERSION)" \
 		GROVE_TERMINATION_DELAY="$(GROVE_TERMINATION_DELAY)" \
 		scripts/install-scheduling-resilience.sh --check
+
+# Shared, immutable startup scripts are managed by one independent Helm release.
+.PHONY: runtime-render runtime-install
+runtime-render: check-helm
+	@$(HELM) template dynamo-model-runtime charts/dynamo-model-runtime --namespace "$(NAMESPACE)"
+
+runtime-install: check-helm
+	@$(HELM) upgrade --install dynamo-model-runtime charts/dynamo-model-runtime --namespace "$(NAMESPACE)" $(CREATE_NAMESPACE_ARG)

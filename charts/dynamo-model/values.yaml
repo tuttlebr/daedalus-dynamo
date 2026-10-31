@@ -46,6 +46,9 @@ redis:
     minAvailable: 1
 
 modelexpress:
+  # Shared startup ConfigMap, installed once with charts/dynamo-model-runtime.
+  # Empty preserves the existing inline startup contract for current releases.
+  runtimeConfigMap: ""
   # Existing cache volumes were populated by the earlier root-based image.
   securityContext:
     runAsUser: 0
@@ -141,6 +144,8 @@ worker:
     sourceFile: ""
     mountPath: ""
   extraEnv: []
+  # Structured options merge across recipe layers. Existing raw argv stays supported.
+  vllmOptions: {}
   vllmArgs:
     - --served-model-name "${MODEL_NAME}"
     - --frontend-decoding
@@ -161,7 +166,7 @@ worker:
 
 planner:
   enabled: true
-  image: nvcr.io/nvidia/ai-dynamo/dynamo-planner:1.6.0
+  image: nvcr.io/nvidia/ai-dynamo/dynamo-planner:1.6.1
   imagePullPolicy: IfNotPresent
   environment: kubernetes
   mode: agg

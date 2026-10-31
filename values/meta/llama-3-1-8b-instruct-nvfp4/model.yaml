@@ -1,0 +1,11 @@
+# Checkpoint publisher: nvidia; builder: meta.
+extends:
+- ../../_shared/vllm.yaml
+model:
+  id: nvidia/Llama-3.1-8B-Instruct-NVFP4
+modelexpress:
+  modelRevision: bdb54e24298451af785c0ac63c1b485e9b7400a2
+worker:
+  vllmOptions:
+    revision: bdb54e24298451af785c0ac63c1b485e9b7400a2
+    linear-backend: marlin

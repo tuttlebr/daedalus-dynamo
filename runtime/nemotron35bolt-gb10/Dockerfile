@@ -5,7 +5,7 @@ USER root
 
 # Preserve the model-capable vLLM/Torch stack instead of installing [vllm].
 RUN pip install --no-cache-dir \
-      ai-dynamo==1.6.0 \
+      ai-dynamo==1.6.1 \
       modelexpress==0.7.0 \
       b12x==1.5.1 \
       blake3==1.0.8 uvloop==0.22.1 \

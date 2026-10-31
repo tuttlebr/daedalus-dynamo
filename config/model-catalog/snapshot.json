@@ -1,0 +1,1557 @@
+{
+  "schema_version": 1,
+  "retrieved_at": "2026-10-30",
+  "collection_url": "https://huggingface.co/collections/nvidia/inference-optimized-checkpoints-with-model-optimizer",
+  "collection_slug": "nvidia/inference-optimized-checkpoints-with-model-optimizer-66aa84f7966b3150262481a4",
+  "last_updated": "2026-10-20T13:09:31.895Z",
+  "models": [
+    {
+      "id": "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4",
+      "revision": "bee7596271d1495f6992ae224aefde4410e816b8",
+      "pipeline_tag": "text-generation",
+      "base_model": null,
+      "config_status": 200,
+      "weight_bytes": 21561882284,
+      "weight_files": 52,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 21559589596
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4.json.gz",
+      "config_sha256": "63bf7ffb72e3da59a7c7417040cb1d1208a2c37886c422080617cfe29d0d5b43"
+    },
+    {
+      "id": "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4",
+      "revision": "ff433f5493e25d631c9f12b5d55c674229923d02",
+      "pipeline_tag": "text-generation",
+      "base_model": null,
+      "config_status": 200,
+      "weight_bytes": 80317948856,
+      "weight_files": 17,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 67228556288,
+        "total_size": 80297329824
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4.json.gz",
+      "config_sha256": "3254ca6fb96e54ca41c34cd3fed90b9e81b02be72c30ae94b88df9afc838cd9f"
+    },
+    {
+      "id": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4",
+      "revision": "6efb4a2a1c1fa277ce7b3df7a1416255011b1c99",
+      "pipeline_tag": "text-generation",
+      "base_model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16",
+      "config_status": 200,
+      "weight_bytes": 19342796520,
+      "weight_files": 5,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 19339781632
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4.json.gz",
+      "config_sha256": "38c6ac23f95793328c43dda97c81339b3efa6a3c114ac66c7fa06985a8b18ace"
+    },
+    {
+      "id": "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8",
+      "revision": "744b1880a37996c5d56bf454ae164dfd74d77c4e",
+      "pipeline_tag": "text-generation",
+      "base_model": null,
+      "config_status": 200,
+      "weight_bytes": 128350001680,
+      "weight_files": 26,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 123611012096,
+        "total_size": 128334890312
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--NVIDIA-Nemotron-3-Super-120B-A12B-FP8.json.gz",
+      "config_sha256": "375c9881ca32901d0867208f374c216b2d60fbc0fbddbe6d7e28b763ad61972d"
+    },
+    {
+      "id": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-FP8",
+      "revision": "9bee19446c0dfd01f356e10979d225b2a6621944",
+      "pipeline_tag": "text-generation",
+      "base_model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16",
+      "config_status": 200,
+      "weight_bytes": 32682163504,
+      "weight_files": 9,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 32679949312
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--NVIDIA-Nemotron-3-Nano-30B-A3B-FP8.json.gz",
+      "config_sha256": "38c6ac23f95793328c43dda97c81339b3efa6a3c114ac66c7fa06985a8b18ace"
+    },
+    {
+      "id": "nvidia/GLM-5.2-NVFP4",
+      "revision": "53e0691e21895a3863a606dfd12910c69eba94ab",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "zai-org/GLM-5.2"
+      ],
+      "config_status": 200,
+      "weight_bytes": 464823042096,
+      "weight_files": 47,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 380989135104,
+        "total_size": 464795267072
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--GLM-5.2-NVFP4.json.gz",
+      "config_sha256": "5dfd7347e0317debcddc4e1daed62562a87e83424bb40346fd97235d3c96ef26"
+    },
+    {
+      "id": "nvidia/DeepSeek-V4-Pro-NVFP4",
+      "revision": "1449d1e641023406daf6b432361486c768aad740",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "deepseek-ai/DeepSeek-V4-Pro"
+      ],
+      "config_status": 200,
+      "weight_bytes": 913092561960,
+      "weight_files": 64,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 913061485688
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--DeepSeek-V4-Pro-NVFP4.json.gz",
+      "config_sha256": "a2152b4ee42380c165d598d6e942b8266aa75d8eb8b3d7992d6fdead1a21d020"
+    },
+    {
+      "id": "nvidia/Qwen3.5-397B-A17B-NVFP4",
+      "revision": "12b28061efd8145b11226e4fab2528ee4f39ef09",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen3.5-397B-A17B"
+      ],
+      "config_status": 200,
+      "weight_bytes": 251185775993,
+      "weight_files": 11,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 203528832496,
+        "total_size": 251135201368
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3.5-397B-A17B-NVFP4.json.gz",
+      "config_sha256": "6a1ba4ebf76375496a9b404cedd11b674331a7f9e3196c6a2b8e09ad2b9533bc"
+    },
+    {
+      "id": "nvidia/Kimi-K2.6-NVFP4",
+      "revision": "2fd3a800dedd098b8327eb49e93ebc75f85da19f",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "moonshotai/Kimi-K2.6"
+      ],
+      "config_status": 200,
+      "weight_bytes": 595185406664,
+      "weight_files": 60,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 519536364528,
+        "total_size": 595148146656
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Kimi-K2.6-NVFP4.json.gz",
+      "config_sha256": "6fafdb5349f733faab5f251562c72deaee51b7b09bf93e58ae85d96c3d0244bf"
+    },
+    {
+      "id": "nvidia/Kimi-K2.5-NVFP4",
+      "revision": "0fd0a5e6879298d3476e3b61852a79792a35ae3d",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "moonshotai/Kimi-K2.5"
+      ],
+      "config_status": 200,
+      "weight_bytes": 590817155992,
+      "weight_files": 119,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 518016977904,
+        "total_size": 590779912064
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Kimi-K2.5-NVFP4.json.gz",
+      "config_sha256": "b5bd66a4d4adb035c84c0d0580c6b6ae9b934ed0461228452806c7089efe7e43"
+    },
+    {
+      "id": "nvidia/Qwen3-VL-235B-A22B-Instruct-NVFP4",
+      "revision": "871d38d02226334efbf047f7186f57c64a146ac4",
+      "pipeline_tag": null,
+      "base_model": [
+        "Qwen/Qwen3-VL-235B-A22B-Instruct"
+      ],
+      "config_status": 200,
+      "weight_bytes": 135273985696,
+      "weight_files": 28,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 118770576112,
+        "total_size": 135254428816
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3-VL-235B-A22B-Instruct-NVFP4.json.gz",
+      "config_sha256": "4b8038d9abe0854811945358b08f0408a32ccc4f29f7f145a4e10274bba2651d"
+    },
+    {
+      "id": "nvidia/GLM-5-NVFP4",
+      "revision": "dc54ff55a7e9e71b85db953d8bc22eca894b44c6",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "zai-org/GLM-5"
+      ],
+      "config_status": 200,
+      "weight_bytes": 460845516933,
+      "weight_files": 282,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 460817131856
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--GLM-5-NVFP4.json.gz",
+      "config_sha256": "810821daa457b6f001367970d4cb3fc506d2520cc255365ed4dca95f03d40b14"
+    },
+    {
+      "id": "nvidia/MiniMax-M2.7-NVFP4",
+      "revision": "e79701cb1f9dce8fe5395b9ed2b20170beebecde",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "MiniMaxAI/MiniMax-M2.7"
+      ],
+      "config_status": 200,
+      "weight_bytes": 139887447904,
+      "weight_files": 15,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 116349510656,
+        "total_size": 139862709248
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--MiniMax-M2.7-NVFP4.json.gz",
+      "config_sha256": "05c5b48e5aeecb420f757c4ceede022c63b2d6f9564204949afee0962c39f544"
+    },
+    {
+      "id": "nvidia/GLM-5.1-NVFP4",
+      "revision": "9116eb1c3ef24dd38dfe61e2eb71399ddd8070c8",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "zai-org/GLM-5.1"
+      ],
+      "config_status": 200,
+      "weight_bytes": 465891474512,
+      "weight_files": 49,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 381523333632,
+        "total_size": 465863664128
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--GLM-5.1-NVFP4.json.gz",
+      "config_sha256": "96b1cebfc582a5f2f13f68f5010a8d57c896ecb125ebbb2a72673b4781057cde"
+    },
+    {
+      "id": "nvidia/diffusiongemma-26B-A4B-it-NVFP4",
+      "revision": "ec4ff3df205028f4e81c954c2227f9312b3ec2ea",
+      "pipeline_tag": "text-generation",
+      "base_model": "google/diffusiongemma-26B-A4B-it",
+      "config_status": 200,
+      "weight_bytes": 18823855888,
+      "weight_files": 2,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 14404786224,
+        "total_size": 18818050776
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--diffusiongemma-26B-A4B-it-NVFP4.json.gz",
+      "config_sha256": "54ad216604cb60a0dfb56cd77d5d74eaa91e376fbda1937341bb100785e73c79"
+    },
+    {
+      "id": "nvidia/MiniMax-M3-NVFP4",
+      "revision": "901464083161bf8612a29ff7ad29914cd4ab4a85",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "MiniMaxAI/MiniMax-M3"
+      ],
+      "config_status": 200,
+      "weight_bytes": 250103762320,
+      "weight_files": 88,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "format": "pt"
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--MiniMax-M3-NVFP4.json.gz",
+      "config_sha256": "253baf6ff1be926ecbcb54a5dc09c5a0b51db08ed789b953ced06f3ff00dae2e"
+    },
+    {
+      "id": "nvidia/MiniMax-M2.5-NVFP4",
+      "revision": "b6220d658389629b9d507d4b2bb314f41fea7898",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "MiniMaxAI/MiniMax-M2.5"
+      ],
+      "config_status": 200,
+      "weight_bytes": 139887054064,
+      "weight_files": 29,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 116349510656,
+        "total_size": 139862709744
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--MiniMax-M2.5-NVFP4.json.gz",
+      "config_sha256": "3c3deb12a9157fa880e2e72b8708963170304aa9fb8a5f1a7cac4e939ca2a4c9"
+    },
+    {
+      "id": "nvidia/Gemma-4-31B-IT-NVFP4",
+      "revision": "4135a98a9b728a548947683219633b25682223ac",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "google/gemma-4-31B-it"
+      ],
+      "config_status": 200,
+      "weight_bytes": 32633477808,
+      "weight_files": 4,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 20868591152,
+        "total_size": 32633255032
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Gemma-4-31B-IT-NVFP4.json.gz",
+      "config_sha256": "665c98d8d45bb838258dc20882648fb5a877ca74ec706b7bb8ee1bb2eae8bbab"
+    },
+    {
+      "id": "nvidia/Gemma-4-26B-A4B-NVFP4",
+      "revision": "a19cfe00be84568a6867111c9a68c9c44fdcffe6",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "google/gemma-4-26B-A4B-it"
+      ],
+      "config_status": 200,
+      "weight_bytes": 18788485588,
+      "weight_files": 2,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 14386941232,
+        "total_size": 18782360732
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Gemma-4-26B-A4B-NVFP4.json.gz",
+      "config_sha256": "4345ba20d56d454f6ec0352fffd65f483f75eb2dbaaaca386f26a6af2bfd3f59"
+    },
+    {
+      "id": "nvidia/Wan2.2-T2V-A14B-Diffusers-NVFP4",
+      "revision": "fa39ec9ba9c9d88ce2a42be69af9f7bc91e8a864",
+      "pipeline_tag": "text-to-video",
+      "base_model": [
+        "Wan-AI/Wan2.2-T2V-A14B-Diffusers"
+      ],
+      "config_status": 404,
+      "weight_bytes": 34549866806,
+      "weight_files": 7,
+      "weight_source": "all safetensors file sizes",
+      "index_metadata": null
+    },
+    {
+      "id": "nvidia/Qwen3.6-35B-A3B-NVFP4",
+      "revision": "1355db6a052410cfd62085d94b58866fd0f2c3c5",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen3.6-35B-A3B"
+      ],
+      "config_status": 200,
+      "weight_bytes": 23424338320,
+      "weight_files": 3,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 18683860336,
+        "total_size": 23407580856
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3.6-35B-A3B-NVFP4.json.gz",
+      "config_sha256": "119b9e3da470f9ed3c0477f31c179fd4e4113a07d915a5bc3baebf5af2e1091b"
+    },
+    {
+      "id": "nvidia/DeepSeek-R1-0528-NVFP4-v2",
+      "revision": "25a138f28f49022958b9f2d205f9b7de0cdb6e18",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "deepseek-ai/DeepSeek-R1-0528"
+      ],
+      "config_status": 200,
+      "weight_bytes": 413328348544,
+      "weight_files": 163,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {},
+      "config_file": "config/model-catalog/hf-configs/nvidia--DeepSeek-R1-0528-NVFP4-v2.json.gz",
+      "config_sha256": "be5caf914fbc11c5f878ca13fe26227876e84e575e1af38bedfefe889af0a4bc"
+    },
+    {
+      "id": "nvidia/Kimi-K2-Thinking-NVFP4",
+      "revision": "fdb56e078abe797d1710b102d0acf62bb8aee90b",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "moonshotai/Kimi-K2-Thinking"
+      ],
+      "config_status": 200,
+      "weight_bytes": 594238829536,
+      "weight_files": 119,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 519065220608,
+        "total_size": 594205859304
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Kimi-K2-Thinking-NVFP4.json.gz",
+      "config_sha256": "b47ff9f9509669e6f35fe5c437d44ae2a3ad0a6a9e9cb5954ce9d15c0c52958f"
+    },
+    {
+      "id": "nvidia/Qwen3-Next-80B-A3B-Thinking-NVFP4",
+      "revision": "2adcdd3e2482cd6fa1676b4f8e6f459a28796f08",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen3-Next-80B-A3B-Thinking"
+      ],
+      "config_status": 200,
+      "weight_bytes": 50757748320,
+      "weight_files": 11,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 40742861568,
+        "total_size": 50722168928
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3-Next-80B-A3B-Thinking-NVFP4.json.gz",
+      "config_sha256": "d01625a2e07f8958d31abbd72526745206fca721015ddaf2de2b8a4027f640d1"
+    },
+    {
+      "id": "nvidia/Qwen3-Next-80B-A3B-Instruct-NVFP4",
+      "revision": "8fb2682f136cf94d932a498f18cb1e428832a912",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen3-Next-80B-A3B-Instruct"
+      ],
+      "config_status": 200,
+      "weight_bytes": 50757748320,
+      "weight_files": 11,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 40742861568,
+        "total_size": 50722168928
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3-Next-80B-A3B-Instruct-NVFP4.json.gz",
+      "config_sha256": "c218c88e682099dee7e219040cda810d1bbe43b89613a3415df65a58f70af956"
+    },
+    {
+      "id": "nvidia/Llama-3.3-70B-Instruct-NVFP4",
+      "revision": "f792b707002f2c613e0729c6b37bbcedc4efa94e",
+      "pipeline_tag": null,
+      "base_model": [
+        "meta-llama/Llama-3.3-70B-Instruct"
+      ],
+      "config_status": 200,
+      "weight_bytes": 42709324392,
+      "weight_files": 9,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 42709045632
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Llama-3.3-70B-Instruct-NVFP4.json.gz",
+      "config_sha256": "14f510806a476495078bee9606cd67ad63c44f7173acc4e66688f11f0c17cc50"
+    },
+    {
+      "id": "nvidia/Llama-3.3-70B-Instruct-FP8",
+      "revision": "fde04ee76a27704c88f569542ef023b57d4d0362",
+      "pipeline_tag": null,
+      "base_model": [
+        "meta-llama/Llama-3.3-70B-Instruct"
+      ],
+      "config_status": 200,
+      "weight_bytes": 72656585760,
+      "weight_files": 15,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 72656376832
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Llama-3.3-70B-Instruct-FP8.json.gz",
+      "config_sha256": "691a09abb40a1bab297721453978fe81b193626a6214b909ed26ab0d5f02e3f9"
+    },
+    {
+      "id": "nvidia/Qwen3-235B-A22B-FP8",
+      "revision": "de5e21de92224fc03193bb87675cd5d3b5852f04",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen3-235B-A22B"
+      ],
+      "config_status": 200,
+      "weight_bytes": 236401310448,
+      "weight_files": 48,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 236388668080
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3-235B-A22B-FP8.json.gz",
+      "config_sha256": "621ca5e3530762e6f2a9a6324d3931fc745829e3aace925d893b3e7ca17a59ce"
+    },
+    {
+      "id": "nvidia/Llama-3.1-8B-Instruct-NVFP4",
+      "revision": "bdb54e24298451af785c0ac63c1b485e9b7400a2",
+      "pipeline_tag": null,
+      "base_model": [
+        "meta-llama/Llama-3.1-8B-Instruct"
+      ],
+      "config_status": 200,
+      "weight_bytes": 6027861376,
+      "weight_files": 2,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 4540600320,
+        "total_size": 6027749376
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Llama-3.1-8B-Instruct-NVFP4.json.gz",
+      "config_sha256": "8fc0c7829a4600e9782272db412eca91a8a004201974df286d3d631a3a457e1d"
+    },
+    {
+      "id": "nvidia/Llama-3.1-8B-Instruct-FP8",
+      "revision": "42d9515ebd69eea3a87351d079c671c3c5ff0a31",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "meta-llama/Llama-3.1-8B-Instruct"
+      ],
+      "config_status": 200,
+      "weight_bytes": 9081287040,
+      "weight_files": 2,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 9081202688
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Llama-3.1-8B-Instruct-FP8.json.gz",
+      "config_sha256": "d6f4449ab078918595acba16c2602413cbed8b80be9fba7430743862971ff1b7"
+    },
+    {
+      "id": "nvidia/Qwen3-30B-A3B-NVFP4",
+      "revision": "2538ded2a4edb247b4d2b4a8ba24e44bd4c017c3",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen3-30B-A3B"
+      ],
+      "config_status": 200,
+      "weight_bytes": 18096329088,
+      "weight_files": 4,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 15583623168,
+        "total_size": 18087458688
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3-30B-A3B-NVFP4.json.gz",
+      "config_sha256": "e7c8040909919b70da182daccf00061a0f6b097b4400766f03ec6baba4d82e5b"
+    },
+    {
+      "id": "nvidia/DeepSeek-R1-0528-NVFP4",
+      "revision": "14d2781f5bbc3578387152af672558efc1d093f5",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "deepseek-ai/DeepSeek-R1-0528"
+      ],
+      "config_status": 200,
+      "weight_bytes": 423626409168,
+      "weight_files": 163,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {},
+      "config_file": "config/model-catalog/hf-configs/nvidia--DeepSeek-R1-0528-NVFP4.json.gz",
+      "config_sha256": "be5caf914fbc11c5f878ca13fe26227876e84e575e1af38bedfefe889af0a4bc"
+    },
+    {
+      "id": "nvidia/Qwen3-235B-A22B-NVFP4",
+      "revision": "21cfa2c9e152032eb60647ee7b46a2bbcd8d76d2",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen3-235B-A22B"
+      ],
+      "config_status": 200,
+      "weight_bytes": 134118973816,
+      "weight_files": 27,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 134101652144
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3-235B-A22B-NVFP4.json.gz",
+      "config_sha256": "621ca5e3530762e6f2a9a6324d3931fc745829e3aace925d893b3e7ca17a59ce"
+    },
+    {
+      "id": "nvidia/Qwen3-32B-NVFP4",
+      "revision": "16426c6eb87be9e27c14cc9fb318f9c7a5f8588c",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen3-32B"
+      ],
+      "config_status": 200,
+      "weight_bytes": 20666404224,
+      "weight_files": 5,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 17159312384,
+        "total_size": 20666169344
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3-32B-NVFP4.json.gz",
+      "config_sha256": "a805e6dfa88742fbdb68eaef3859dc2dee6a3d7c4ab09432787800135e9d4606"
+    },
+    {
+      "id": "nvidia/Qwen3-14B-NVFP4",
+      "revision": "bc39319a4dc265d9bbb9a9731bc52c4988d9ece7",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen3-14B"
+      ],
+      "config_status": 200,
+      "weight_bytes": 10544431632,
+      "weight_files": 3,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 8162278400,
+        "total_size": 10544284160
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3-14B-NVFP4.json.gz",
+      "config_sha256": "ed25af2a9ecf045e851470d9808eaa7d1610f01bb8dc411f751cd7d02b54e23c"
+    },
+    {
+      "id": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8",
+      "revision": "0acd4b1c237eab45d3977b1b46631919e9a75774",
+      "pipeline_tag": "any-to-any",
+      "base_model": [
+        "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16"
+      ],
+      "config_status": 200,
+      "weight_bytes": 35185309520,
+      "weight_files": 4,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 33013679040,
+        "total_size": 35182645728
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8.json.gz",
+      "config_sha256": "5fcde41539b04a5d6c2a7572132310ae44be04f173fb6a1965f91d2156418ddf"
+    },
+    {
+      "id": "nvidia/Qwen3-14B-FP8",
+      "revision": "b30b0a0ff7b2f14259b859681a8e2b1c2f2b8117",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen3-14B"
+      ],
+      "config_status": 200,
+      "weight_bytes": 16324672552,
+      "weight_files": 4,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 14768307200,
+        "total_size": 16324559360
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3-14B-FP8.json.gz",
+      "config_sha256": "32bc42960a10df973b2dc6c9ff51811b2eb57928a2035c6ded5960bc82809e10"
+    },
+    {
+      "id": "nvidia/Qwen3-8B-NVFP4",
+      "revision": "ccd10a893cbca613259517c3efe08e151ddf2b8e",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen3-8B"
+      ],
+      "config_status": 200,
+      "weight_bytes": 6397066384,
+      "weight_files": 2,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 4717851648,
+        "total_size": 6396932352
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3-8B-NVFP4.json.gz",
+      "config_sha256": "5344735c855b5a302503359bf336e07934924c65be524be35eb5b3f739e1847b"
+    },
+    {
+      "id": "nvidia/Qwen3-8B-FP8",
+      "revision": "2cebc4c89e25abc17668c81b01dceaf3d8b914d5",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen3-8B"
+      ],
+      "config_status": 200,
+      "weight_bytes": 9435808600,
+      "weight_files": 2,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 8190735360,
+        "total_size": 9435705600
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3-8B-FP8.json.gz",
+      "config_sha256": "e350369f89f9895c9848bdbf91129898d3fb1d87a4cb2ffc47d2d58574961383"
+    },
+    {
+      "id": "nvidia/Llama-3_3-Nemotron-Super-49B-v1_5-FP8",
+      "revision": "04822723e77e036ddf2d24e83c6d469d3b009252",
+      "pipeline_tag": "text-generation",
+      "base_model": null,
+      "config_status": 200,
+      "weight_bytes": 51969720616,
+      "weight_files": 11,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 49867145216,
+        "total_size": 51969560360
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Llama-3_3-Nemotron-Super-49B-v1_5-FP8.json.gz",
+      "config_sha256": "98eac4c07b567521d01a28a74a5a0959deeaa3e63d9a8a71bc2b3c97bb082c9f"
+    },
+    {
+      "id": "nvidia/Llama-3_1-Nemotron-Ultra-253B-v1-FP8",
+      "revision": "069d35811ba17b27c5e7a9def076ed4788679819",
+      "pipeline_tag": "text-generation",
+      "base_model": null,
+      "config_status": 200,
+      "weight_bytes": 257606543512,
+      "weight_files": 52,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 257606357400
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Llama-3_1-Nemotron-Ultra-253B-v1-FP8.json.gz",
+      "config_sha256": "2221d52400a73c2abeb99351f2d4d03192deb402d247d96c640760e3a316b263"
+    },
+    {
+      "id": "nvidia/Llama-4-Scout-17B-16E-Instruct-NVFP4",
+      "revision": "9417590c9bc99b359f3ac66d1346ecd54249888e",
+      "pipeline_tag": null,
+      "base_model": [
+        "meta-llama/Llama-4-Scout-17B-16E-Instruct"
+      ],
+      "config_status": 401,
+      "weight_bytes": 65345259392,
+      "weight_files": 14,
+      "weight_source": "all safetensors file sizes",
+      "index_metadata": null
+    },
+    {
+      "id": "nvidia/Llama-4-Scout-17B-16E-Instruct-FP8",
+      "revision": "3c0175a5a4a66f8e139faf93ddeb7d2741ff3560",
+      "pipeline_tag": null,
+      "base_model": [
+        "meta-llama/Llama-4-Scout-17B-16E-Instruct"
+      ],
+      "config_status": 401,
+      "weight_bytes": 111587397528,
+      "weight_files": 26,
+      "weight_source": "all safetensors file sizes",
+      "index_metadata": null
+    },
+    {
+      "id": "nvidia/Llama-4-Maverick-17B-128E-Instruct-FP8",
+      "revision": "e91306aa6edc0a8b551b1815027163646638d252",
+      "pipeline_tag": null,
+      "base_model": [
+        "meta-llama/Llama-4-Maverick-17B-128E-Instruct"
+      ],
+      "config_status": 401,
+      "weight_bytes": 404541157144,
+      "weight_files": 52,
+      "weight_source": "all safetensors file sizes",
+      "index_metadata": null
+    },
+    {
+      "id": "nvidia/Phi-4-reasoning-plus-FP8",
+      "revision": "18abf8a59bd8ff0b79ec712863a153becc6cdaeb",
+      "pipeline_tag": null,
+      "base_model": [
+        "microsoft/Phi-4-reasoning-plus"
+      ],
+      "config_status": 200,
+      "weight_bytes": 15687595640,
+      "weight_files": 4,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 14659507200,
+        "total_size": 15687528000
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Phi-4-reasoning-plus-FP8.json.gz",
+      "config_sha256": "bbf22e6ba6df9ee4981c66c458141e5500e0d89297a558a88ffe390347e8c4ec"
+    },
+    {
+      "id": "nvidia/Qwen2.5-VL-7B-Instruct-NVFP4",
+      "revision": "d13bb1f2d8fbbd9f16cbb7688c8d6b6932d797d7",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen2.5-VL-7B-Instruct"
+      ],
+      "config_status": 200,
+      "weight_bytes": 7204376520,
+      "weight_files": 2,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 5029522432,
+        "total_size": 7204232736
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen2.5-VL-7B-Instruct-NVFP4.json.gz",
+      "config_sha256": "69e93cda6ece35bdd96421ca2e8ed06f12405c1bb3552e97bead1d5193190fe6"
+    },
+    {
+      "id": "black-forest-labs/FLUX.1-dev-onnx",
+      "revision": "7aecb764a692fe0a3bb5c2d30ee3325e7d2f97a4",
+      "pipeline_tag": "text-to-image",
+      "base_model": null,
+      "config_status": 401,
+      "weight_bytes": 0,
+      "weight_files": 0,
+      "weight_source": "all safetensors file sizes",
+      "index_metadata": null
+    },
+    {
+      "id": "nvidia/DeepSeek-R1-NVFP4",
+      "revision": "4bedb8a695a119b1a38d16a675c4665e58708aea",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "deepseek-ai/DeepSeek-R1"
+      ],
+      "config_status": 200,
+      "weight_bytes": 423626487880,
+      "weight_files": 80,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 423626487880
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--DeepSeek-R1-NVFP4.json.gz",
+      "config_sha256": "356013f93c18e3e2ae3dff9da487d453017064556649a1e80afa40c201778472"
+    },
+    {
+      "id": "nvidia/DeepSeek-R1-NVFP4-v2",
+      "revision": "bfae149dc1d5ab8deb9a618fb8c84c7aed749933",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "deepseek-ai/DeepSeek-R1"
+      ],
+      "config_status": 200,
+      "weight_bytes": 413328348544,
+      "weight_files": 163,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {},
+      "config_file": "config/model-catalog/hf-configs/nvidia--DeepSeek-R1-NVFP4-v2.json.gz",
+      "config_sha256": "356013f93c18e3e2ae3dff9da487d453017064556649a1e80afa40c201778472"
+    },
+    {
+      "id": "nvidia/DeepSeek-V3-0324-NVFP4",
+      "revision": "d03662cdc34b56eab1315d4557e395e6b4944782",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "deepseek-ai/DeepSeek-V3-0324"
+      ],
+      "config_status": 200,
+      "weight_bytes": 423626487880,
+      "weight_files": 80,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 423626487880
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--DeepSeek-V3-0324-NVFP4.json.gz",
+      "config_sha256": "356013f93c18e3e2ae3dff9da487d453017064556649a1e80afa40c201778472"
+    },
+    {
+      "id": "nvidia/Llama-3_3-Nemotron-Super-49B-v1-FP8",
+      "revision": "bc7d3c23b806e89a68f7399989fffae112c36054",
+      "pipeline_tag": "text-generation",
+      "base_model": null,
+      "config_status": 200,
+      "weight_bytes": 51969720616,
+      "weight_files": 11,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 51969560360
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Llama-3_3-Nemotron-Super-49B-v1-FP8.json.gz",
+      "config_sha256": "17d1403e72bb47640f5371904b0fd0c763fdbafc9a2ce45f58c691da459e5db7"
+    },
+    {
+      "id": "nvidia/Llama-3.1-70B-Instruct-FP8",
+      "revision": "07a08be3d8a8f5254c2aba375b79743bca8fd491",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "meta-llama/Llama-3.1-70B-Instruct"
+      ],
+      "config_status": 200,
+      "weight_bytes": 72656585760,
+      "weight_files": 15,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 72656376832
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Llama-3.1-70B-Instruct-FP8.json.gz",
+      "config_sha256": "b59b835aabf458af1ab421c39ed2e121747a98d0c9e445de8ee36a2a471d99e6"
+    },
+    {
+      "id": "nvidia/Llama-3.1-405B-Instruct-FP8",
+      "revision": "55a1cd4cc02cdec8eabebf7715e9b81c0fe58e91",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "meta-llama/Llama-3.1-405B-Instruct"
+      ],
+      "config_status": 200,
+      "weight_bytes": 410060564704,
+      "weight_files": 86,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 410060234624
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Llama-3.1-405B-Instruct-FP8.json.gz",
+      "config_sha256": "8023059ce29e0cbe21b5520013357e82491f38f01649d7ebfe7f9629a6efc072"
+    },
+    {
+      "id": "nvidia/Llama-3.1-405B-Instruct-NVFP4",
+      "revision": "8ddfc523e75da0cd52d8d486895aa984282f6db9",
+      "pipeline_tag": null,
+      "base_model": [
+        "meta-llama/Llama-3.1-405B-Instruct"
+      ],
+      "config_status": 200,
+      "weight_bytes": 234340306864,
+      "weight_files": 49,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 234339868040
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Llama-3.1-405B-Instruct-NVFP4.json.gz",
+      "config_sha256": "b9b048bfef16e09c8bc48be35ed2d7f5bdbfe2786038441a3a403f7aeeb8f203"
+    },
+    {
+      "id": "nvidia/Phi-4-multimodal-instruct-NVFP4",
+      "revision": "617cfabb9ad6c2c6e318fd21c1961536b84f65a1",
+      "pipeline_tag": null,
+      "base_model": [
+        "microsoft/Phi-4-multimodal-instruct"
+      ],
+      "config_status": 200,
+      "weight_bytes": 7256962048,
+      "weight_files": 2,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 7256607680
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Phi-4-multimodal-instruct-NVFP4.json.gz",
+      "config_sha256": "c3267875a5b584ee1e992bd4e342cd11a26d57361c3ac9e3c1904bf6926052c3"
+    },
+    {
+      "id": "nvidia/Phi-4-multimodal-instruct-FP8",
+      "revision": "d822efce23f65f86c165aeed435cc27092e21d60",
+      "pipeline_tag": null,
+      "base_model": [
+        "microsoft/Phi-4-multimodal-instruct"
+      ],
+      "config_status": 200,
+      "weight_bytes": 8666231200,
+      "weight_files": 2,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 8665893824
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Phi-4-multimodal-instruct-FP8.json.gz",
+      "config_sha256": "45db6c294403f1e4f0e84c96a84498692399f922d7c155a8a2e34228efdb8aed"
+    },
+    {
+      "id": "nvidia/Phi-4-reasoning-plus-NVFP4",
+      "revision": "cb950fd61cdbfa8e0f467ace3087c7d32ea8a47b",
+      "pipeline_tag": null,
+      "base_model": [
+        "microsoft/Phi-4-reasoning-plus"
+      ],
+      "config_status": 200,
+      "weight_bytes": 9723839816,
+      "weight_files": 2,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 7843763200,
+        "total_size": 9723752000
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Phi-4-reasoning-plus-NVFP4.json.gz",
+      "config_sha256": "8110d6b747a1a42dbc9d65e39dc2e025a43bf9a17ee4134a4af59d22987acc2e"
+    },
+    {
+      "id": "nvidia/Qwen2.5-VL-7B-Instruct-FP8",
+      "revision": "470c50cb578da41329eb79bba128da173a0eeb31",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen2.5-VL-7B-Instruct"
+      ],
+      "config_status": 200,
+      "weight_bytes": 10059165664,
+      "weight_files": 3,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 8292166656,
+        "total_size": 10059046432
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen2.5-VL-7B-Instruct-FP8.json.gz",
+      "config_sha256": "333a6d6099b5e1d0212c3a210daede560b0d80bcbf8e3bb7ced9ac16a665a85d"
+    },
+    {
+      "id": "nvidia/DeepSeek-V3.1-NVFP4",
+      "revision": "68b4a17cce1482e94030ca00dacda3dec4c6359d",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "deepseek-ai/DeepSeek-V3.1"
+      ],
+      "config_status": 200,
+      "weight_bytes": 413328348544,
+      "weight_files": 163,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {},
+      "config_file": "config/model-catalog/hf-configs/nvidia--DeepSeek-V3.1-NVFP4.json.gz",
+      "config_sha256": "3360130a559ec396d5aa8a2d9cb2012d696cb318c4d59b39de71461942c22c4e"
+    },
+    {
+      "id": "nvidia/DeepSeek-V3.2-NVFP4",
+      "revision": "7c0f62c6da1da0c81c6e097010cc55854d206812",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "deepseek-ai/DeepSeek-V3.2"
+      ],
+      "config_status": 200,
+      "weight_bytes": 415061565152,
+      "weight_files": 163,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {},
+      "config_file": "config/model-catalog/hf-configs/nvidia--DeepSeek-V3.2-NVFP4.json.gz",
+      "config_sha256": "f8137597b151a9c766783fd3f0bd3bfa0466678adf3ba2f594da3fcc61ca8f78"
+    },
+    {
+      "id": "nvidia/Qwen3-Coder-480B-A35B-Instruct-NVFP4",
+      "revision": "7cd997a9ba42019dd3da402a106744f9b50d26c6",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen3-Coder-480B-A35B-Instruct"
+      ],
+      "config_status": 200,
+      "weight_bytes": 272874140696,
+      "weight_files": 55,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 241041798656,
+        "total_size": 272859895728
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3-Coder-480B-A35B-Instruct-NVFP4.json.gz",
+      "config_sha256": "667fcfe35c698d53fac0f4091174800b80c78b0d5ca7c5a756b26b1f8c3086e0"
+    },
+    {
+      "id": "nvidia/Qwen3-235B-A22B-Thinking-2507-NVFP4",
+      "revision": "963445d1b9d3318cae13a4477bdfae4c2c6dab1e",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen3-235B-A22B-Thinking-2507"
+      ],
+      "config_status": 200,
+      "weight_bytes": 139219687472,
+      "weight_files": 28,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 119968378368,
+        "total_size": 139202447840
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3-235B-A22B-Thinking-2507-NVFP4.json.gz",
+      "config_sha256": "40d919518a1085e0cc1b1e6b3bcc7dd7650df8c1db4e27bda8c62cb8bdb225d5"
+    },
+    {
+      "id": "nvidia/Qwen3-235B-A22B-Instruct-2507-NVFP4",
+      "revision": "1c4ec35802abf3a20672be7e5c51a098796f71d6",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen3-235B-A22B-Instruct-2507"
+      ],
+      "config_status": 200,
+      "weight_bytes": 139219687472,
+      "weight_files": 28,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 119968378368,
+        "total_size": 139202447840
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3-235B-A22B-Instruct-2507-NVFP4.json.gz",
+      "config_sha256": "40d919518a1085e0cc1b1e6b3bcc7dd7650df8c1db4e27bda8c62cb8bdb225d5"
+    },
+    {
+      "id": "nvidia/GLM-4.7-NVFP4",
+      "revision": "47fa7dc885a174b67af8eb53d3cd4f9c72f0fbf7",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "zai-org/GLM-4.7"
+      ],
+      "config_status": 200,
+      "weight_bytes": 229916297608,
+      "weight_files": 45,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 183482937344,
+        "total_size": 229895746304
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--GLM-4.7-NVFP4.json.gz",
+      "config_sha256": "98dff644b9e8773f01ff8a48799e113ad723c64e72153a6cfb91d17db9707b98"
+    },
+    {
+      "id": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4",
+      "revision": "16993199e436da4ba75ddc410855f87e0d996ee6",
+      "pipeline_tag": "any-to-any",
+      "base_model": [
+        "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16"
+      ],
+      "config_status": 200,
+      "weight_bytes": 22409034192,
+      "weight_files": 3,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 18326275008,
+        "total_size": 22405484880
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4.json.gz",
+      "config_sha256": "9e5360b547e47798028aa65f0abb58017de9aef66d8fb568b6e57c1127f8be06"
+    },
+    {
+      "id": "nvidia/Wan2.2-T2V-A14B-Diffusers-FP8",
+      "revision": "cc82ea0037efe15025ccc5f066b333e1478b818a",
+      "pipeline_tag": "text-to-video",
+      "base_model": [
+        "Wan-AI/Wan2.2-T2V-A14B-Diffusers"
+      ],
+      "config_status": 404,
+      "weight_bytes": 45000158054,
+      "weight_files": 7,
+      "weight_source": "all safetensors file sizes",
+      "index_metadata": null
+    },
+    {
+      "id": "stepfun-ai/Step-3.7-Flash-NVFP4",
+      "revision": "4275532ffd9a9496ff36b7a2dc4a9db1048da438",
+      "pipeline_tag": "image-text-to-text",
+      "base_model": null,
+      "config_status": 200,
+      "weight_bytes": 129241604232,
+      "weight_files": 14,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 103810330432,
+        "total_size": 129241604232
+      },
+      "config_file": "config/model-catalog/hf-configs/stepfun-ai--Step-3.7-Flash-NVFP4.json.gz",
+      "config_sha256": "afcff9cd9d1fd9d68dbfe6e8737b2183636a8bd13cec320d2dd34f8eda71b18a"
+    },
+    {
+      "id": "nvidia/Qwen3.5-122B-A10B-NVFP4",
+      "revision": "98915d837c4e7c87ac8296d02e89de19b3207e6d",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen3.5-122B-A10B"
+      ],
+      "config_status": 200,
+      "weight_bytes": 83495005008,
+      "weight_files": 9,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 64580759280,
+        "total_size": 83474870752
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3.5-122B-A10B-NVFP4.json.gz",
+      "config_sha256": "3018bded111e0e8d03ff6f35996029a2d4ae7734e08e0d41cde13f9a0ffcfaaf"
+    },
+    {
+      "id": "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4",
+      "revision": "02462641f13d3af838b904f48195b9bb8a1e4ebc",
+      "pipeline_tag": "text-generation",
+      "base_model": null,
+      "config_status": 200,
+      "weight_bytes": 352308689576,
+      "weight_files": 113,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 352284061280
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4.json.gz",
+      "config_sha256": "245485321e9085e22570587bf036c4a36db232ec0d0a643c309cfd2ff155fbf1"
+    },
+    {
+      "id": "nvidia/DeepSeek-V4-Flash-NVFP4",
+      "revision": "e3cd60e7de98e9867116860d522499a728de1cf9",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "deepseek-ai/DeepSeek-V4-Flash"
+      ],
+      "config_status": 200,
+      "weight_bytes": 168281985176,
+      "weight_files": 46,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 168266793544
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--DeepSeek-V4-Flash-NVFP4.json.gz",
+      "config_sha256": "ab91db1b99c6108616a39a2f751fad3cb3fcba658063b72816545fc3ff99bd65"
+    },
+    {
+      "id": "nvidia/Qwen3.6-27B-NVFP4",
+      "revision": "0893e1606ff3d5f97a441f405d5fc541a6bdf404",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen3.6-27B"
+      ],
+      "config_status": 200,
+      "weight_bytes": 21921697184,
+      "weight_files": 3,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 18164649200,
+        "total_size": 21921428072
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3.6-27B-NVFP4.json.gz",
+      "config_sha256": "0d3af3f079d1d269ab162a2e724d95f9308ab699d2f8c68545193070c5858ae7"
+    },
+    {
+      "id": "nvidia/Mistral-Medium-3.5-128B-NVFP4",
+      "revision": "b8c66d2098edd8c9c26bde2b2ff41b5967e111ae",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "mistralai/Mistral-Medium-3.5-128B"
+      ],
+      "config_status": 200,
+      "weight_bytes": 95225244904,
+      "weight_files": 10,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 83840179560,
+        "total_size": 95224812960
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Mistral-Medium-3.5-128B-NVFP4.json.gz",
+      "config_sha256": "d75a5de96d53f3b851b61b6a29ff0eebcf17312552dfe4c8c5f2002e370ddb21"
+    },
+    {
+      "id": "nvidia/Qwen3.5-397B-A17B-NVFP4-V2",
+      "revision": "8f590eae8f10bf55d9a46f79ea0280bde435c9f8",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen3.5-397B-A17B"
+      ],
+      "config_status": 200,
+      "weight_bytes": 243575846403,
+      "weight_files": 26,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 243522542608
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3.5-397B-A17B-NVFP4-V2.json.gz",
+      "config_sha256": "e34f713690f73282c6c3f9ffe39a85de026e883fdcdd9a146e0920e306a5429e"
+    },
+    {
+      "id": "nvidia/Kimi-K2.7-Code-NVFP4",
+      "revision": "9f28d60908c98034bb288e755566764eac77cc0d",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "moonshotai/Kimi-K2.7-Code"
+      ],
+      "config_status": 200,
+      "weight_bytes": 595185395016,
+      "weight_files": 67,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 595148192736
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Kimi-K2.7-Code-NVFP4.json.gz",
+      "config_sha256": "70883ba14d9e25db39d25992a897b58ba4a5740de3b3072961f47f02e3ad4b5b"
+    },
+    {
+      "id": "thinkingmachines/Inkling-NVFP4",
+      "revision": "42a75a99a40eb2ba1e0717db6357a0bf15205044",
+      "pipeline_tag": "image-text-to-text",
+      "base_model": [
+        "thinkingmachines/Inkling"
+      ],
+      "config_status": 200,
+      "weight_bytes": 592005609232,
+      "weight_files": 34,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 591854374368
+      },
+      "config_file": "config/model-catalog/hf-configs/thinkingmachines--Inkling-NVFP4.json.gz",
+      "config_sha256": "7b070532e3bce1b3a092338832974644c252e452e3199cadae5812ce022dbbf5"
+    },
+    {
+      "id": "nvidia/Qwen-Image-Flash",
+      "revision": "eafac15f6140e6dd9c6031217d658ac10bfb604b",
+      "pipeline_tag": "text-to-image",
+      "base_model": [
+        "Qwen/Qwen-Image"
+      ],
+      "config_status": 404,
+      "weight_bytes": 57699269336,
+      "weight_files": 6,
+      "weight_source": "all safetensors file sizes",
+      "index_metadata": null
+    },
+    {
+      "id": "nvidia/Kimi-K3-NVFP4",
+      "revision": "b2428a0b83a8b712ff2e1a8448a103d4175341f1",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "moonshotai/Kimi-K3"
+      ],
+      "config_status": 200,
+      "weight_bytes": 1609918090976,
+      "weight_files": 96,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 1609777087808
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Kimi-K3-NVFP4.json.gz",
+      "config_sha256": "eb93ddb53983d0d3520674311354fb72f118ffe8046690e292394962c0892010"
+    },
+    {
+      "id": "LGAI-EXAONE/K-EXAONE-2.0-750B-A37B-NVFP4",
+      "revision": "360716a7e9cb1161906061d23fb9c68fe3767d6c",
+      "pipeline_tag": "text-generation",
+      "base_model": "LGAI-EXAONE/K-EXAONE-2.0-750B-A37B",
+      "config_status": 200,
+      "weight_bytes": 526334317048,
+      "weight_files": 53,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 410600277504,
+        "total_size": 526307960320
+      },
+      "config_file": "config/model-catalog/hf-configs/LGAI-EXAONE--K-EXAONE-2.0-750B-A37B-NVFP4.json.gz",
+      "config_sha256": "3435349347cc8b9bc6d9cffa922ffe0a56d96652f9af011102c0e258b30dd0a2"
+    },
+    {
+      "id": "nvidia/Qwen3.8-2.4T-A95B-NVFP4",
+      "revision": "74eb734297318ecf7c48016a4ac8ce1b47cc74a9",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen3.8-2.4T-A95B"
+      ],
+      "config_status": 200,
+      "weight_bytes": 1444488180456,
+      "weight_files": 200,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 1444420107432
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3.8-2.4T-A95B-NVFP4.json.gz",
+      "config_sha256": "a700fe2469d15456fc878994db7f255417dddbc72d4643fa304229cdf31c2fe0"
+    },
+    {
+      "id": "nvidia/DeepSeek-V4-Pro-0813-NVFP4",
+      "revision": "949138637e8e8fe190335be2396af62187dc8a83",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "deepseek-ai/DeepSeek-V4-Pro-0813"
+      ],
+      "config_status": 200,
+      "weight_bytes": 941115855096,
+      "weight_files": 66,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 892727580904
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--DeepSeek-V4-Pro-0813-NVFP4.json.gz",
+      "config_sha256": "90645860c496a6ce62431abc7adfb6bf68363bbb889008911c03915849540d4f"
+    },
+    {
+      "id": "nvidia/DeepSeek-V4-Flash-0731-NVFP4",
+      "revision": "f1caa71142bd0be02f728c79f75042ac1e461579",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "deepseek-ai/DeepSeek-V4-Flash-0731"
+      ],
+      "config_status": 200,
+      "weight_bytes": 175550788904,
+      "weight_files": 48,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 166878536440
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--DeepSeek-V4-Flash-0731-NVFP4.json.gz",
+      "config_sha256": "297989d397217edf7c8e95fca7aed3c1327628a7c5279ab7d9bacb931b6d7cc4"
+    },
+    {
+      "id": "nvidia/Muse-Glimmer-30B-NVFP4",
+      "revision": "47818374517751c48c55cde2621594926b1888b6",
+      "pipeline_tag": "image-text-to-text",
+      "base_model": [
+        "meta-models/Muse-Glimmer-30B"
+      ],
+      "config_status": 200,
+      "weight_bytes": 24669619724,
+      "weight_files": 3,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 19807536128,
+        "total_size": 24669346036
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Muse-Glimmer-30B-NVFP4.json.gz",
+      "config_sha256": "558409d4ac891b2eaa2f8bb739eef9bd7b39083659d73ad631279d2bd2ee24a8"
+    },
+    {
+      "id": "nvidia/Qwen3.8-Flash-Next-NVFP4",
+      "revision": "fc694b54fb0174e0913e6adf86691ef85a4ead47",
+      "pipeline_tag": "image-text-to-text",
+      "base_model": [
+        "Qwen/Qwen3.8-Flash-Next"
+      ],
+      "config_status": 200,
+      "weight_bytes": 132680249378,
+      "weight_files": 11,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 132639846394
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3.8-Flash-Next-NVFP4.json.gz",
+      "config_sha256": "2f8aa6f91476f72700628177c5caee0d64f1998b40a5f73b6ab754696ee705e7"
+    },
+    {
+      "id": "nvidia/Qwen3.8-27B-NVFP4",
+      "revision": "482ca0f3832238542f8f5295dde86b5f22711d80",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "Qwen/Qwen3.8-27B"
+      ],
+      "config_status": 200,
+      "weight_bytes": 21921697280,
+      "weight_files": 3,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_parameters": 18164649200,
+        "total_size": 21921428072
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--Qwen3.8-27B-NVFP4.json.gz",
+      "config_sha256": "41f113612901636c0a221b07c3473d91d129c919a5a44bf3535ca4f308058b6d"
+    },
+    {
+      "id": "nvidia/GLM-5.3-Flash-NVFP4",
+      "revision": "1d00738646cbb0c6d0a9eb403dac5f366f1473a7",
+      "pipeline_tag": "image-text-to-text",
+      "base_model": [
+        "zai-org/GLM-5.3-Flash"
+      ],
+      "config_status": 200,
+      "weight_bytes": 204439108056,
+      "weight_files": 33,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 204419115456
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--GLM-5.3-Flash-NVFP4.json.gz",
+      "config_sha256": "43f03850ef2570a6ed59665109ce01130541a63334c6f0eaf9fbd0b8a8c47e44"
+    },
+    {
+      "id": "nvidia/DeepSeek-V4.1-Flash-NVFP4",
+      "revision": "c48dca0146b56d64c8116dbb6fcace8b7cc835f8",
+      "pipeline_tag": "image-text-to-text",
+      "base_model": [
+        "deepseek-ai/DeepSeek-V4.1-Flash"
+      ],
+      "config_status": 200,
+      "weight_bytes": 428986460424,
+      "weight_files": 48,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 510286023000
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--DeepSeek-V4.1-Flash-NVFP4.json.gz",
+      "config_sha256": "0f54d19fd40f1d3aaa7a6651750069b6e028228694aec2d6bd58e8b085a17f80"
+    },
+    {
+      "id": "nvidia/GLM-5.3-NVFP4",
+      "revision": "e3b8f9f2fad29727dfa95e766c5cac18ea1414bf",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "zai-org/GLM-5.3"
+      ],
+      "config_status": 200,
+      "weight_bytes": 464143549144,
+      "weight_files": 50,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 464115789896
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--GLM-5.3-NVFP4.json.gz",
+      "config_sha256": "d5698bab8a8267b2f82f57887f4ab2f3c34532a578aa4c72fbacb4e0be2969bd"
+    },
+    {
+      "id": "nvidia/Qwen-Image-NVFP4",
+      "revision": "4928c00477453b3570521e70a32e34b54c3a6624",
+      "pipeline_tag": "text-to-image",
+      "base_model": [
+        "Qwen/Qwen-Image"
+      ],
+      "config_status": 404,
+      "weight_bytes": 30350614894,
+      "weight_files": 3,
+      "weight_source": "all safetensors file sizes",
+      "index_metadata": null
+    },
+    {
+      "id": "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4",
+      "revision": "da5b2650a835292c678994a1fa3fb653250fb508",
+      "pipeline_tag": "image-text-to-text",
+      "base_model": [
+        "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16"
+      ],
+      "config_status": 200,
+      "weight_bytes": 75010188240,
+      "weight_files": 88,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 75010189968
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4.json.gz",
+      "config_sha256": "629e00491d1214c8a2f75fac14b7dca9716557f0f1ee2733d84eaf69712f94f6"
+    },
+    {
+      "id": "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16",
+      "revision": "fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe",
+      "pipeline_tag": "image-text-to-text",
+      "base_model": null,
+      "config_status": 200,
+      "weight_bytes": 248913061416,
+      "weight_files": 64,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 248906833960
+      },
+      "config_file": "config/model-catalog/hf-configs/nvidia--NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16.json.gz",
+      "config_sha256": "9b016f4755ad9b671b53d1b57cf754ffd75baf4c45b6fb22b506299a89fef7d3"
+    },
+    {
+      "id": "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4-LiLiCorr",
+      "revision": "292bf1efc06ba39567da7351f2ad7a522afa3959",
+      "pipeline_tag": "text-generation",
+      "base_model": [
+        "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16",
+        "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4"
+      ],
+      "config_status": 200,
+      "weight_bytes": 1317952596,
+      "weight_files": 1,
+      "weight_source": "all safetensors file sizes",
+      "index_metadata": null,
+      "config_file": "config/model-catalog/hf-configs/nvidia--NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4-LiLiCorr.json.gz",
+      "config_sha256": "b3db964d18e66afb5a88fc11a6d6ec2296059a7f1f1133ba5288ad1e0759fc56"
+    },
+    {
+      "id": "stepfun-ai/Step-5-Preview-NVFP4",
+      "revision": "bc246cc2848e17b37f377eda8fd825c5b3018d1f",
+      "pipeline_tag": null,
+      "base_model": null,
+      "config_status": 200,
+      "weight_bytes": 394165202312,
+      "weight_files": 95,
+      "weight_source": "safetensors index shard sizes",
+      "index_metadata": {
+        "total_size": 394164831232
+      },
+      "config_file": "config/model-catalog/hf-configs/stepfun-ai--Step-5-Preview-NVFP4.json.gz",
+      "config_sha256": "e1d0ccac71be6fec3179522709ea6ea887ab9568ba36eee7bcb380806cffd0dc"
+    },
+    {
+      "id": "nvidia/Muse-Spark-Open-816B-A42B-DFlash2",
+      "revision": "22e2669e4c60689f9bff0749a34d9d8e59ce7cd6",
+      "pipeline_tag": "image-text-to-text",
+      "base_model": [
+        "meta-models/Muse-Spark-Open-816B-A42B"
+      ],
+      "config_status": 200,
+      "weight_bytes": 8768333792,
+      "weight_files": 1,
+      "weight_source": "all safetensors file sizes",
+      "index_metadata": null,
+      "config_file": "config/model-catalog/hf-configs/nvidia--Muse-Spark-Open-816B-A42B-DFlash2.json.gz",
+      "config_sha256": "59b1ff2e343af0b44a75fc8e3925611ff55355af7cc07637d354b3e973023787"
+    }
+  ]
+}

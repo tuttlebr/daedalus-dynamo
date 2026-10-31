@@ -1,0 +1,22 @@
+# Spark CPU and GPU share 128 GB of memory. Per-recipe requests include weights.
+worker:
+  nodeSelector:
+    nvidia.com/gpu.product: NVIDIA-GB10
+    kubernetes.io/arch: arm64
+  vllmOptions:
+    distributed-executor-backend: mp
+    gpu-memory-utilization: 0.90
+frontend:
+  nodeSelector:
+    kubernetes.io/arch: arm64
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+modelexpress:
+  nodeSelector:
+    kubernetes.io/arch: arm64
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule

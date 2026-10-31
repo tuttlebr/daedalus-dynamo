@@ -35,7 +35,7 @@ def render(values: Path) -> list[dict]:
 class BoltHealthTimeoutTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.values = ROOT / "values/nemotron35bolt-gb10.yaml"
+        cls.values = ROOT / "tests/fixtures/retired-values/nemotron35bolt-gb10.yaml"
         cls.rendered = render(cls.values)
 
     def test_native_worker_timeout_preserves_enabled_probes_and_aliases(self):

@@ -1,0 +1,34 @@
+observed_at: '2026-10-30'
+context: kubernetes-admin@kubernetes
+profiles:
+  dgx-spark:
+    nodes: [daedalus-06]
+    gpu_product: NVIDIA-GB10
+    gpus_per_node: 1
+    memory_gib: 121.52756881713867
+    memory_fraction: 0.90
+    unified_memory: true
+    aisimulate_system: gb10
+    aisimulate_support: no-bundled-hardware-profile
+    available_gpus_at_snapshot: 0
+  l40s:
+    nodes: [daedalus-02, daedalus-03]
+    gpu_product: NVIDIA-L40S
+    gpus_per_node: 2
+    memory_gib: 44.98828125
+    memory_fraction: 0.90
+    unified_memory: false
+    aisimulate_system: l40s
+    aisimulate_support: op-level-with-coverage-gaps
+    available_gpus_at_snapshot: 1
+    available_pairs_at_snapshot: 0
+  a30:
+    nodes: [daedalus-04]
+    gpu_product: NVIDIA-A30
+    gpus_per_node: 1
+    memory_gib: 24
+    memory_fraction: 0.90
+    unified_memory: false
+    aisimulate_system: a30
+    aisimulate_support: estimate-only-no-silicon-database
+    available_gpus_at_snapshot: 0

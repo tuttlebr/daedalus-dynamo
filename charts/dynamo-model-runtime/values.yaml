@@ -1,0 +1,2 @@
+# Install once per namespace, independently of individual model releases.
+name: dynamo-modelexpress-runtime-v1

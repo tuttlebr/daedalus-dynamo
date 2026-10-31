@@ -18,8 +18,8 @@ FRAMING_LAUNCHER = (
     / "runtime/qwen36-35b-fp8-l40s/frontend_tool_framing.py"
 )
 FRAMING_IMAGE = (
-    "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0@sha256:"
-    "c957d97ccb8b225d7671f39afc6b340d910f0c58f8d17837cce6078c77344cd0"
+    "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.1@sha256:"
+    "5899e7bdd3528ab09a17ec87e2abe1949f8a0386a0a49f3b24dbd52d8211dc5d"
 )
 
 

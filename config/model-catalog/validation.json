@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-30",
+  "resident_recipes_rendered": 113,
+  "specialized_offload_recipes_rendered": 1,
+  "representative_server_dry_run": [
+    "dgx-spark-tp1",
+    "l40s-tp2",
+    "a30-tp1",
+    "spark-nvme-offload",
+    "shared-configmap"
+  ],
+  "targeted_tests": {
+    "make_cli": 10,
+    "recipe_portability": 5,
+    "cache_runtime": 2
+  },
+  "full_suite": {
+    "tests": 135,
+    "failures": 22,
+    "errors": 3,
+    "skipped": 10,
+    "new_failures_vs_baseline": 0
+  },
+  "pre_removal_legacy_render_comparison": {
+    "profiles": 18,
+    "object_differences": 0
+  },
+  "gpu_inference_smoke_tested": false,
+  "evidence": "artifacts/portability-20261030",
+  "retirement": {
+    "complete": true,
+    "legacy_dgds_remaining": 0,
+    "legacy_pods_remaining": 0,
+    "all_existing_pvcs_preserved": true,
+    "gateway_and_route_specs_unchanged": true
+  }
+}

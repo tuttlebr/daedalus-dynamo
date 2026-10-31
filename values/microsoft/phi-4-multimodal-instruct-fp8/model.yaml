@@ -1,0 +1,10 @@
+# Checkpoint publisher: nvidia; builder: microsoft.
+extends:
+- ../../_shared/vllm.yaml
+model:
+  id: nvidia/Phi-4-multimodal-instruct-FP8
+modelexpress:
+  modelRevision: d822efce23f65f86c165aeed435cc27092e21d60
+worker:
+  vllmOptions:
+    revision: d822efce23f65f86c165aeed435cc27092e21d60

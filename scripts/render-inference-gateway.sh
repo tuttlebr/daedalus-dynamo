@@ -8,6 +8,7 @@ GATEWAY_NAME="${GATEWAY_NAME:-inference-gateway}"
 GATEWAY_REQUEST_TIMEOUT="${GATEWAY_REQUEST_TIMEOUT:-300s}"
 GATEWAY_PORT="${GATEWAY_PORT:-32359}"
 GATEWAY_NODE_PORT="${GATEWAY_NODE_PORT:-32359}"
+GATEWAY_INTERNAL_PORT="${GATEWAY_INTERNAL_PORT:-8000}"
 GATEWAY_LOAD_BALANCER_IP="${GATEWAY_LOAD_BALANCER_IP:-192.168.1.12}"
 GATEWAY_IMAGE_REGISTRY="${GATEWAY_IMAGE_REGISTRY:-daedalus.ddns.me:5050}"
 GATEWAY_IMAGE_REPOSITORY="${GATEWAY_IMAGE_REPOSITORY:-btuttle/daedalus-agentgateway}"
@@ -222,6 +223,8 @@ spec:
       type: LoadBalancer
       allocateLoadBalancerNodePorts: true
       ports:
+        # Do not publish the internal HTTP listener through the LAN service.
+        - \$patch: replace
         - name: listener-${GATEWAY_PORT}
           port: ${GATEWAY_PORT}
           protocol: TCP
@@ -253,6 +256,26 @@ spec:
             kind: Secret
             name: daedalus-tls
             namespace: daedalus
+    - name: internal-http
+      port: ${GATEWAY_INTERNAL_PORT}
+      protocol: HTTP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${GATEWAY_NAME}-internal
+  labels:
+    app.kubernetes.io/name: ${GATEWAY_NAME}-internal
+    app.kubernetes.io/part-of: ${APP_LABEL_VALUE}
+spec:
+  type: ClusterIP
+  selector:
+    gateway.networking.k8s.io/gateway-name: ${GATEWAY_NAME}
+  ports:
+    - name: internal-http
+      port: ${GATEWAY_INTERNAL_PORT}
+      targetPort: ${GATEWAY_INTERNAL_PORT}
+      protocol: TCP
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

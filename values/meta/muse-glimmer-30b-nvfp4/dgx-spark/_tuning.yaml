@@ -1,0 +1,20 @@
+# Spark shares CPU/GPU RAM. 0.90 requested 109.46 GiB with only 99.31 GiB free.
+# Keep startup headroom for the OS, Model Express, frontend and loading buffers.
+# The generator reads this layer when screening fit and retains it on rebuild.
+recipe:
+  gateway: true
+  qualification: gpu-smoke-tested-text-only
+  validation:
+    date: "2026-10-30"
+    promptTokens: 31083
+    evidence: artifacts/muse-spark-20261030/validation.json
+worker:
+  # One GPU cannot host both generations during a worker rollout.
+  annotations:
+    nvidia.com/deployment-rolling-update-max-surge: "0"
+    nvidia.com/deployment-rolling-update-max-unavailable: "1"
+  # Reserve the ~85 GiB executor budget plus overhead in the unified RAM pool.
+  memoryRequest: 88Gi
+  vllmOptions:
+    gpu-memory-utilization: 0.70
+    max-model-len: 32768

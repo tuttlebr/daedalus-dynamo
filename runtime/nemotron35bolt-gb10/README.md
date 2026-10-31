@@ -1,7 +1,7 @@
 # Nemotron 3.5 Bolt on GB10
 
 The image pins vLLM `0.32.0rc1.dev100+g77154ca61`, Dynamo
-stable `1.6.0`, ModelExpress `0.7.0`, and b12x `1.5.1`. The serving profile is
+stable `1.6.1`, ModelExpress `0.7.0`, and b12x `1.5.1`. The serving profile is
 [`values/nemotron35bolt-gb10.yaml`](../../values/nemotron35bolt-gb10.yaml).
 
 This is the active model for local inference. The former Qwen IDs are explicit
@@ -18,9 +18,10 @@ hits across the hybrid groups. Without an explicit prefix-match unit, the
 remaining groups would default to coarser block-sized prefix hashes. Recheck
 the resolved block sizes and actual backend cache hits after an upgrade.
 
-The worker uses image tag
-`1.6.0-vllm77154ca-mamba-prefill-20261027-compat1`; the frontend uses
-`1.6.0-vllm77154ca-mamba-prefill-20261027`. Both contain stable Dynamo 1.6.0.
+The worker and frontend now target the same image tag,
+`1.6.1-vllm77154ca-mamba-prefill-20261028`. Rebuild and push it with the checked-in
+Dockerfile before deploying these values. The 1.6.1 file update has not been
+deployed; the live validation below records the previous 1.6.0 image.
 Speculation can be restored using the backed-up Helm revision
 and values; the existing draft checkpoint remains cached on disk.
 
@@ -36,12 +37,13 @@ See [the deployment report](../../artifacts/bolt-no-dflash-20261026/deployment-r
 
 ## Stable Dynamo generation compatibility
 
-The model still requires the pinned vLLM 0.32 development engine. Dynamo 1.6.0
+The model still requires the pinned vLLM 0.32 development engine. Dynamo 1.6.1
 imports an embedding helper whose old ZMQ API was removed in that engine.
 [`patch_dynamo_generation_import.py`](./patch_dynamo_generation_import.py)
 defers that unused import into the embedding function, allowing generation
 startup without substituting an incompatible API. It checks both package
-versions and the original source hash; the image build imports the complete
+versions and the original source hash, which is unchanged in the published
+1.6.1 wheel; the image build imports the complete
 Dynamo vLLM entrypoint afterward. This image supports this Bolt generation
 profile; its multiprocess embedding path is not supported.
 

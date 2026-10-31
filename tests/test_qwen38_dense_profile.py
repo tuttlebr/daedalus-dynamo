@@ -35,8 +35,8 @@ class DenseStagingTests(unittest.TestCase):
     def setUpClass(cls):
         raw = subprocess.check_output(
             ["helm", "template", "qwen38-27b-l40s", "charts/dynamo-model",
-             "-n", "daedalus-dynamo", "-f", "values/qwen38-27b-l40s.yaml",
-             "-f", "values/staging/qwen38-27b-bf16kv-l40s.yaml"],
+             "-n", "daedalus-dynamo", "-f", "tests/fixtures/retired-values/qwen38-27b-l40s.yaml",
+             "-f", "tests/fixtures/retired-values/staging/qwen38-27b-bf16kv-l40s.yaml"],
             cwd=ROOT, text=True, timeout=20,
         )
         cls.baseline = [item for item in yaml.safe_load_all(raw) if item]

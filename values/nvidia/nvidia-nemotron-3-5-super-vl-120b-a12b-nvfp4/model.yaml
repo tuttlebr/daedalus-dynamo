@@ -1,0 +1,13 @@
+# Checkpoint publisher: nvidia; builder: nvidia.
+extends:
+- ../../_shared/vllm.yaml
+model:
+  id: nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4
+modelexpress:
+  modelRevision: da5b2650a835292c678994a1fa3fb653250fb508
+worker:
+  vllmOptions:
+    revision: da5b2650a835292c678994a1fa3fb653250fb508
+    linear-backend: marlin
+    moe-backend: marlin
+    language-model-only: true

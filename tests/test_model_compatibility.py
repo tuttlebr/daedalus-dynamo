@@ -170,7 +170,7 @@ class SingleModelCompatibilityTests(unittest.TestCase):
 
     def test_one_worker_and_aliases_match_the_pinned_bolt_weights(self):
         policy = COMPAT.load_policy()
-        bolt = yaml.safe_load((ROOT / "values/nemotron35bolt-gb10.yaml").read_text())
+        bolt = yaml.safe_load((ROOT / "tests/fixtures/retired-values/nemotron35bolt-gb10.yaml").read_text())
         argv = shlex.split(" ".join(bolt["worker"]["vllmArgs"]))
         start = argv.index("--served-model-name") + 1
         end = next(
@@ -187,8 +187,8 @@ class SingleModelCompatibilityTests(unittest.TestCase):
         self.assertEqual(bolt["worker"]["replicas"], 1)
         self.assertEqual(bolt["worker"]["gpu"], "1")
         for name in [
-            "values/qwen38-27b-l40s.yaml",
-            "values/staging/qwen36-35b-fp8-l40s.yaml",
+            "tests/fixtures/retired-values/qwen38-27b-l40s.yaml",
+            "tests/fixtures/retired-values/staging/qwen36-35b-fp8-l40s.yaml",
         ]:
             qwen = yaml.safe_load((ROOT / name).read_text())
             self.assertEqual(qwen["worker"]["replicas"], 0)

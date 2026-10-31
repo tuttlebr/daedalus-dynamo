@@ -1,0 +1,11 @@
+# Checkpoint publisher: nvidia; builder: microsoft.
+extends:
+- ../../_shared/vllm.yaml
+model:
+  id: nvidia/Phi-4-reasoning-plus-NVFP4
+modelexpress:
+  modelRevision: cb950fd61cdbfa8e0f467ace3087c7d32ea8a47b
+worker:
+  vllmOptions:
+    revision: cb950fd61cdbfa8e0f467ace3087c7d32ea8a47b
+    linear-backend: marlin

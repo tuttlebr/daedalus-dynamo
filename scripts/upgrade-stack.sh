@@ -17,8 +17,7 @@ kubectl get crd -o yaml > "$run_dir/before/crds.yaml"
 kubectl get dgd -n daedalus-dynamo -o yaml > "$run_dir/before/models.yaml"
 for entry in dynamo-system:dynamo-platform grove-system:grove kai-scheduler:kai-scheduler \
   agentgateway-system:agentgateway agentgateway-system:agentgateway-crds \
-  gpu-operator:gpu-operator monitoring:kube-prometheus-stack \
-  daedalus-dynamo:nemotron35bolt-gb10 daedalus-dynamo:qwen38-27b-l40s; do
+  gpu-operator:gpu-operator monitoring:kube-prometheus-stack; do
   namespace="${entry%%:*}"
   release="${entry#*:}"
   helm get values "$release" -n "$namespace" -o yaml > "$run_dir/before/$release-values.yaml"
@@ -31,9 +30,7 @@ kubectl get all,configmap -n lws-system -o yaml > "$run_dir/before/lws.yaml"
 # Dockerfiles. Validate them before changing the cluster.
 for image in \
   daedalus.ddns.me:5050/btuttle/daedalus-nats:2.15.2 \
-  daedalus.ddns.me:5050/btuttle/daedalus-agentgateway:v1.6.0 \
-  daedalus.ddns.me:5050/btuttle/daedalus-dynamo-nemotron35bolt-gb10:1.6.0-vllm77154ca-mamba-prefill-20261027 \
-  daedalus.ddns.me:5050/btuttle/daedalus-dynamo-nemotron35bolt-gb10:1.6.0-vllm77154ca-mamba-prefill-20261027-compat1; do
+  daedalus.ddns.me:5050/btuttle/daedalus-agentgateway:v1.6.0; do
   docker buildx imagetools inspect "$image" > /dev/null
 done
 curl -fsSL "https://github.com/kai-scheduler/KAI-Scheduler/releases/download/$KAI_VERSION/kai-scheduler-$KAI_VERSION.tgz" \
@@ -90,12 +87,8 @@ helm upgrade kube-prometheus-stack "$run_dir/charts/monitoring.tgz" -n monitorin
 kubectl rollout status deployment -n monitoring --timeout=10m
 kubectl wait prometheus/kube-prometheus-maintenance -n monitoring --for=condition=Available --timeout=10m
 
-helm upgrade nemotron35bolt-gb10 charts/dynamo-model -n daedalus-dynamo \
-  -f values/nemotron35bolt-gb10.yaml --wait --timeout 10m
-helm upgrade qwen38-27b-l40s charts/dynamo-model -n daedalus-dynamo \
-  -f values/staging/qwen36-35b-fp8-l40s.yaml \
-  --post-renderer scripts/qwen36_fp8_postrender.py --wait --timeout 10m
-kubectl wait dgd -n daedalus-dynamo --all --for=condition=Ready --timeout=40m
+# Model releases are selected explicitly from the recipe catalog.
+# Stack upgrades must not recreate the retired Bolt/Super deployments.
 helm list -A -o json > "$run_dir/helm-after.json"
 kubectl get svc,gateway,httproute,ingress -A -o json > "$run_dir/endpoints-after.json"
 printf 'Stack rollout complete. Run LAN and application API checks before acceptance. Evidence: %s\n' "$run_dir"

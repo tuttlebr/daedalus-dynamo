@@ -17,12 +17,13 @@ for the frontend, ModelExpress, and worker. An NFS cache would put remote page
 faults in the generation path. A second Spark worker cannot share this local
 cache; this profile intentionally disables autoscaling.
 
-The base is vLLM 0.31.0, pinned by image index digest, with Dynamo 1.5.1.
-The frontend separately uses NVIDIA's Dynamo 1.5.1 runtime: the PyPI ARM64
-bindings in the custom worker have NIXL stubs, which cannot construct this
-model's frontend media loader. Both components use the same Dynamo version;
-the worker only needs text-token generation through the TCP request plane.
-The repository's shared Dynamo 1.4.1 image predates this architecture.
+The base is vLLM 0.31.0, pinned by image index digest, with Dynamo 1.6.1 and
+ModelExpress 0.7.0. The frontend continues to use NVIDIA's NIXL-enabled runtime,
+now Dynamo 1.6.1. The previous PyPI ARM64 bindings had NIXL stubs that could not
+construct this model's frontend media loader. Both components use the same
+Dynamo version; the worker only needs text-token generation through the TCP
+request plane.
+The custom build retains the GB10 memory and kernel patches listed below.
 `model.runtimeVersionOverride` declares the custom image's Dynamo version to
 the operator. The Makefile reads this profile's build Dockerfile, context and
 ARM64 platform; existing profiles retain their original build defaults.
@@ -36,13 +37,12 @@ See [LICENSE](./LICENSE). The deterministic custom CUDA kernel, hybrid
 checkpoint conversion, reduced draft vocabulary, and vLLM HTTP parser patches
 are not used. Dynamo owns the frontend parsing.
 
-`patch_dynamo_vllm031.py` is the local compatibility adapter for Dynamo 1.5.1's
-scheduler metrics. vLLM 0.31 replaced `skipped_waiting` with
-`kv_holding_waiting`, and keeps deferred requests in its two waiting queues.
-The adapter counts each request once and preserves preempted/remote-KV decode
-classification. Without it, metrics collection crashes the engine on the
-first request. It checks both package versions and the original source hash
-before changing that one method; regression tests cover the queue semantics.
+Dynamo 1.6.1 includes the vLLM 0.31 scheduler queue fix. The former local
+`patch_dynamo_vllm031.py` adapter has been removed: upstream counts each
+request once across `waiting` and `kv_holding_waiting`, preserving
+preempted/remote-KV decode classification. The worker image now targets
+`1.6.1-vllm0.31.0-1`; rebuild and push it before deploying the updated values.
+The 1.6.1 file update has not been deployed; the validation below is historical.
 
 Initial capacity is four sequences, 4,096 batched tokens, 8 GiB KV, and the
 native 262,144-token context. The initial profile serves text, reasoning and
@@ -83,8 +83,8 @@ requests without queuing or preemption.
 Build natively on Spark from the repository root:
 
 ```bash
-DOCKER_HOST=ssh://daedalus-06 make image values/qwen38-flash-next-gb10.yaml
-SKIP_BUILD=1 SKIP_PUSH=1 make deploy values/qwen38-flash-next-gb10.yaml
+DOCKER_HOST=ssh://daedalus-06 make image values/qwen/qwen3-8-flash-next-nvfp4/dgx-spark/tp1-pp1-dp1-nvme-offload.yaml
+SKIP_BUILD=1 SKIP_PUSH=1 make deploy values/qwen/qwen3-8-flash-next-nvfp4/dgx-spark/tp1-pp1-dp1-nvme-offload.yaml
 ```
 
 The SSH account needs Docker access. An ARM64 build host or an existing
@@ -94,8 +94,8 @@ the release; the chart retains PVCs.
 Validate the rendered deployment and endpoint:
 
 ```bash
-make lint values/qwen38-flash-next-gb10.yaml
-make status values/qwen38-flash-next-gb10.yaml
+make lint values/qwen/qwen3-8-flash-next-nvfp4/dgx-spark/tp1-pp1-dp1-nvme-offload.yaml
+make status values/qwen/qwen3-8-flash-next-nvfp4/dgx-spark/tp1-pp1-dp1-nvme-offload.yaml
 kubectl get pods,pvc -n daedalus-dynamo -o wide
 scripts/smoke-test-responses.py --connect-ip 192.168.1.12 \
   --model nvidia/Qwen3.8-Flash-Next-NVFP4

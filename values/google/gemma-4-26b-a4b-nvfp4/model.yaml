@@ -1,0 +1,13 @@
+# Checkpoint publisher: nvidia; builder: google.
+extends:
+- ../../_shared/vllm.yaml
+model:
+  id: nvidia/Gemma-4-26B-A4B-NVFP4
+modelexpress:
+  modelRevision: a19cfe00be84568a6867111c9a68c9c44fdcffe6
+worker:
+  vllmOptions:
+    revision: a19cfe00be84568a6867111c9a68c9c44fdcffe6
+    linear-backend: marlin
+    moe-backend: marlin
+    language-model-only: true

@@ -1,0 +1,12 @@
+# Checkpoint publisher: nvidia; builder: mistralai.
+extends:
+- ../../_shared/vllm.yaml
+model:
+  id: nvidia/Mistral-Medium-3.5-128B-NVFP4
+modelexpress:
+  modelRevision: b8c66d2098edd8c9c26bde2b2ff41b5967e111ae
+worker:
+  vllmOptions:
+    revision: b8c66d2098edd8c9c26bde2b2ff41b5967e111ae
+    linear-backend: marlin
+    language-model-only: true

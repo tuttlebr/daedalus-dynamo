@@ -1,0 +1,10 @@
+# Checkpoint publisher: nvidia; builder: meta.
+extends:
+- ../../_shared/vllm.yaml
+model:
+  id: nvidia/Llama-4-Scout-17B-16E-Instruct-FP8
+modelexpress:
+  modelRevision: 3c0175a5a4a66f8e139faf93ddeb7d2741ff3560
+worker:
+  vllmOptions:
+    revision: 3c0175a5a4a66f8e139faf93ddeb7d2741ff3560

@@ -1,0 +1,39 @@
+# Specialized NVMe embedding-offload runtime; rebuild and GPU-qualify before use.
+extends:
+- ../../_shared/vllm.yaml
+model:
+  id: nvidia/Qwen3.8-Flash-Next-NVFP4
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-qwen38-gb10:1.6.1-vllm0.31.0-1
+  buildDockerfile: runtime/qwen38-flash-next-gb10/Dockerfile
+  buildContext: runtime/qwen38-flash-next-gb10
+  buildPlatform: linux/arm64
+frontend:
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.1
+modelexpress:
+  modelRevision: fc694b54fb0174e0913e6adf86691ef85a4ead47
+worker:
+  vllmOptions:
+    load-format: safetensors
+    quantization: modelopt_fp4
+    language-model-only: true
+    dyn-tool-call-parser: qwen3_coder
+    dyn-reasoning-parser: qwen3
+    tensor-parallel-size: 1
+    pipeline-parallel-size: 1
+    data-parallel-size: 1
+    max-model-len: 8192
+    max-num-seqs: 1
+    max-num-batched-tokens: 4096
+    gpu-memory-utilization: 0.8
+    kv-cache-memory-bytes: 8589934592
+    enable-chunked-prefill: true
+    enable-prefix-caching: true
+    prefix-caching-hash-algo: sha256
+    kv-cache-dtype: fp8_e4m3
+    no-disable-hybrid-kv-cache-manager: true
+    no-enable-flashinfer-autotune: true
+    compilation-config:
+      cudagraph_mode: PIECEWISE
+    revision: fc694b54fb0174e0913e6adf86691ef85a4ead47
+    linear-backend: marlin
+    moe-backend: marlin

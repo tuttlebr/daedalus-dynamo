@@ -6,13 +6,12 @@ from __future__ import annotations
 import argparse
 import ast
 from pathlib import Path
-import sys
 
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "runtime/nemotron35super-gb10/cache_integrity.py"
-VALUES = ROOT / "values/staging/nemotron35super-gb10.yaml"
+VALUES = ROOT / "tests/fixtures/retired-values/staging/nemotron35super-gb10.yaml"
 
 
 def render(namespace: str = "daedalus-dynamo") -> list[dict]:
@@ -107,8 +106,8 @@ def main() -> None:
     parser.add_argument(
         "--namespace", choices=["daedalus-dynamo"], default="daedalus-dynamo"
     )
-    args = parser.parse_args()
-    yaml.safe_dump_all(render(args.namespace), sys.stdout, sort_keys=False)
+    parser.parse_args()
+    parser.error("The private Super stage is retired. Select a recipe from values/nvidia/ instead.")
 
 
 if __name__ == "__main__":
