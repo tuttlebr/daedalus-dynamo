@@ -9,6 +9,7 @@ recipe:
     tp: 1
     pp: 1
     dp: 1
+  screeningContextLength: 8192
   qualification: candidate-not-gpu-smoke-tested
 model:
   name: mx-qwen3-next-80b-a3b-ins-spark-tp1-db4e81
@@ -16,7 +17,6 @@ worker:
   gpu: '1'
   vllmOptions:
     tensor-parallel-size: 1
-    max-model-len: 8192
   memoryRequest: 55Gi
 modelCache:
   name: mx-qwen3-next-80b-a3b-ins-spark-tp1-db4e81-cache

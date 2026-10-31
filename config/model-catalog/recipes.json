@@ -7,8 +7,9 @@
     "pp": 1,
     "dp": 1,
     "replicas": 1,
-    "default_context": 8192,
-    "max_context": 32768,
+    "runtime_max_model_len": "auto",
+    "default_screening_context": 8192,
+    "max_screening_context": 32768,
     "max_sequences": 1,
     "kv_dtype": "bfloat16",
     "performance_qualified": false

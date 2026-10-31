@@ -12,22 +12,27 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-from model_values import helm_values, resolve, values_path  # noqa: E402
+from model_values import helm_values, list_recipes, resolve, values_path  # noqa: E402
 from build_model_catalog import generate  # noqa: E402
+from simulate_model_catalog import prediction  # noqa: E402
 
 
 class RecipePortabilityTests(unittest.TestCase):
-    def test_muse_spark_tuning_survives_catalog_regeneration(self) -> None:
+    def test_auto_context_and_muse_tuning_survive_catalog_regeneration(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             shutil.copytree(ROOT / "config/model-catalog", root / "config/model-catalog")
             shutil.copytree(ROOT / "values", root / "values")
             catalog = generate(root)
+            for path in list_recipes(root / "values"):
+                with self.subTest(path=path):
+                    self.assertEqual(resolve(path)["worker"]["vllmOptions"]["max-model-len"], "auto")
             model = root / "values/meta/muse-glimmer-30b-nvfp4"
             values = resolve(model / "dgx-spark/tp1-pp1-dp1.yaml")
-            self.assertEqual(values["recipe"]["qualification"], "gpu-smoke-tested-text-only")
+            self.assertEqual(values["recipe"]["qualification"], "requires-auto-context-gpu-validation")
+            self.assertEqual(values["recipe"]["validation"]["maxModelLen"], 32768)
             options = values["worker"]["vllmOptions"]
-            self.assertEqual(options["max-model-len"], 32768)
+            self.assertEqual(options["max-model-len"], "auto")
             # The failed startup observed 99.31 GiB free out of 121.63 GiB.
             # Leave at least 10 GiB for other unified-memory allocations.
             executor_gib = 121.63 * options["gpu-memory-utilization"]
@@ -41,7 +46,7 @@ class RecipePortabilityTests(unittest.TestCase):
             self.assertEqual(worker["annotations"]["nvidia.com/deployment-rolling-update-max-surge"], "0")
             self.assertEqual(worker["annotations"]["nvidia.com/deployment-rolling-update-max-unavailable"], "1")
             command = worker["extraPodSpec"]["mainContainer"]["args"][0]
-            self.assertIn("--max-model-len '32768'", command)
+            self.assertIn("--max-model-len 'auto'", command)
             frontend_command = graph["spec"]["services"]["Frontend"]["extraPodSpec"]["mainContainer"]["args"][0]
             self.assertIn("--dyn-chat-processor", frontend_command)
             self.assertIn("muse_glimmer", frontend_command)
@@ -51,8 +56,25 @@ class RecipePortabilityTests(unittest.TestCase):
             self.assertLess(assessment["estimated_gib_per_rank"], assessment["budget_gib_per_rank"])
             l40s = resolve(model / "l40s/tp1-pp1-dp1.yaml")["worker"]["vllmOptions"]
             self.assertEqual(l40s["gpu-memory-utilization"], 0.9)
-            self.assertEqual(l40s["max-model-len"], 8192)
+            self.assertEqual(l40s["max-model-len"], "auto")
             self.assertEqual(resolve(model / "l40s/tp1-pp1-dp1.yaml")["frontend"]["extraArgs"], values["frontend"]["extraArgs"])
+
+    def test_simulation_uses_numeric_screening_context_for_auto_serving(self) -> None:
+        for path, screening_context in (
+            ("values/qwen/qwen3-8b-nvfp4/l40s/tp1-pp1-dp1.yaml", 8192),
+            ("values/google/gemma-4-31b-it-nvfp4/l40s/tp1-pp1-dp1.yaml", 4096),
+            ("values/meta/muse-glimmer-30b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml", 32768),
+        ):
+            values = resolve(ROOT / path)
+            for setting in ("auto", -1, 2048):
+                with self.subTest(path=path, setting=setting):
+                    values["worker"]["vllmOptions"]["max-model-len"] = setting
+                    result = prediction({"id": values["model"]["id"]}, values, "/model")
+                    expected = 2048 if setting == 2048 else screening_context
+                    self.assertEqual(result["engine"]["context_length"], expected)
+                    traffic = result["traffic"]["source"]
+                    self.assertLessEqual(traffic["input_tokens"] + traffic["output_tokens"], expected)
+                    self.assertEqual(values["worker"]["vllmOptions"]["max-model-len"], setting)
 
     def test_layer_precedence_lists_and_cycle_diagnostics(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -92,6 +114,10 @@ class RecipePortabilityTests(unittest.TestCase):
                     self.assertFalse(values["planner"]["enabled"])
                     self.assertFalse(values["worker"]["scalingAdapter"]["enabled"])
                     options = values["worker"]["vllmOptions"]
+                    self.assertEqual(options["max-model-len"], "auto")
+                    assessment = next(a for a in model["assessments"]
+                                      if a["hardware"] == recipe["hardware"] and a["tp"] == tp)
+                    self.assertEqual(recipe["screeningContextLength"], assessment["context_length"])
                     self.assertEqual(options["pipeline-parallel-size"], 1)
                     self.assertEqual(options["data-parallel-size"], 1)
                     self.assertEqual(options["tensor-parallel-size"], tp)
@@ -129,6 +155,8 @@ class RecipePortabilityTests(unittest.TestCase):
                 self.assertEqual(pod["volumes"][0]["configMap"]["name"], configmap["metadata"]["name"])
                 container = pod["mainContainer"]
                 self.assertIn("/opt/modelexpress-runtime/" + script, container["args"][0])
+                if component == "VllmWorker":
+                    self.assertIn("--max-model-len 'auto'", container["args"][0])
                 environment = {e["name"]: e["value"] for e in container["env"]}
                 self.assertEqual(environment["MODEL_REVISION"], values["modelexpress"]["modelRevision"])
                 subprocess.run(["bash", "-n"], input=container["args"][0], text=True, check=True)

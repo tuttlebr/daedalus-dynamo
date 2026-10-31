@@ -163,7 +163,10 @@ def generate(root: Path = ROOT) -> dict:
                     heads = decoder_config(config).get("num_attention_heads")
                     if heads and heads % tp:
                         continue
-                    assessment = fit(model, fit_hardware, tp, tuned_options.get("max-model-len", 8192))
+                    # Offline screening needs a numeric context. It must not cap
+                    # the runtime's independently profiled automatic context.
+                    screening_context = tuning.get("recipe", {}).get("screeningContextLength", 8192)
+                    assessment = fit(model, fit_hardware, tp, screening_context)
                     entry["assessments"].append({"hardware": hardware_name, "tp": tp, **assessment})
                     if not assessment["fits"]:
                         continue
@@ -172,13 +175,14 @@ def generate(root: Path = ROOT) -> dict:
                     hw_short = "spark" if hardware_name == "dgx-spark" else hardware_name
                     name = f"mx-{slug(model_id.split('/')[-1])[:22].rstrip('-')}-{hw_short}-tp{tp}-{suffix}"
                     path = directory / hardware_name / f"tp{tp}-pp1-dp1.yaml"
-                    options = {"tensor-parallel-size": tp, "max-model-len": assessment["context_length"]}
+                    options = {"tensor-parallel-size": tp}
                     worker = {"gpu": str(tp), "vllmOptions": options}
                     if hw["unified_memory"] and "memoryRequest" not in tuning.get("worker", {}):
                         worker["memoryRequest"] = f"{math.ceil(assessment['estimated_gib_per_rank']) + 2}Gi"
                     recipe = {"extends": ["../model.yaml", f"../../../_hardware/{hardware_name}.yaml"],
                               "recipe": {"release": name, "hardware": hardware_name,
                                          "parallelism": {"tp": tp, "pp": 1, "dp": 1},
+                                         "screeningContextLength": assessment["context_length"],
                                          "qualification": tuning.get("recipe", {}).get("qualification", "candidate-not-gpu-smoke-tested")},
                               "model": {"name": name}, "worker": worker,
                               "modelCache": {"name": name + "-cache", "storage": f"{max(32, math.ceil(model['weight_bytes'] / GIB * 1.2))}Gi"},
@@ -198,8 +202,9 @@ def generate(root: Path = ROOT) -> dict:
     manifest = {"schema_version": 1, "snapshot": "config/model-catalog/snapshot.json",
                 "hardware": "config/model-catalog/hardware.yaml",
                 "policy": {"nodes_per_instance": 1, "pp": 1, "dp": 1,
-                           "replicas": 1, "default_context": 8192,
-                           "max_context": max((a.get("context_length", 0) for e in entries for a in e["assessments"]), default=8192),
+                           "replicas": 1, "runtime_max_model_len": "auto",
+                           "default_screening_context": 8192,
+                           "max_screening_context": max((a.get("context_length", 0) for e in entries for a in e["assessments"]), default=8192),
                            "max_sequences": 1,
                            "kv_dtype": "bfloat16", "performance_qualified": False},
                 "models": entries}

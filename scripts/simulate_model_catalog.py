@@ -33,6 +33,10 @@ def prediction(model: dict, values: dict, config_path: str) -> dict:
         elif "FP8" in model["id"]:
             timing.update(gemm_quant_mode="fp8", moe_quant_mode="fp8")
     context = options["max-model-len"]
+    if context in ("auto", -1):
+        # AISimulate runs without a GPU and cannot profile vLLM's serving limit.
+        # Use the catalog's numeric screening workload only for this estimate.
+        context = recipe["screeningContextLength"]
     return {
         "engine": {
             "model": config_path,

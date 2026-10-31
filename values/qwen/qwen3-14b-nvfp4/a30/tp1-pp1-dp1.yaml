@@ -9,6 +9,7 @@ recipe:
     tp: 1
     pp: 1
     dp: 1
+  screeningContextLength: 8192
   qualification: candidate-not-gpu-smoke-tested
 model:
   name: mx-qwen3-14b-nvfp4-a30-tp1-5ba1f4
@@ -16,7 +17,6 @@ worker:
   gpu: '1'
   vllmOptions:
     tensor-parallel-size: 1
-    max-model-len: 8192
 modelCache:
   name: mx-qwen3-14b-nvfp4-a30-tp1-5ba1f4-cache
   storage: 32Gi

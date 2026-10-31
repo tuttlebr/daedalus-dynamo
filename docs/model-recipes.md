@@ -43,11 +43,21 @@ is resolved relative to each file. Later mappings override earlier mappings;
 arrays replace rather than append. Use `worker.vllmOptions` for mergeable options.
 Changing a parent updates every dependent recipe on its next render/deploy.
 
+All recipes inherit `worker.vllmOptions.max-model-len: auto` from the shared
+defaults. At worker startup, vLLM selects the largest context that fits the
+configured memory budget, up to the model's supported maximum. The limit covers
+prompt plus generated tokens. Omitting this option instead uses the model's
+declared context without requesting automatic memory fitting. See the
+[vLLM 0.31 option reference](https://docs.vllm.ai/en/v0.31.0/configuration/engine_args/#max-model-len).
+Generated recipes record a separate numeric `recipe.screeningContextLength` for
+offline fit estimates and AISimulate. This metadata is stripped before Helm and
+does not constrain the runtime's context.
+
 Per-model hardware tuning belongs in `<hardware>/_tuning.yaml`. The catalog
-generator includes this layer, uses its context length and memory fraction for
+generator includes this layer, uses its screening context and memory fraction for
 fit screening, and preserves explicit unified-memory requests. This keeps live
 startup fixes intact when regenerating the catalog. Muse on DGX Spark uses this
-layer for a 32,768-token context, 0.70 GPU memory utilization, an 88 GiB pod memory
+layer for a 32,768-token screening context, 0.70 GPU memory utilization, an 88 GiB pod memory
 request, and worker updates with zero surge / one unavailable replica because
 there is only one GPU. Its original 0.90 setting requested 109.46 GiB when only
 99.31 GiB was free. Lowering the fraction fixes that startup check; lowering
@@ -60,12 +70,14 @@ uses this layer to select the vLLM chat processor and `muse_glimmer` reasoning/t
 parsers, with 8 GiB frontend memory. Without these parsers, reasoning and ATEM
 channel markers appeared in `message.content`.
 
-Muse Spark was GPU smoke-tested on 2026-10-30: `/v1/models` reports a 32,768-token
+Muse Spark was GPU smoke-tested on 2026-10-30 with a fixed context: `/v1/models` reported a 32,768-token
 window; short chat and a 31,083-input-token chat request returned the expected
 answer with reasoning separated. The long request took 55.47 seconds and generated
 145 tokens. The worker remained Ready with zero restarts. These are functional
 checks on the text-only recipe, not multimodal or throughput qualification. Logs,
 responses, validation metadata and rollback are in `artifacts/muse-spark-20261030/`.
+That evidence applies to the earlier fixed limit; the new automatic-context
+configuration has not been GPU smoke-tested or deployed as part of this change.
 
 To add a future model, create a model definition inheriting `../../_shared/vllm.yaml`,
 then a hardware recipe inheriting `../model.yaml` and the hardware layer. Set unique
@@ -91,15 +103,17 @@ that those GPUs are free.
 
 Resident-fit screening uses actual HF safetensors shard sizes divided by TP,
 4 GiB per rank for runtime/repacking/auxiliary tensors, and BF16 KV storage for
-one sequence. By default it starts at 8,192 tokens (32,768 for the tuned Muse Spark
-recipe) and reduces context to 4,096 or 2,048 if
+one sequence. Offline screening starts at 8,192 tokens (32,768 for the tuned Muse Spark
+recipe) and reduces its estimate to 4,096 or 2,048 if
 needed, within 90% of the observed memory envelope. Hybrid/sliding attention is
 bounded with full-attention KV where geometry is known. Unknown geometry has a
 1 GiB placeholder and is explicitly unresolved; these entries require runtime
 memory measurement. Sharded weights and replicated multimodal components can make
 the estimate differ from actual loading memory. Spark's pod memory request includes
 estimated resident GPU memory because its RAM is shared. Model fit never implies
-that several recipes fit concurrently.
+that several recipes fit concurrently. These screening contexts are not serving
+limits. Recorded simulation results remain estimates for their original numeric
+workloads; they do not establish the context that vLLM will select with `auto`.
 
 These are conservative text-serving starting points: batch/concurrency 1, eager
 execution, BF16 KV, no speculative decoding. Multimodal wrappers use language-only

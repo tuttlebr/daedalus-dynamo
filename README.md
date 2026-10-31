@@ -27,6 +27,11 @@ A model definition inherits serving defaults. A recipe adds hardware, parallelis
 release identity and storage. Mappings merge; lists replace. `make` resolves the
 layers before passing ordinary values to Helm.
 
+All recipes inherit `worker.vllmOptions.max-model-len: auto`: vLLM determines the
+largest context that fits its configured memory budget at startup, up to the
+model's supported limit. Numeric `recipe.screeningContextLength` values are only
+for offline memory screening and simulation; they do not cap serving context.
+
 ## Select and deploy
 
 ```bash

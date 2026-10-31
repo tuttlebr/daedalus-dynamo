@@ -9,6 +9,7 @@ recipe:
     tp: 1
     pp: 1
     dp: 1
+  screeningContextLength: 8192
   qualification: requires-huggingface-access-and-memory-validation
 model:
   name: mx-llama-4-scout-17b-16e-spark-tp1-5639cd
@@ -16,7 +17,6 @@ worker:
   gpu: '1'
   vllmOptions:
     tensor-parallel-size: 1
-    max-model-len: 8192
   memoryRequest: 111Gi
 modelCache:
   name: mx-llama-4-scout-17b-16e-spark-tp1-5639cd-cache

@@ -10,14 +10,14 @@ recipe:
     tp: 1
     pp: 1
     dp: 1
-  qualification: gpu-smoke-tested-text-only
+  screeningContextLength: 32768
+  qualification: requires-auto-context-gpu-validation
 model:
   name: mx-muse-glimmer-30b-nvfp4-spark-tp1-910243
 worker:
   gpu: '1'
   vllmOptions:
     tensor-parallel-size: 1
-    max-model-len: 32768
 modelCache:
   name: mx-muse-glimmer-30b-nvfp4-spark-tp1-910243-cache
   storage: 32Gi

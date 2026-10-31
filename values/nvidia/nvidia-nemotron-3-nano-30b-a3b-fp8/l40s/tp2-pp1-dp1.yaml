@@ -9,6 +9,7 @@ recipe:
     tp: 2
     pp: 1
     dp: 1
+  screeningContextLength: 8192
   qualification: candidate-not-gpu-smoke-tested
 model:
   name: mx-nvidia-nemotron-3-nano-l40s-tp2-2b9023
@@ -16,7 +17,6 @@ worker:
   gpu: '2'
   vllmOptions:
     tensor-parallel-size: 2
-    max-model-len: 8192
 modelCache:
   name: mx-nvidia-nemotron-3-nano-l40s-tp2-2b9023-cache
   storage: 37Gi

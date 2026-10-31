@@ -9,6 +9,7 @@ recipe:
     tp: 1
     pp: 1
     dp: 1
+  screeningContextLength: 8192
   qualification: candidate-not-gpu-smoke-tested
 model:
   name: mx-phi-4-multimodal-instr-spark-tp1-172c0d
@@ -16,7 +17,6 @@ worker:
   gpu: '1'
   vllmOptions:
     tensor-parallel-size: 1
-    max-model-len: 8192
   memoryRequest: 16Gi
 modelCache:
   name: mx-phi-4-multimodal-instr-spark-tp1-172c0d-cache
