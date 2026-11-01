@@ -48,6 +48,18 @@ NVMe recipe builds its custom ARM64 image unless explicitly overridden.
 
 `make deploy`, `make install`, and `make upgrade` route models through the shared
 HTTP gateway on fixed port `32360` by default and refresh `/v1/models`.
+The catalog polls each routed frontend at startup and every 30 seconds to publish
+its runtime context limit as `context_window`, `max_model_len`, and
+`context_length` (the same token count, covering input plus output). This picks
+up the resolved limit when `max-model-len: auto` is used. Model IDs and reviewed
+aliases stay intact; aliases report their canonical backend's limit. Limits are
+omitted until the frontend reports them, and removed on the next refresh if the
+frontend becomes unavailable or stops reporting the model. Offline fit estimates
+and model-card maximums are not substituted for live values. When multiple
+backends serve an ID, every backend must report a limit and the smallest is used.
+Use `make gateway-catalog-apply` to refresh existing route configuration and
+install catalog updates without redeploying model workers.
+
 Use `GATEWAY=0` (or `recipe.gateway: false`) only for an explicitly private
 deployment. To add a route for an already deployed model:
 

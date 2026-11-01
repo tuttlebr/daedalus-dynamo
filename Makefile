@@ -605,7 +605,7 @@ gateway-catalog-apply: check-kubectl check-python
 			-n "$(NAMESPACE)" \
 			-l "app.kubernetes.io/part-of=$(APP_LABEL_VALUE),daedalus-dynamo/route-kind=model" \
 			-o json 2>/dev/null | \
-			$(PYTHON) scripts/http-routes-to-models-json.py \
+			$(PYTHON) scripts/http-routes-to-models-json.py --include-backends \
 	)"; \
 	APP_LABEL_VALUE="$(APP_LABEL_VALUE)" \
 		MODEL_CATALOG_IMAGE="$(MODEL_CATALOG_IMAGE)" \

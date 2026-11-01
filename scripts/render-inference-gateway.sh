@@ -508,7 +508,9 @@ EOF
 }
 
 render_catalog() {
-  local catalog_hash models_json_indented
+  local catalog_hash catalog_script_hash models_json_indented catalog_script
+  catalog_script="$(dirname "${BASH_SOURCE[0]}")/serve-model-catalog.py"
+  catalog_script_hash="$(sha256sum "${catalog_script}" | awk '{print $1}')"
   catalog_hash="$(printf '%s' "${MODELS_JSON}" | sha256sum | awk '{print $1}')"
   models_json_indented="$(printf '%s\n' "${MODELS_JSON}" | sed 's/^/    /')"
 
@@ -524,6 +526,8 @@ metadata:
 data:
   models.json: |
 ${models_json_indented}
+  serve-model-catalog.py: |
+$(sed 's/^/    /' "${catalog_script}")
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -544,6 +548,7 @@ spec:
         app.kubernetes.io/part-of: ${APP_LABEL_VALUE}
       annotations:
         daedalus-dynamo/models-json-sha256: "${catalog_hash}"
+        daedalus-dynamo/catalog-script-sha256: "${catalog_script_hash}"
     spec:
       containers:
         - name: model-catalog
@@ -563,44 +568,12 @@ spec:
                   name: model-catalog-config
                   key: models.json
           command:
-            - /bin/sh
-            - -c
-          args:
-            - |
-              cat > /tmp/model_catalog.py <<'PY'
-              import json
-              import os
-              from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-
-              payload = os.environ.get("MODELS_JSON", '{"object":"list","data":[]}')
-              json.loads(payload)
-
-              class Handler(BaseHTTPRequestHandler):
-                  def log_message(self, fmt, *args):
-                      return
-
-                  def do_GET(self):
-                      if self.path.split("?", 1)[0] != "/v1/models":
-                          self.send_response(404)
-                          self.end_headers()
-                          return
-                      body = payload.encode("utf-8")
-                      self.send_response(200)
-                      self.send_header("content-type", "application/json")
-                      self.send_header("content-length", str(len(body)))
-                      self.end_headers()
-                      self.wfile.write(body)
-
-                  def do_OPTIONS(self):
-                      self.send_response(204)
-                      self.send_header("access-control-allow-origin", "*")
-                      self.send_header("access-control-allow-methods", "GET,OPTIONS")
-                      self.send_header("access-control-allow-headers", "content-type,authorization")
-                      self.end_headers()
-
-              ThreadingHTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
-              PY
-              exec python /tmp/model_catalog.py
+            - python
+            - /opt/catalog/serve-model-catalog.py
+          volumeMounts:
+            - name: catalog-script
+              mountPath: /opt/catalog
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /v1/models
@@ -613,6 +586,13 @@ spec:
               port: http
             periodSeconds: 30
             timeoutSeconds: 5
+      volumes:
+        - name: catalog-script
+          configMap:
+            name: model-catalog-config
+            items:
+              - key: serve-model-catalog.py
+                path: serve-model-catalog.py
 ---
 apiVersion: v1
 kind: Service
