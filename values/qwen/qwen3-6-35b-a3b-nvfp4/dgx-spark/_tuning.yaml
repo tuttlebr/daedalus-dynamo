@@ -1,0 +1,62 @@
+# NVIDIA source and intentional Dynamo adaptations: see docs/nvidia-spark-recipes.md.
+# https://github.com/NVIDIA/local-ai-inference-recipes/blob/7b2ee453234617f58e1e100c195ac3be7f79e233/models/qwen/qwen3.6-35b-a3b/dgx-spark/linux/vllm/128gb/recipe.yaml
+extends:
+- ../../../_shared/nvidia-spark.yaml
+recipe:
+  upstream:
+    url: https://github.com/NVIDIA/local-ai-inference-recipes/blob/7b2ee453234617f58e1e100c195ac3be7f79e233/models/qwen/qwen3.6-35b-a3b/dgx-spark/linux/vllm/128gb/recipe.yaml
+    sha256: 66835de883c37d366b0d1a10f699e4e0cc4c6a5d311a7f6aed84cd8a9a103460
+    minimumMemoryGB: 128
+    backendVersion: 0.31.0+88641915.nv26.10.73893335
+  runtime: ngc-2610
+model:
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-spark:1.6.1-ngc-2610-nvidia-v066-1
+  buildDockerfile: runtime/nvidia-spark/ngc-2610.Dockerfile
+  buildContext: .
+  buildPlatform: linux/arm64
+frontend:
+  runtimeProfile: nvidia/Qwen3.6-35B-A3B-NVFP4
+  extraArgs:
+  - --dyn-chat-processor
+  - vllm
+  - --enable-auto-tool-choice
+  - --tool-call-parser
+  - qwen3_xml
+  - --reasoning-parser
+  - qwen3
+  - --trust-remote-code
+worker:
+  runtimeProfile: nvidia/Qwen3.6-35B-A3B-NVFP4
+  memoryRequest: 102Gi
+  prefetchModels: []
+  extraEnv:
+  - name: DYN_HEALTH_CHECK_REQUEST_TIMEOUT
+    value: '120'
+  - name: NCCL_IB_DISABLE
+    value: '1'
+  - name: VLLM_WORKER_MULTIPROC_METHOD
+    value: spawn
+  vllmOptions:
+    tensor-parallel-size: 1
+    trust-remote-code: true
+    kv-cache-dtype: fp8
+    attention-backend: flashinfer
+    moe-backend: marlin
+    gpu-memory-utilization: 0.8
+    max-model-len: 262144
+    max-num-seqs: 8
+    max-num-batched-tokens: 8192
+    enable-chunked-prefill: true
+    async-scheduling: true
+    enable-prefix-caching: true
+    speculative-config:
+      method: mtp
+      num_speculative_tokens: 4
+      moe_backend: triton
+    load-format: safetensors
+    reasoning-parser: qwen3
+    dyn-tool-call-parser: qwen3_xml
+    dyn-reasoning-parser: qwen3
+    enable-multimodal: true
+modelCache:
+  storage: 40Gi

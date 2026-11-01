@@ -18,7 +18,7 @@ from simulate_model_catalog import prediction  # noqa: E402
 
 
 class RecipePortabilityTests(unittest.TestCase):
-    def test_auto_context_and_muse_tuning_survive_catalog_regeneration(self) -> None:
+    def test_context_policy_and_muse_tuning_survive_catalog_regeneration(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             shutil.copytree(ROOT / "config/model-catalog", root / "config/model-catalog")
@@ -26,7 +26,9 @@ class RecipePortabilityTests(unittest.TestCase):
             catalog = generate(root)
             for path in list_recipes(root / "values"):
                 with self.subTest(path=path):
-                    self.assertEqual(resolve(path)["worker"]["vllmOptions"]["max-model-len"], "auto")
+                    values = resolve(path)
+                    if not values["recipe"].get("upstream"):
+                        self.assertEqual(values["worker"]["vllmOptions"]["max-model-len"], "auto")
             model = root / "values/meta/muse-glimmer-30b-nvfp4"
             values = resolve(model / "dgx-spark/tp1-pp1-dp1.yaml")
             self.assertEqual(values["recipe"]["qualification"], "requires-auto-context-gpu-validation")
@@ -114,7 +116,8 @@ class RecipePortabilityTests(unittest.TestCase):
                     self.assertFalse(values["planner"]["enabled"])
                     self.assertFalse(values["worker"]["scalingAdapter"]["enabled"])
                     options = values["worker"]["vllmOptions"]
-                    self.assertEqual(options["max-model-len"], "auto")
+                    if not recipe.get("upstream"):
+                        self.assertEqual(options["max-model-len"], "auto")
                     assessment = next(a for a in model["assessments"]
                                       if a["hardware"] == recipe["hardware"] and a["tp"] == tp)
                     self.assertEqual(recipe["screeningContextLength"], assessment["context_length"])
@@ -125,7 +128,7 @@ class RecipePortabilityTests(unittest.TestCase):
                     self.assertEqual(values["modelexpress"]["modelRevision"], model["revision"])
                     self.assertRegex(model["revision"], r"^[0-9a-f]{40}$")
                     self.assertNotIn("recipe", helm_values(values))
-                    if "NVFP4" in model["id"]:
+                    if "NVFP4" in model["id"] and not recipe.get("upstream"):
                         self.assertEqual(options["linear-backend"], "marlin")
 
     def test_retired_profiles_are_only_regression_fixtures(self) -> None:

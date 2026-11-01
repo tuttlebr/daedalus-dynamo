@@ -96,6 +96,21 @@
     "worker": {
       "type": "object",
       "properties": {
+        "runtimeProfile": { "type": "string", "pattern": "^[a-zA-Z0-9_./-]*$" },
+        "unlimitedMemlock": { "type": "boolean" },
+        "extraVolumeMounts": { "type": "array", "items": { "type": "object" } },
+        "prefetchModels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "revision"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+$" },
+              "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+            }
+          }
+        },
         "livenessFailureThreshold": {
           "type": "integer",
           "minimum": 1,
@@ -192,6 +207,7 @@
     "frontend": {
       "type": "object",
       "properties": {
+        "runtimeProfile": { "type": "string", "pattern": "^[a-zA-Z0-9_./-]*$" },
         "image": { "type": "string" },
         "nodeSelector": { "type": "object", "additionalProperties": { "type": "string" } },
         "tolerations": { "type": "array", "items": { "type": "object" } },

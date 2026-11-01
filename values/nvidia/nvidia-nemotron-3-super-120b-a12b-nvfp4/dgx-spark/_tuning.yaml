@@ -1,0 +1,60 @@
+# NVIDIA source and intentional Dynamo adaptations: see docs/nvidia-spark-recipes.md.
+# https://github.com/NVIDIA/local-ai-inference-recipes/blob/7b2ee453234617f58e1e100c195ac3be7f79e233/models/nvidia/nemotron-3-super-120b-a12b/dgx-spark/linux/vllm/recipe.yaml
+extends:
+- ../../../_shared/nvidia-spark.yaml
+recipe:
+  upstream:
+    url: https://github.com/NVIDIA/local-ai-inference-recipes/blob/7b2ee453234617f58e1e100c195ac3be7f79e233/models/nvidia/nemotron-3-super-120b-a12b/dgx-spark/linux/vllm/recipe.yaml
+    sha256: 7e5462a5cf4e50b1f4b873316de95e86559dd39cdd35b8a13262be53f927816d
+    minimumMemoryGB: 128
+    backendVersion: 0.31.0
+  runtime: vllm-031
+model:
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-spark:1.6.1-vllm-031-nvidia-v066-1
+  buildDockerfile: runtime/nvidia-spark/vllm-031.Dockerfile
+  buildContext: .
+  buildPlatform: linux/arm64
+frontend:
+  runtimeProfile: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4
+  extraArgs:
+  - --dyn-chat-processor
+  - vllm
+  - --enable-auto-tool-choice
+  - --tool-call-parser
+  - qwen3_xml
+  - --reasoning-parser
+  - nemotron_v3
+worker:
+  runtimeProfile: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4
+  memoryRequest: 102Gi
+  prefetchModels: []
+  extraEnv:
+  - name: DYN_HEALTH_CHECK_REQUEST_TIMEOUT
+    value: '120'
+  - name: NCCL_IB_DISABLE
+    value: '1'
+  - name: VLLM_WORKER_MULTIPROC_METHOD
+    value: spawn
+  - name: VLLM_FLOAT32_MATMUL_PRECISION
+    value: high
+  - name: VLLM_ALLOW_LONG_MAX_MODEL_LEN
+    value: '1'
+  vllmOptions:
+    max-model-len: 262144
+    gpu-memory-utilization: 0.8
+    max-num-seqs: 8
+    load-format: fastsafetensors
+    attention-backend: flashinfer
+    max-num-batched-tokens: 16384
+    kv-cache-dtype: fp8
+    mamba-cache-mode: align
+    mamba-ssm-cache-dtype: float32
+    speculative-config:
+      method: mtp
+      num_speculative_tokens: 3
+    enable-prefix-caching: true
+    reasoning-parser: nemotron_v3
+    dyn-tool-call-parser: qwen3_xml
+    dyn-reasoning-parser: nemotron_v3
+modelCache:
+  storage: 104Gi

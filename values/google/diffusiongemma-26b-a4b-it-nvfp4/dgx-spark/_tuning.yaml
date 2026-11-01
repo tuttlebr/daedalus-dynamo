@@ -1,0 +1,58 @@
+# NVIDIA source and intentional Dynamo adaptations: see docs/nvidia-spark-recipes.md.
+# https://github.com/NVIDIA/local-ai-inference-recipes/blob/7b2ee453234617f58e1e100c195ac3be7f79e233/models/google/diffusiongemma-26b-a4b/dgx-spark/linux/vllm/recipe.yaml
+extends:
+- ../../../_shared/nvidia-spark.yaml
+recipe:
+  upstream:
+    url: https://github.com/NVIDIA/local-ai-inference-recipes/blob/7b2ee453234617f58e1e100c195ac3be7f79e233/models/google/diffusiongemma-26b-a4b/dgx-spark/linux/vllm/recipe.yaml
+    sha256: cf2d635efa0c2d2411696bf2a89652757ca187f0477232a4db17776e565d707a
+    minimumMemoryGB: 128
+    backendVersion: 0.1.dev21818+g3a947437c.d20261014
+  runtime: spark-20261014
+model:
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-spark:1.6.1-spark-20261014-nvidia-v066-1
+  buildDockerfile: runtime/nvidia-spark/spark-20261014.Dockerfile
+  buildContext: .
+  buildPlatform: linux/arm64
+frontend:
+  runtimeProfile: nvidia/diffusiongemma-26B-A4B-it-NVFP4
+  extraArgs:
+  - --dyn-chat-processor
+  - vllm
+  - --enable-auto-tool-choice
+  - --tool-call-parser
+  - gemma4
+  - --reasoning-parser
+  - gemma4
+  - --default-chat-template-kwargs
+  - '{"enable_thinking":true}'
+  - --trust-remote-code
+worker:
+  runtimeProfile: nvidia/diffusiongemma-26B-A4B-it-NVFP4
+  memoryRequest: 102Gi
+  prefetchModels: []
+  extraEnv:
+  - name: DYN_HEALTH_CHECK_REQUEST_TIMEOUT
+    value: '120'
+  - name: NCCL_IB_DISABLE
+    value: '1'
+  - name: VLLM_WORKER_MULTIPROC_METHOD
+    value: spawn
+  vllmOptions:
+    max-model-len: 262144
+    gpu-memory-utilization: 0.8
+    trust-remote-code: true
+    load-format: fastsafetensors
+    attention-backend: TRITON_ATTN
+    max-num-seqs: 10
+    enable-prefix-caching: true
+    diffusion-config:
+      canvas_length: 256
+    override-generation-config:
+      max_new_tokens: null
+    reasoning-parser: gemma4
+    dyn-tool-call-parser: gemma4
+    dyn-reasoning-parser: gemma4
+    enable-multimodal: true
+modelCache:
+  storage: 32Gi

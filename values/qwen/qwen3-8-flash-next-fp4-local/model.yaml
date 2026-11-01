@@ -1,0 +1,10 @@
+# Supplemental pinned NVIDIA checkpoint, outside the HF collection snapshot.
+extends:
+- ../../_shared/vllm.yaml
+model:
+  id: nvidia/Qwen3.8-Flash-Next-FP4-Local
+modelexpress:
+  modelRevision: b9ce18a6887e18c089fdea8509a33e63429a3300
+worker:
+  vllmOptions:
+    revision: b9ce18a6887e18c089fdea8509a33e63429a3300

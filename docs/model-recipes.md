@@ -6,6 +6,14 @@ contains 93 entries. This checkout provides 113 resident candidate recipes acros
 entry is accounted for below. The initial catalog work did not deploy a new
 inference workload; subsequent model-specific tuning is recorded below.
 
+The [2026-11-01 DGX Spark review](dgx-spark-nvidia-recipe-review-2026-11-01.md)
+records the original 40 Spark candidates. The subsequent
+[NVIDIA Spark implementation](nvidia-spark-recipes.md) adapts ten matching profiles
+and adds separate Bolt and Flash Next FP4-Local profiles, for 42 Spark recipes.
+Its pinned runtime builds and per-model settings are code only; they have not
+been deployed or GPU-qualified. Models without a matching NVIDIA source keep
+their existing candidate settings.
+
 ## Use a recipe
 
 ```bash
@@ -46,8 +54,10 @@ is resolved relative to each file. Later mappings override earlier mappings;
 arrays replace rather than append. Use `worker.vllmOptions` for mergeable options.
 Changing a parent updates every dependent recipe on its next render/deploy.
 
-All recipes inherit `worker.vllmOptions.max-model-len: auto` from the shared
-defaults. At worker startup, vLLM selects the largest context that fits the
+Generic candidates inherit `worker.vllmOptions.max-model-len: auto` from the shared
+defaults. NVIDIA Spark profiles instead use their published context (including
+an omitted limit for Lightning); see their `_tuning.yaml` files.
+With `auto`, at worker startup vLLM selects the largest context that fits the
 configured memory budget, up to the model's supported maximum. The limit covers
 prompt plus generated tokens. Omitting this option instead uses the model's
 declared context without requesting automatic memory fitting. See the
@@ -118,11 +128,18 @@ that several recipes fit concurrently. These screening contexts are not serving
 limits. Recorded simulation results remain estimates for their original numeric
 workloads; they do not establish the context that vLLM will select with `auto`.
 
-These are conservative text-serving starting points: batch/concurrency 1, eager
+Generic candidates are conservative text-serving starting points: batch/concurrency 1, eager
 execution, BF16 KV, no speculative decoding. Multimodal wrappers use language-only
 mode where supported; image/video/audio capacity is not qualified. NVFP4 uses
 vLLM's Marlin path, including on L40S and A30; it is not rejected solely because
 those GPUs lack native FP4 tensor cores. See the [vLLM Marlin implementation](https://github.com/vllm-project/vllm/blob/v0.31.0/vllm/model_executor/kernels/linear/nvfp4/marlin.py).
+
+NVIDIA Spark profiles override this policy with model-specific KV precision,
+speculation, context, batching and multimodal settings. Their memory requests
+reserve the configured fraction of unified RAM plus 4 GiB, and draft checkpoints
+have separate revision pins and cache allowances. The generic simulation adapter
+does not model these configurations and will not reuse earlier candidate results
+as evidence for them.
 
 ## AI Simulate evidence
 

@@ -1,0 +1,24 @@
+# Supplemental NVIDIA single-Spark profile; private until explicitly published.
+extends:
+- ../model.yaml
+- ../../../_hardware/dgx-spark.yaml
+- _tuning.yaml
+recipe:
+  release: mx-nvidia-nemotron-3-5-bo-spark-tp1-0630ca
+  hardware: dgx-spark
+  parallelism:
+    tp: 1
+    pp: 1
+    dp: 1
+  gateway: false
+model:
+  name: mx-nvidia-nemotron-3-5-bo-spark-tp1-0630ca
+worker:
+  gpu: '1'
+  vllmOptions:
+    tensor-parallel-size: 1
+modelCache:
+  name: mx-nvidia-nemotron-3-5-bo-spark-tp1-0630ca-cache
+redis:
+  name: mx-nvidia-nemotron-3-5-bo-spark-tp1-0630ca-redis
+  dataPvcName: mx-nvidia-nemotron-3-5-bo-spark-tp1-0630ca-redis-data

@@ -1,0 +1,24 @@
+# Supplemental NVIDIA single-Spark profile; private until explicitly published.
+extends:
+- ../model.yaml
+- ../../../_hardware/dgx-spark.yaml
+- _tuning.yaml
+recipe:
+  release: mx-qwen3-8-flash-next-fp4-spark-tp1-ac7a04
+  hardware: dgx-spark
+  parallelism:
+    tp: 1
+    pp: 1
+    dp: 1
+  gateway: false
+model:
+  name: mx-qwen3-8-flash-next-fp4-spark-tp1-ac7a04
+worker:
+  gpu: '1'
+  vllmOptions:
+    tensor-parallel-size: 1
+modelCache:
+  name: mx-qwen3-8-flash-next-fp4-spark-tp1-ac7a04-cache
+redis:
+  name: mx-qwen3-8-flash-next-fp4-spark-tp1-ac7a04-redis
+  dataPvcName: mx-qwen3-8-flash-next-fp4-spark-tp1-ac7a04-redis-data

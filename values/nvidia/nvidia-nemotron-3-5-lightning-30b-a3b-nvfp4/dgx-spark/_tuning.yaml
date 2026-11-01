@@ -1,0 +1,60 @@
+# NVIDIA source and intentional Dynamo adaptations: see docs/nvidia-spark-recipes.md.
+# https://github.com/NVIDIA/local-ai-inference-recipes/blob/7b2ee453234617f58e1e100c195ac3be7f79e233/models/nvidia/nemotron-3.5-lightning-30b-a3b/dgx-spark/linux/vllm/64gb/nvfp4/recipe.yaml
+extends:
+- ../../../_shared/nvidia-spark.yaml
+recipe:
+  upstream:
+    url: https://github.com/NVIDIA/local-ai-inference-recipes/blob/7b2ee453234617f58e1e100c195ac3be7f79e233/models/nvidia/nemotron-3.5-lightning-30b-a3b/dgx-spark/linux/vllm/64gb/nvfp4/recipe.yaml
+    sha256: be33d127f24fa49192607d6dd604f88f7eb7369f250a1ff74b4b948e4303ffed
+    minimumMemoryGB: 64
+    backendVersion: 0.32.0rc1.dev301+g1ac942555.d20261016
+  runtime: spark-20261016
+model:
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-spark:1.6.1-spark-20261016-nvidia-v066-1
+  buildDockerfile: runtime/nvidia-spark/spark-20261016.Dockerfile
+  buildContext: .
+  buildPlatform: linux/arm64
+frontend:
+  runtimeProfile: nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4
+  extraArgs:
+  - --dyn-chat-processor
+  - vllm
+  - --enable-auto-tool-choice
+  - --tool-call-parser
+  - qwen3_xml
+  - --reasoning-parser
+  - nemotron_v3
+worker:
+  runtimeProfile: nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4
+  memoryRequest: 102Gi
+  prefetchModels:
+  - id: nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark
+    revision: 6d127b50ecd98562cea85d0087680b7d86091fb0
+  extraEnv:
+  - name: DYN_HEALTH_CHECK_REQUEST_TIMEOUT
+    value: '120'
+  - name: NCCL_IB_DISABLE
+    value: '1'
+  - name: VLLM_WORKER_MULTIPROC_METHOD
+    value: spawn
+  vllmOptions:
+    moe-backend: marlin
+    kv-cache-dtype: fp8
+    max-num-batched-tokens: 4096
+    gpu-memory-utilization: 0.8
+    enable-prefix-caching: true
+    mamba-backend: flashinfer
+    mamba-cache-mode: align
+    mamba-ssm-cache-dtype: float16
+    enable-mamba-cache-stochastic-rounding: true
+    mamba-cache-philox-rounds: 5
+    reasoning-parser: nemotron_v3
+    load-format: safetensors
+    speculative-config:
+      method: dspark
+      model: /model/.model-express/cache/models--nvidia--NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark/snapshots/6d127b50ecd98562cea85d0087680b7d86091fb0
+      num_speculative_tokens: 7
+    dyn-tool-call-parser: qwen3_xml
+    dyn-reasoning-parser: nemotron_v3
+modelCache:
+  storage: 40Gi

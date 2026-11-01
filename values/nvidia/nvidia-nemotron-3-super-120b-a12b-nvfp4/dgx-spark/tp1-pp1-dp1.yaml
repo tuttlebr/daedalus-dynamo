@@ -2,6 +2,7 @@
 extends:
 - ../model.yaml
 - ../../../_hardware/dgx-spark.yaml
+- _tuning.yaml
 recipe:
   release: mx-nvidia-nemotron-3-supe-spark-tp1-025bdc
   hardware: dgx-spark
@@ -10,17 +11,15 @@ recipe:
     pp: 1
     dp: 1
   screeningContextLength: 8192
-  qualification: candidate-not-gpu-smoke-tested
+  qualification: requires-image-build-and-gpu-validation
 model:
   name: mx-nvidia-nemotron-3-supe-spark-tp1-025bdc
 worker:
   gpu: '1'
   vllmOptions:
     tensor-parallel-size: 1
-  memoryRequest: 82Gi
 modelCache:
   name: mx-nvidia-nemotron-3-supe-spark-tp1-025bdc-cache
-  storage: 90Gi
 redis:
   name: mx-nvidia-nemotron-3-supe-spark-tp1-025bdc-redis
   dataPvcName: mx-nvidia-nemotron-3-supe-spark-tp1-025bdc-redis-data

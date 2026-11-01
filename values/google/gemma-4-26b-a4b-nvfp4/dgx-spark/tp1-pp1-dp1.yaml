@@ -2,6 +2,7 @@
 extends:
 - ../model.yaml
 - ../../../_hardware/dgx-spark.yaml
+- _tuning.yaml
 recipe:
   release: mx-gemma-4-26b-a4b-nvfp4-spark-tp1-32ce1b
   hardware: dgx-spark
@@ -10,17 +11,15 @@ recipe:
     pp: 1
     dp: 1
   screeningContextLength: 8192
-  qualification: candidate-not-gpu-smoke-tested
+  qualification: requires-image-build-and-gpu-validation
 model:
   name: mx-gemma-4-26b-a4b-nvfp4-spark-tp1-32ce1b
 worker:
   gpu: '1'
   vllmOptions:
     tensor-parallel-size: 1
-  memoryRequest: 26Gi
 modelCache:
   name: mx-gemma-4-26b-a4b-nvfp4-spark-tp1-32ce1b-cache
-  storage: 32Gi
 redis:
   name: mx-gemma-4-26b-a4b-nvfp4-spark-tp1-32ce1b-redis
   dataPvcName: mx-gemma-4-26b-a4b-nvfp4-spark-tp1-32ce1b-redis-data

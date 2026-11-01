@@ -1,0 +1,57 @@
+# NVIDIA source and intentional Dynamo adaptations: see docs/nvidia-spark-recipes.md.
+# https://github.com/NVIDIA/local-ai-inference-recipes/blob/7b2ee453234617f58e1e100c195ac3be7f79e233/models/google/gemma-4-26b-a4b/dgx-spark/linux/vllm/128gb/recipe.yaml
+extends:
+- ../../../_shared/nvidia-spark.yaml
+recipe:
+  upstream:
+    url: https://github.com/NVIDIA/local-ai-inference-recipes/blob/7b2ee453234617f58e1e100c195ac3be7f79e233/models/google/gemma-4-26b-a4b/dgx-spark/linux/vllm/128gb/recipe.yaml
+    sha256: 98e4312d70b0b3a61c1cbdecd9038fd7ed4b053e05efe781eb8b448d77aa58e8
+    minimumMemoryGB: 128
+    backendVersion: 0.32.0rc1.dev301+g1ac942555.d20261016
+  runtime: spark-20261016
+model:
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-spark:1.6.1-spark-20261016-nvidia-v066-1
+  buildDockerfile: runtime/nvidia-spark/spark-20261016.Dockerfile
+  buildContext: .
+  buildPlatform: linux/arm64
+frontend:
+  runtimeProfile: nvidia/Gemma-4-26B-A4B-NVFP4
+  extraArgs:
+  - --dyn-chat-processor
+  - vllm
+  - --enable-auto-tool-choice
+  - --tool-call-parser
+  - gemma4
+  - --reasoning-parser
+  - gemma4
+worker:
+  runtimeProfile: nvidia/Gemma-4-26B-A4B-NVFP4
+  memoryRequest: 102Gi
+  prefetchModels:
+  - id: google/gemma-4-26B-A4B-it-assistant
+    revision: 6e5aaaf4c42b98394530b8fda2e95cadd65c151c
+  extraEnv:
+  - name: DYN_HEALTH_CHECK_REQUEST_TIMEOUT
+    value: '120'
+  - name: NCCL_IB_DISABLE
+    value: '1'
+  - name: VLLM_WORKER_MULTIPROC_METHOD
+    value: spawn
+  vllmOptions:
+    max-model-len: 262144
+    gpu-memory-utilization: 0.8
+    max-num-seqs: 8
+    load-format: instanttensor
+    enable-prefix-caching: true
+    reasoning-parser: gemma4
+    max-num-batched-tokens: 4096
+    speculative-config:
+      method: mtp
+      model: /model/.model-express/cache/models--google--gemma-4-26B-A4B-it-assistant/snapshots/6e5aaaf4c42b98394530b8fda2e95cadd65c151c
+      num_speculative_tokens: 4
+      moe_backend: triton
+    dyn-tool-call-parser: gemma4
+    dyn-reasoning-parser: gemma4
+    enable-multimodal: true
+modelCache:
+  storage: 32Gi

@@ -13,6 +13,8 @@ from pathlib import Path
 
 import yaml
 
+from model_values import resolve
+
 ROOT = Path(__file__).resolve().parents[1]
 GIB = 2**30
 
@@ -154,7 +156,7 @@ def generate(root: Path = ROOT) -> dict:
                 # Keep measured model/hardware tuning outside generated leaves so
                 # rebuilding the catalog cannot restore a failed startup budget.
                 tuning_path = directory / hardware_name / "_tuning.yaml"
-                tuning = yaml.safe_load(tuning_path.read_text()) if tuning_path.exists() else {}
+                tuning = resolve(tuning_path) if tuning_path.exists() else {}
                 tuned_options = tuning.get("worker", {}).get("vllmOptions", {})
                 fit_hardware = {**hw, "memory_fraction": tuned_options.get("gpu-memory-utilization", hw["memory_fraction"])}
                 for tp in (1, 2):
@@ -187,6 +189,10 @@ def generate(root: Path = ROOT) -> dict:
                               "model": {"name": name}, "worker": worker,
                               "modelCache": {"name": name + "-cache", "storage": f"{max(32, math.ceil(model['weight_bytes'] / GIB * 1.2))}Gi"},
                               "redis": {"name": name + "-redis", "dataPvcName": name + "-redis-data"}}
+                    # A draft checkpoint shares the cache. Do not replace its
+                    # explicitly reserved capacity with the target-only estimate.
+                    if "storage" in tuning.get("modelCache", {}):
+                        recipe["modelCache"].pop("storage")
                     if tuning_path.exists():
                         recipe["extends"].append("_tuning.yaml")
                     if model["config_status"] in (401, 403):
@@ -202,12 +208,27 @@ def generate(root: Path = ROOT) -> dict:
     manifest = {"schema_version": 1, "snapshot": "config/model-catalog/snapshot.json",
                 "hardware": "config/model-catalog/hardware.yaml",
                 "policy": {"nodes_per_instance": 1, "pp": 1, "dp": 1,
+                           "scope": "Generic candidate defaults; NVIDIA Spark profiles override engine settings per recipe.",
                            "replicas": 1, "runtime_max_model_len": "auto",
                            "default_screening_context": 8192,
                            "max_screening_context": max((a.get("context_length", 0) for e in entries for a in e["assessments"]), default=8192),
                            "max_sequences": 1,
                            "kv_dtype": "bfloat16", "performance_qualified": False},
                 "models": entries}
+    nvidia_source = root / "config/model-catalog/nvidia-spark.json"
+    if nvidia_source.exists():
+        profiles = json.loads(nvidia_source.read_text())["profiles"]
+        manifest["nvidia_spark_recipes"] = {
+            "source": "config/model-catalog/nvidia-spark.json",
+            "qualification": "requires-image-build-and-gpu-validation",
+            "recipes": [p["values"] for p in profiles],
+        }
+        # The collection snapshot remains an exact historical collection. These
+        # separately authored checkpoint recipes are tracked without rewriting it.
+        manifest["supplemental_recipes"] = [
+            {"id": p["model"], "revision": p["revision"], "recipes": [p["values"]]}
+            for p in profiles if p["supplemental"]
+        ]
     output = root / "config/model-catalog/recipes.json"
     output.write_text(json.dumps(manifest, indent=2) + "\n")
     return manifest

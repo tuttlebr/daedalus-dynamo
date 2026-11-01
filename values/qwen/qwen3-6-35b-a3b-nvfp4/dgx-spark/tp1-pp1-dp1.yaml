@@ -2,6 +2,7 @@
 extends:
 - ../model.yaml
 - ../../../_hardware/dgx-spark.yaml
+- _tuning.yaml
 recipe:
   release: mx-qwen3-6-35b-a3b-nvfp4-spark-tp1-f7dd87
   hardware: dgx-spark
@@ -10,17 +11,15 @@ recipe:
     pp: 1
     dp: 1
   screeningContextLength: 8192
-  qualification: candidate-not-gpu-smoke-tested
+  qualification: requires-image-build-and-gpu-validation
 model:
   name: mx-qwen3-6-35b-a3b-nvfp4-spark-tp1-f7dd87
 worker:
   gpu: '1'
   vllmOptions:
     tensor-parallel-size: 1
-  memoryRequest: 29Gi
 modelCache:
   name: mx-qwen3-6-35b-a3b-nvfp4-spark-tp1-f7dd87-cache
-  storage: 32Gi
 redis:
   name: mx-qwen3-6-35b-a3b-nvfp4-spark-tp1-f7dd87-redis
   dataPvcName: mx-qwen3-6-35b-a3b-nvfp4-spark-tp1-f7dd87-redis-data

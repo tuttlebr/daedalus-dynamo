@@ -1,0 +1,43 @@
+# Kubernetes/Dynamo adaptation of the pinned NVIDIA single-Spark recipes.
+# Model-specific options and provenance live in each Spark _tuning.yaml.
+recipe:
+  buildRequired: true
+  qualification: requires-image-build-and-gpu-validation
+  screeningContextLength: 8192
+frontend:
+  # Inherit the model's derivative image, including its vLLM chat parsers.
+  image: ""
+  resources:
+    requests:
+      cpu: "1"
+      memory: 4Gi
+    limits:
+      cpu: "4"
+      memory: 8Gi
+worker:
+  sharedMemorySize: 16Gi
+  unlimitedMemlock: true
+  securityContext:
+    runAsUser: 0
+    capabilities:
+      add: [IPC_LOCK, SYS_RESOURCE]
+  annotations:
+    nvidia.com/deployment-rolling-update-max-surge: "0"
+    nvidia.com/deployment-rolling-update-max-unavailable: "1"
+  # Remove generic candidate settings so omitted upstream options use the
+  # selected engine's defaults. False booleans are omitted by this chart.
+  vllmOptions:
+    load-format: null
+    trust-remote-code: null
+    dtype: null
+    max-model-len: null
+    max-num-seqs: null
+    max-num-batched-tokens: null
+    kv-cache-dtype: null
+    enforce-eager: false
+    enable-chunked-prefill: null
+    enable-prefix-caching: null
+    seed: null
+    linear-backend: null
+    moe-backend: null
+    language-model-only: false

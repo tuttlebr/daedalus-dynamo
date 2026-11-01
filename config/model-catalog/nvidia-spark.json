@@ -1,0 +1,610 @@
+{
+  "schema_version": 1,
+  "reviewed_at": "2026-11-01",
+  "dynamo_version": "1.6.1",
+  "native_runtime_image": "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.1@sha256:5899e7bdd3528ab09a17ec87e2abe1949f8a0386a0a49f3b24dbd52d8211dc5d",
+  "runtimes": {
+    "vllm-031": {
+      "base_image": "vllm/vllm-openai:v0.31.0@sha256:c1c9f6fd5c109ba7f0546a59f5b2f15fb87f64c77782e90a27b648b42a8e67c3",
+      "expected_vllm": "0.31.0"
+    },
+    "ngc-2610": {
+      "base_image": "nvcr.io/nvidia/vllm:26.10.pre1-py3@sha256:cb38bbefdbc3e9fe045f931dd72cbd58cd48985c7e09916bcc6c15c10f39b929",
+      "expected_vllm": "0.31.0+88641915.nv26.10.73893335"
+    },
+    "spark-20261014": {
+      "base_image": "eugr/spark-vllm:nightly-20261014@sha256:7094664bb85abf28be8cc5d678d8fc2a954160479d31f3a8402d394f74eb5dca",
+      "expected_vllm": "0.1.dev21818+g3a947437c.d20261014"
+    },
+    "spark-20261015": {
+      "base_image": "eugr/spark-vllm:nightly-20261015@sha256:4428520bf19839a81eaa9f0647e421713e7246bd9ca28669dd742cb09955ad86",
+      "expected_vllm": "0.32.0rc1.dev227+g1336955f3.d20261015"
+    },
+    "spark-20261016": {
+      "base_image": "eugr/spark-vllm:nightly-20261016@sha256:431593a0a7064bd41d9b2720ca5d00185540ce0fdf1e893adf85af9c07dc7175",
+      "expected_vllm": "0.32.0rc1.dev301+g1ac942555.d20261016"
+    },
+    "b12x-20261015": {
+      "base_image": "eugr/spark-vllm-b12x:nightly-20261015@sha256:03a956544e9f9b4b7ba91690469fbe7848bdbef29a7d2e0f5788368467bb3595",
+      "expected_vllm": "0.1.dev21830+g8244d1c44.d20261015"
+    }
+  },
+  "profiles": [
+    {
+      "model": "nvidia/diffusiongemma-26B-A4B-it-NVFP4",
+      "revision": "ec4ff3df205028f4e81c954c2227f9312b3ec2ea",
+      "weight_bytes": 18823855888,
+      "values": "values/google/diffusiongemma-26b-a4b-it-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "supplemental": false,
+      "source": {
+        "repository": "https://github.com/NVIDIA/local-ai-inference-recipes",
+        "commit": "7b2ee453234617f58e1e100c195ac3be7f79e233",
+        "path": "models/google/diffusiongemma-26b-a4b/dgx-spark/linux/vllm/recipe.yaml",
+        "sha256": "cf2d635efa0c2d2411696bf2a89652757ca187f0477232a4db17776e565d707a",
+        "min_memory_gb": 128,
+        "image": "eugr/spark-vllm:nightly-20261014",
+        "backend_version": "0.1.dev21818+g3a947437c.d20261014"
+      },
+      "runtime": "spark-20261014",
+      "draft": null,
+      "options": {
+        "max-model-len": 262144,
+        "gpu-memory-utilization": 0.8,
+        "port": 8000,
+        "host": "0.0.0.0",
+        "trust-remote-code": true,
+        "enable-auto-tool-choice": true,
+        "tool-call-parser": "gemma4",
+        "load-format": "fastsafetensors",
+        "attention-backend": "TRITON_ATTN",
+        "max-num-seqs": 10,
+        "enable-prefix-caching": true,
+        "diffusion-config": {
+          "canvas_length": 256
+        },
+        "override-generation-config": {
+          "max_new_tokens": null
+        },
+        "reasoning-parser": "gemma4",
+        "default-chat-template-kwargs": {
+          "enable_thinking": true
+        }
+      },
+      "environment": {}
+    },
+    {
+      "model": "nvidia/Gemma-4-26B-A4B-NVFP4",
+      "revision": "a19cfe00be84568a6867111c9a68c9c44fdcffe6",
+      "weight_bytes": 18788485588,
+      "values": "values/google/gemma-4-26b-a4b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "supplemental": false,
+      "source": {
+        "repository": "https://github.com/NVIDIA/local-ai-inference-recipes",
+        "commit": "7b2ee453234617f58e1e100c195ac3be7f79e233",
+        "path": "models/google/gemma-4-26b-a4b/dgx-spark/linux/vllm/128gb/recipe.yaml",
+        "sha256": "98e4312d70b0b3a61c1cbdecd9038fd7ed4b053e05efe781eb8b448d77aa58e8",
+        "min_memory_gb": 128,
+        "image": "eugr/spark-vllm:nightly-20261016",
+        "backend_version": "0.32.0rc1.dev301+g1ac942555.d20261016"
+      },
+      "runtime": "spark-20261016",
+      "draft": {
+        "id": "google/gemma-4-26B-A4B-it-assistant",
+        "revision": "6e5aaaf4c42b98394530b8fda2e95cadd65c151c",
+        "weight_bytes": 839427840,
+        "files": 1,
+        "gated": false
+      },
+      "options": {
+        "max-model-len": 262144,
+        "gpu-memory-utilization": 0.8,
+        "port": 8000,
+        "host": "0.0.0.0",
+        "max-num-seqs": 8,
+        "load-format": "instanttensor",
+        "enable-prefix-caching": true,
+        "enable-auto-tool-choice": true,
+        "tool-call-parser": "gemma4",
+        "reasoning-parser": "gemma4",
+        "max-num-batched-tokens": 4096,
+        "speculative-config": {
+          "method": "mtp",
+          "model": "google/gemma-4-26B-A4B-it-assistant",
+          "num_speculative_tokens": 4,
+          "moe_backend": "triton"
+        }
+      },
+      "environment": {}
+    },
+    {
+      "model": "nvidia/Gemma-4-31B-IT-NVFP4",
+      "revision": "4135a98a9b728a548947683219633b25682223ac",
+      "weight_bytes": 32633477808,
+      "values": "values/google/gemma-4-31b-it-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "supplemental": false,
+      "source": {
+        "repository": "https://github.com/NVIDIA/local-ai-inference-recipes",
+        "commit": "7b2ee453234617f58e1e100c195ac3be7f79e233",
+        "path": "models/google/gemma-4-31b/dgx-spark/linux/vllm/128gb/nvfp4/recipe.yaml",
+        "sha256": "c1d2a67bbdcc1fb6dc234f4dd6f1130ad0a2c87b7b1fbd9b650b8c5c7916d23f",
+        "min_memory_gb": 128,
+        "image": "eugr/spark-vllm:nightly-20261016",
+        "backend_version": "0.32.0rc1.dev301+g1ac942555.d20261016"
+      },
+      "runtime": "spark-20261016",
+      "draft": {
+        "id": "google/gemma-4-31B-it-assistant",
+        "revision": "627c5ec1458b9086b841a91e0512fd31fd2fbbf1",
+        "weight_bytes": 939042560,
+        "files": 1,
+        "gated": false
+      },
+      "options": {
+        "gpu-memory-utilization": 0.8,
+        "max-model-len": 262144,
+        "max-num-seqs": 8,
+        "host": "0.0.0.0",
+        "port": 8000,
+        "enable-prefix-caching": true,
+        "max-num-batched-tokens": 4096,
+        "reasoning-parser": "gemma4",
+        "enable-auto-tool-choice": true,
+        "tool-call-parser": "gemma4",
+        "load-format": "fastsafetensors",
+        "speculative-config": {
+          "model": "google/gemma-4-31B-it-assistant",
+          "num_speculative_tokens": 4
+        }
+      },
+      "environment": {}
+    },
+    {
+      "model": "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4",
+      "revision": "ff433f5493e25d631c9f12b5d55c674229923d02",
+      "weight_bytes": 80317948856,
+      "values": "values/nvidia/nvidia-nemotron-3-super-120b-a12b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "supplemental": false,
+      "source": {
+        "repository": "https://github.com/NVIDIA/local-ai-inference-recipes",
+        "commit": "7b2ee453234617f58e1e100c195ac3be7f79e233",
+        "path": "models/nvidia/nemotron-3-super-120b-a12b/dgx-spark/linux/vllm/recipe.yaml",
+        "sha256": "7e5462a5cf4e50b1f4b873316de95e86559dd39cdd35b8a13262be53f927816d",
+        "min_memory_gb": 128,
+        "image": "vllm/vllm-openai:v0.31.0",
+        "backend_version": "0.31.0"
+      },
+      "runtime": "vllm-031",
+      "draft": null,
+      "options": {
+        "host": "0.0.0.0",
+        "port": 8000,
+        "max-model-len": 262144,
+        "gpu-memory-utilization": 0.8,
+        "max-num-seqs": 8,
+        "load-format": "fastsafetensors",
+        "attention-backend": "flashinfer",
+        "max-num-batched-tokens": 16384,
+        "kv-cache-dtype": "fp8",
+        "mamba-cache-mode": "align",
+        "mamba-ssm-cache-dtype": "float32",
+        "speculative-config": {
+          "method": "mtp",
+          "num_speculative_tokens": 3
+        },
+        "enable-prefix-caching": true,
+        "reasoning-parser": "nemotron_v3",
+        "enable-auto-tool-choice": true,
+        "tool-call-parser": "qwen3_xml"
+      },
+      "environment": {
+        "VLLM_FLOAT32_MATMUL_PRECISION": "high",
+        "VLLM_ALLOW_LONG_MAX_MODEL_LEN": "1"
+      }
+    },
+    {
+      "model": "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB",
+      "revision": "cf2effc5c4b794ee9fb8d34eab3d1d65ce64142f",
+      "weight_bytes": 24083745496,
+      "values": "values/nvidia/nvidia-nemotron-3-5-bolt-74b-a9b-24gb/dgx-spark/tp1-pp1-dp1.yaml",
+      "supplemental": true,
+      "source": {
+        "repository": "https://github.com/NVIDIA/local-ai-inference-recipes",
+        "commit": "7b2ee453234617f58e1e100c195ac3be7f79e233",
+        "path": "models/nvidia/nemotron-3.5-bolt-74b-a9b/dgx-spark/linux/vllm/128gb/iq2/recipe.yaml",
+        "sha256": "c3cf954def0c84a8aea9ad1ece5db6dbf7a88809cf91cdefd3fe5e874ae7ce89",
+        "min_memory_gb": 128,
+        "image": "eugr/spark-vllm:nightly-20261015",
+        "backend_version": "0.32.0rc1.dev227+g1336955f3.d20261015"
+      },
+      "runtime": "spark-20261015",
+      "draft": {
+        "id": "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-LiLiCorr",
+        "revision": "449d24140160b8e51871bfc0f0a7338abf640aa1",
+        "weight_bytes": 962485872,
+        "files": 1,
+        "gated": false
+      },
+      "options": {
+        "kv-cache-dtype": "fp8",
+        "max-num-seqs": 8,
+        "trust-remote-code": true,
+        "max-model-len": "auto",
+        "gpu-memory-utilization": 0.8,
+        "max-num-batched-tokens": 8192,
+        "speculative-config": {
+          "model": "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-LiLiCorr",
+          "method": "dflash",
+          "num_speculative_tokens": 7
+        },
+        "load-format": "instanttensor",
+        "enable-auto-tool-choice": true,
+        "tool-call-parser": "qwen3_coder",
+        "reasoning-parser": "nemotron_v3",
+        "enable-mamba-shared-prefix-checkpoint": true,
+        "block-size": 64,
+        "prefix-match-unit": 64
+      },
+      "environment": {}
+    },
+    {
+      "model": "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4",
+      "revision": "bee7596271d1495f6992ae224aefde4410e816b8",
+      "weight_bytes": 21561882284,
+      "values": "values/nvidia/nvidia-nemotron-3-5-lightning-30b-a3b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "supplemental": false,
+      "source": {
+        "repository": "https://github.com/NVIDIA/local-ai-inference-recipes",
+        "commit": "7b2ee453234617f58e1e100c195ac3be7f79e233",
+        "path": "models/nvidia/nemotron-3.5-lightning-30b-a3b/dgx-spark/linux/vllm/64gb/nvfp4/recipe.yaml",
+        "sha256": "be33d127f24fa49192607d6dd604f88f7eb7369f250a1ff74b4b948e4303ffed",
+        "min_memory_gb": 64,
+        "image": "eugr/spark-vllm:nightly-20261016",
+        "backend_version": "0.32.0rc1.dev301+g1ac942555.d20261016"
+      },
+      "runtime": "spark-20261016",
+      "draft": {
+        "id": "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark",
+        "revision": "6d127b50ecd98562cea85d0087680b7d86091fb0",
+        "weight_bytes": 1349057504,
+        "files": 1,
+        "gated": false
+      },
+      "options": {
+        "moe-backend": "marlin",
+        "kv-cache-dtype": "fp8",
+        "max-num-batched-tokens": 4096,
+        "gpu-memory-utilization": 0.8,
+        "enable-prefix-caching": true,
+        "mamba-backend": "flashinfer",
+        "mamba-cache-mode": "align",
+        "mamba-ssm-cache-dtype": "float16",
+        "enable-mamba-cache-stochastic-rounding": true,
+        "mamba-cache-philox-rounds": 5,
+        "reasoning-parser": "nemotron_v3",
+        "enable-auto-tool-choice": true,
+        "tool-call-parser": "qwen3_xml",
+        "load-format": "safetensors",
+        "speculative-config": {
+          "method": "dspark",
+          "model": "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark",
+          "num_speculative_tokens": 7
+        }
+      },
+      "environment": {}
+    },
+    {
+      "model": "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4",
+      "revision": "da5b2650a835292c678994a1fa3fb653250fb508",
+      "weight_bytes": 75010188240,
+      "values": "values/nvidia/nvidia-nemotron-3-5-super-vl-120b-a12b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "supplemental": false,
+      "source": {
+        "repository": "https://github.com/NVIDIA/local-ai-inference-recipes",
+        "commit": "7b2ee453234617f58e1e100c195ac3be7f79e233",
+        "path": "models/nvidia/nemotron-3.5-super-vl-120b-a12b/dgx-spark/linux/vllm/nvfp4/recipe.yaml",
+        "sha256": "9d21989e223030bbd383ebf808ea473dfe266b93bb9065b01ef70d7e32c2c4b5",
+        "min_memory_gb": 128,
+        "image": "eugr/spark-vllm:latest",
+        "backend_version": "0.32.0rc1.dev227+g1336955f3.d20261015"
+      },
+      "runtime": "spark-20261015",
+      "draft": {
+        "id": "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4-LiLiCorr",
+        "revision": "292bf1efc06ba39567da7351f2ad7a522afa3959",
+        "weight_bytes": 1317952596,
+        "files": 1,
+        "gated": false
+      },
+      "options": {
+        "kv-cache-dtype": "fp8",
+        "max-num-seqs": 8,
+        "trust-remote-code": true,
+        "max-model-len": "auto",
+        "gpu-memory-utilization": 0.8,
+        "max-num-batched-tokens": 8192,
+        "speculative-config": {
+          "model": "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4-LiLiCorr",
+          "method": "dflash",
+          "num_speculative_tokens": 7
+        },
+        "mamba-backend": "flashinfer",
+        "mamba-ssm-cache-dtype": "float16",
+        "enable-mamba-cache-stochastic-rounding": true,
+        "mamba-cache-philox-rounds": 5,
+        "enable-mamba-shared-prefix-checkpoint": true,
+        "prefix-match-unit": 64,
+        "block-size": 64,
+        "enable-auto-tool-choice": true,
+        "tool-call-parser": "qwen3_coder",
+        "reasoning-parser": "nemotron_v3",
+        "mm-processor-cache-gb": 0,
+        "limit-mm-per-prompt": {
+          "video": 1,
+          "image": 1
+        },
+        "video-pruning-rate": 0.5,
+        "media-io-kwargs": {
+          "video": {
+            "fps": 2,
+            "num_frames": 256
+          }
+        },
+        "load-format": "instanttensor"
+      },
+      "environment": {}
+    },
+    {
+      "model": "nvidia/Qwen3.5-122B-A10B-NVFP4",
+      "revision": "98915d837c4e7c87ac8296d02e89de19b3207e6d",
+      "weight_bytes": 83495005008,
+      "values": "values/qwen/qwen3-5-122b-a10b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "supplemental": false,
+      "source": {
+        "repository": "https://github.com/NVIDIA/local-ai-inference-recipes",
+        "commit": "7b2ee453234617f58e1e100c195ac3be7f79e233",
+        "path": "models/qwen/qwen3.5-122b-a10b/dgx-spark/linux/vllm/recipe.yaml",
+        "sha256": "145582f7944824ecb62f1af8c18a6ea3dd0ec6ec72e8a6a998313ab244d9cac0",
+        "min_memory_gb": 128,
+        "image": "vllm/vllm-openai:v0.31.0",
+        "backend_version": "0.31.0"
+      },
+      "runtime": "vllm-031",
+      "draft": null,
+      "options": {
+        "max-model-len": 262144,
+        "gpu-memory-utilization": 0.8,
+        "max-num-seqs": 8,
+        "port": 8000,
+        "host": "0.0.0.0",
+        "load-format": "safetensors",
+        "enable-prefix-caching": true,
+        "enable-auto-tool-choice": true,
+        "tool-call-parser": "qwen3_xml",
+        "reasoning-parser": "qwen3",
+        "max-num-batched-tokens": 8192,
+        "attention-backend": "flashinfer",
+        "kv-cache-dtype": "fp8",
+        "moe-backend": "marlin",
+        "speculative-config": {
+          "method": "mtp",
+          "num_speculative_tokens": 3,
+          "moe_backend": "triton"
+        }
+      },
+      "environment": {}
+    },
+    {
+      "model": "nvidia/Qwen3.6-27B-NVFP4",
+      "revision": "0893e1606ff3d5f97a441f405d5fc541a6bdf404",
+      "weight_bytes": 21921697184,
+      "values": "values/qwen/qwen3-6-27b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "supplemental": false,
+      "source": {
+        "repository": "https://github.com/NVIDIA/local-ai-inference-recipes",
+        "commit": "7b2ee453234617f58e1e100c195ac3be7f79e233",
+        "path": "models/qwen/qwen3.6-27b/dgx-spark/linux/vllm/recipe.yaml",
+        "sha256": "3e0c3976810d2217f8df37be0ac4ae1121ca3aa7d0bf2165ae050581a9f194a4",
+        "min_memory_gb": 128,
+        "image": "vllm/vllm-openai:v0.31.0",
+        "backend_version": "0.31.0"
+      },
+      "runtime": "vllm-031",
+      "draft": null,
+      "options": {
+        "host": "0.0.0.0",
+        "port": 8000,
+        "trust-remote-code": true,
+        "kv-cache-dtype": "fp8",
+        "attention-backend": "flashinfer",
+        "gpu-memory-utilization": 0.5,
+        "max-model-len": 262144,
+        "max-num-seqs": 8,
+        "max-num-batched-tokens": 8192,
+        "enable-chunked-prefill": true,
+        "async-scheduling": true,
+        "enable-prefix-caching": true,
+        "speculative-config": {
+          "method": "mtp",
+          "num_speculative_tokens": 5
+        },
+        "load-format": "fastsafetensors",
+        "reasoning-parser": "qwen3",
+        "tool-call-parser": "qwen3_xml",
+        "enable-auto-tool-choice": true
+      },
+      "environment": {}
+    },
+    {
+      "model": "nvidia/Qwen3.6-35B-A3B-NVFP4",
+      "revision": "1355db6a052410cfd62085d94b58866fd0f2c3c5",
+      "weight_bytes": 23424338320,
+      "values": "values/qwen/qwen3-6-35b-a3b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "supplemental": false,
+      "source": {
+        "repository": "https://github.com/NVIDIA/local-ai-inference-recipes",
+        "commit": "7b2ee453234617f58e1e100c195ac3be7f79e233",
+        "path": "models/qwen/qwen3.6-35b-a3b/dgx-spark/linux/vllm/128gb/recipe.yaml",
+        "sha256": "66835de883c37d366b0d1a10f699e4e0cc4c6a5d311a7f6aed84cd8a9a103460",
+        "min_memory_gb": 128,
+        "image": "nvcr.io/nvidia/vllm:26.10.pre1-py3",
+        "backend_version": "0.31.0+88641915.nv26.10.73893335"
+      },
+      "runtime": "ngc-2610",
+      "draft": null,
+      "options": {
+        "host": "0.0.0.0",
+        "port": 8000,
+        "tensor-parallel-size": 1,
+        "trust-remote-code": true,
+        "kv-cache-dtype": "fp8",
+        "attention-backend": "flashinfer",
+        "moe-backend": "marlin",
+        "gpu-memory-utilization": 0.8,
+        "max-model-len": 262144,
+        "max-num-seqs": 8,
+        "max-num-batched-tokens": 8192,
+        "enable-chunked-prefill": true,
+        "async-scheduling": true,
+        "enable-prefix-caching": true,
+        "speculative-config": {
+          "method": "mtp",
+          "num_speculative_tokens": 4,
+          "moe_backend": "triton"
+        },
+        "load-format": "safetensors",
+        "reasoning-parser": "qwen3",
+        "tool-call-parser": "qwen3_xml",
+        "enable-auto-tool-choice": true
+      },
+      "environment": {}
+    },
+    {
+      "model": "nvidia/Qwen3.8-27B-NVFP4",
+      "revision": "482ca0f3832238542f8f5295dde86b5f22711d80",
+      "weight_bytes": 21921697280,
+      "values": "values/qwen/qwen3-8-27b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml",
+      "supplemental": false,
+      "source": {
+        "repository": "https://github.com/NVIDIA/local-ai-inference-recipes",
+        "commit": "7b2ee453234617f58e1e100c195ac3be7f79e233",
+        "path": "models/qwen/qwen3.8-27b/dgx-spark/linux/vllm/128gb/nvfp4/recipe.yaml",
+        "sha256": "e93337dda7e5aaf479601766b36109f063ad12cf275761c9d389a61d61ad138d",
+        "min_memory_gb": 128,
+        "image": "nvcr.io/nvidia/vllm:26.10.pre1-py3",
+        "backend_version": "0.31.0+88641915.nv26.10.73893335"
+      },
+      "runtime": "ngc-2610",
+      "draft": {
+        "id": "z-lab/Qwen3.8-27B-DFlash2",
+        "revision": "50307d4c4cde6860d4eee73e2547cd786fe8e8a4",
+        "weight_bytes": 3848817896,
+        "files": 1,
+        "gated": false
+      },
+      "options": {
+        "host": "0.0.0.0",
+        "port": 8000,
+        "kv-cache-dtype": "fp8",
+        "max-model-len": 262144,
+        "max-num-seqs": 8,
+        "async-scheduling": true,
+        "enable-flashinfer-autotune": true,
+        "gpu-memory-utilization": 0.6,
+        "kernel-config": {
+          "linear_backend": "nvfp4_dynamic",
+          "nvfp4_dynamic_max_tokens": 16,
+          "unquantized_linear_backend": "flashinfer_cudnn",
+          "linear_backend_per_quant": {
+            "fp8_w8a8": "cutlass"
+          }
+        },
+        "speculative-config": {
+          "method": "dflash",
+          "model": "z-lab/Qwen3.8-27B-DFlash2",
+          "num_speculative_tokens": 7,
+          "draft_sample_method": "probabilistic",
+          "rejection_sample_method": "standard"
+        },
+        "compilation-config": {
+          "pass_config": {
+            "fuse_act_quant": true
+          },
+          "max_cudagraph_capture_size": 64
+        },
+        "reasoning-parser": "qwen3",
+        "tool-call-parser": "qwen3_xml",
+        "enable-auto-tool-choice": true
+      },
+      "environment": {}
+    },
+    {
+      "model": "nvidia/Qwen3.8-Flash-Next-FP4-Local",
+      "revision": "b9ce18a6887e18c089fdea8509a33e63429a3300",
+      "weight_bytes": 102192011716,
+      "values": "values/qwen/qwen3-8-flash-next-fp4-local/dgx-spark/tp1-pp1-dp1.yaml",
+      "supplemental": true,
+      "source": {
+        "repository": "https://github.com/NVIDIA/local-ai-inference-recipes",
+        "commit": "7b2ee453234617f58e1e100c195ac3be7f79e233",
+        "path": "models/qwen/qwen3.8-flash-next/dgx-spark/linux/vllm/fp4-local/recipe.yaml",
+        "sha256": "e00eb23270bbb657ea0bd9b29f66f4a81324be740b7c5eda21b1f299724f226c",
+        "min_memory_gb": 128,
+        "image": "eugr/spark-vllm-b12x:nightly-20261015",
+        "backend_version": "0.1.dev21830+g8244d1c44.d20261015"
+      },
+      "runtime": "b12x-20261015",
+      "draft": null,
+      "options": {
+        "host": "0.0.0.0",
+        "port": 8000,
+        "tensor-parallel-size": 1,
+        "pipeline-parallel-size": 1,
+        "mamba-cache-mode": "align",
+        "enable-prefix-caching": true,
+        "enable-chunked-prefill": true,
+        "dtype": "bfloat16",
+        "kv-cache-dtype": "fp8",
+        "quantization": "modelopt_mixed",
+        "block-size": 16,
+        "load-format": "b12x",
+        "max-model-len": 262144,
+        "max-num-seqs": 8,
+        "max-num-batched-tokens": 4096,
+        "speculative-config": {
+          "method": "mtp",
+          "num_speculative_tokens": 4
+        },
+        "gdn-decode-kernel": "b12x",
+        "linear-backend": "b12x",
+        "moe-backend": "b12x",
+        "no-enable-flashinfer-autotune": true,
+        "mm-encoder-tp-mode": "data",
+        "reasoning-parser": "qwen3",
+        "tool-call-parser": "qwen3_xml",
+        "enable-auto-tool-choice": true,
+        "compilation-config": {
+          "pass_config": {
+            "fuse_act_quant": true
+          }
+        },
+        "gpu-memory-utilization": 0.8
+      },
+      "environment": {
+        "VLLM_PLE_TABLE_MEMORY": "disk",
+        "B12X_DISK_BACKEND": "io_uring",
+        "CUTE_DSL_ARCH": "sm_121a",
+        "SAFETENSORS_FAST_GPU": "1",
+        "VLLM_WORKER_MULTIPROC_METHOD": "spawn",
+        "VLLM_SSM_CONV_STATE_LAYOUT": "DS",
+        "VLLM_USE_AOT_COMPILE": "1",
+        "VLLM_USE_MEGA_AOT_ARTIFACT": "1",
+        "VLLM_USE_V2_MODEL_RUNNER": "1",
+        "B12X_POLICY_MODE": "auto",
+        "VLLM_MXFP8_LM_HEAD": "1",
+        "VLLM_B12X_MOE_FP4_LAYER_MAX_INPUT_SCALE": "w13",
+        "VLLM_B12X_MOE_FP4_FORCE_A16": "1",
+        "B12X_W4A16_A4_PREFILL": "1"
+      }
+    }
+  ]
+}

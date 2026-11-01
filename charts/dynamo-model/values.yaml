@@ -76,6 +76,8 @@ modelexpress:
       memory: 4Gi
 
 frontend:
+  # Optional build/runtime contract supplied by the NVIDIA Spark derivative.
+  runtimeProfile: ""
   # A separate frontend image can supply native transport features while a
   # model-specific worker image supplies a newer inference engine.
   image: ""
@@ -106,6 +108,11 @@ frontend:
       memory: 2Gi
 
 worker:
+  runtimeProfile: ""
+  # Prefetch exact draft snapshots before creating the inference engine.
+  prefetchModels: []
+  unlimitedMemlock: false
+  extraVolumeMounts: []
   annotations: {}
   componentName: VllmWorker
   replicas: 1

@@ -1,0 +1,10 @@
+# Supplemental pinned NVIDIA checkpoint, outside the HF collection snapshot.
+extends:
+- ../../_shared/vllm.yaml
+model:
+  id: nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB
+modelexpress:
+  modelRevision: cf2effc5c4b794ee9fb8d34eab3d1d65ce64142f
+worker:
+  vllmOptions:
+    revision: cf2effc5c4b794ee9fb8d34eab3d1d65ce64142f

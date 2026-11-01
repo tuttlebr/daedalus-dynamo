@@ -2,6 +2,7 @@
 extends:
 - ../model.yaml
 - ../../../_hardware/dgx-spark.yaml
+- _tuning.yaml
 recipe:
   release: mx-nvidia-nemotron-3-5-li-spark-tp1-c766bc
   hardware: dgx-spark
@@ -10,17 +11,15 @@ recipe:
     pp: 1
     dp: 1
   screeningContextLength: 8192
-  qualification: candidate-not-gpu-smoke-tested
+  qualification: requires-image-build-and-gpu-validation
 model:
   name: mx-nvidia-nemotron-3-5-li-spark-tp1-c766bc
 worker:
   gpu: '1'
   vllmOptions:
     tensor-parallel-size: 1
-  memoryRequest: 27Gi
 modelCache:
   name: mx-nvidia-nemotron-3-5-li-spark-tp1-c766bc-cache
-  storage: 32Gi
 redis:
   name: mx-nvidia-nemotron-3-5-li-spark-tp1-c766bc-redis
   dataPvcName: mx-nvidia-nemotron-3-5-li-spark-tp1-c766bc-redis-data

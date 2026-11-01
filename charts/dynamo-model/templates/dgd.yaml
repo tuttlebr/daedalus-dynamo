@@ -75,6 +75,9 @@ spec:
                 exit 78
               fi
               echo "Frontend RLIMIT_NOFILE soft=$(ulimit -S -n) hard=$(ulimit -H -n)"
+              {{- if .Values.frontend.runtimeProfile }}
+              python3 /opt/nvidia-spark/verify_runtime.py --profile {{ .Values.frontend.runtimeProfile | squote }} --role frontend
+              {{- end }}
               unset NATS_SERVER &&
               exec python3 -m dynamo.frontend \
               --router-mode {{ .Values.frontend.routerMode }} \
@@ -418,7 +421,7 @@ spec:
         mainContainer:
           image: {{ .Values.model.image | quote }}
           imagePullPolicy: {{ .Values.model.imagePullPolicy }}
-          {{- if or .Values.worker.customJinjaTemplate.enabled .Values.modelexpress.runtimeConfigMap }}
+          {{- if or .Values.worker.customJinjaTemplate.enabled .Values.modelexpress.runtimeConfigMap .Values.worker.extraVolumeMounts }}
           volumeMounts:
             {{- if .Values.modelexpress.runtimeConfigMap }}
             - name: modelexpress-runtime
@@ -430,6 +433,9 @@ spec:
               mountPath: {{ required "worker.customJinjaTemplate.mountPath is required when enabled" .Values.worker.customJinjaTemplate.mountPath | quote }}
               subPath: chat-template.jinja
               readOnly: true
+            {{- end }}
+            {{- with .Values.worker.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
             {{- end }}
           {{- end }}
           {{- if .Values.worker.workingDir }}
@@ -493,6 +499,13 @@ spec:
                 exit 78
               fi
               echo "Worker RLIMIT_NOFILE soft=$(ulimit -S -n) hard=$(ulimit -H -n)"
+              {{- if .Values.worker.unlimitedMemlock }}
+              ulimit -l unlimited
+              ulimit -s 65536
+              {{- end }}
+              {{- if .Values.worker.runtimeProfile }}
+              python3 /opt/nvidia-spark/verify_runtime.py --profile {{ .Values.worker.runtimeProfile | squote }} --role worker
+              {{- end }}
 
               {{- if .Values.modelexpress.runtimeConfigMap }}
               source /opt/modelexpress-runtime/wait-cache.sh
@@ -522,6 +535,11 @@ spec:
               echo "Model cache is ready at $MODEL_READY_LINK."
               {{- end }}
 
+              {{- end }}
+
+              {{- if .Values.worker.prefetchModels }}
+              python3 /opt/nvidia-spark/prefetch_models.py --cache-dir "$HF_HUB_CACHE" \
+                {{ .Values.worker.prefetchModels | toJson | replace "'" "'\"'\"'" | squote }}
               {{- end }}
 
               {{- if .Values.worker.applyVllmModelOptLmHeadPatch }}

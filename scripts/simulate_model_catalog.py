@@ -66,6 +66,17 @@ def simulate(model: dict, path: str, output: Path, image: str, timeout: int) -> 
               "hardware": values["recipe"]["hardware"], "tp": values["recipe"]["parallelism"]["tp"],
               "runtime_vllm_version": "0.31.0", "performance_qualified": False}
     record_path = target / "outcome.json"
+    if values["recipe"].get("upstream"):
+        # Older reports describe the generic eager/BF16/no-draft candidate.
+        # Neither reusing them nor predicting with that approximation qualifies
+        # the new speculative, FP8, multimodal or diffusion runtime.
+        record.update(
+            status="requires-model-specific-simulator-support",
+            reason="The generic simulator adapter does not model this NVIDIA Spark profile.",
+            runtime_vllm_version=values["recipe"]["upstream"]["backendVersion"],
+        )
+        record_path.write_text(json.dumps(record, indent=2) + "\n")
+        return record
     if record_path.exists():
         return json.loads(record_path.read_text())
     if not model.get("config"):

@@ -1,0 +1,55 @@
+# NVIDIA source and intentional Dynamo adaptations: see docs/nvidia-spark-recipes.md.
+# https://github.com/NVIDIA/local-ai-inference-recipes/blob/7b2ee453234617f58e1e100c195ac3be7f79e233/models/google/gemma-4-31b/dgx-spark/linux/vllm/128gb/nvfp4/recipe.yaml
+extends:
+- ../../../_shared/nvidia-spark.yaml
+recipe:
+  upstream:
+    url: https://github.com/NVIDIA/local-ai-inference-recipes/blob/7b2ee453234617f58e1e100c195ac3be7f79e233/models/google/gemma-4-31b/dgx-spark/linux/vllm/128gb/nvfp4/recipe.yaml
+    sha256: c1d2a67bbdcc1fb6dc234f4dd6f1130ad0a2c87b7b1fbd9b650b8c5c7916d23f
+    minimumMemoryGB: 128
+    backendVersion: 0.32.0rc1.dev301+g1ac942555.d20261016
+  runtime: spark-20261016
+model:
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-spark:1.6.1-spark-20261016-nvidia-v066-1
+  buildDockerfile: runtime/nvidia-spark/spark-20261016.Dockerfile
+  buildContext: .
+  buildPlatform: linux/arm64
+frontend:
+  runtimeProfile: nvidia/Gemma-4-31B-IT-NVFP4
+  extraArgs:
+  - --dyn-chat-processor
+  - vllm
+  - --enable-auto-tool-choice
+  - --tool-call-parser
+  - gemma4
+  - --reasoning-parser
+  - gemma4
+worker:
+  runtimeProfile: nvidia/Gemma-4-31B-IT-NVFP4
+  memoryRequest: 102Gi
+  prefetchModels:
+  - id: google/gemma-4-31B-it-assistant
+    revision: 627c5ec1458b9086b841a91e0512fd31fd2fbbf1
+  extraEnv:
+  - name: DYN_HEALTH_CHECK_REQUEST_TIMEOUT
+    value: '120'
+  - name: NCCL_IB_DISABLE
+    value: '1'
+  - name: VLLM_WORKER_MULTIPROC_METHOD
+    value: spawn
+  vllmOptions:
+    gpu-memory-utilization: 0.8
+    max-model-len: 262144
+    max-num-seqs: 8
+    enable-prefix-caching: true
+    max-num-batched-tokens: 4096
+    reasoning-parser: gemma4
+    load-format: fastsafetensors
+    speculative-config:
+      model: /model/.model-express/cache/models--google--gemma-4-31B-it-assistant/snapshots/627c5ec1458b9086b841a91e0512fd31fd2fbbf1
+      num_speculative_tokens: 4
+    dyn-tool-call-parser: gemma4
+    dyn-reasoning-parser: gemma4
+    enable-multimodal: true
+modelCache:
+  storage: 48Gi

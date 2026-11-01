@@ -1,0 +1,7 @@
+**
+!runtime/
+!runtime/nvidia-spark/
+!runtime/nvidia-spark/*.py
+!config/
+!config/model-catalog/
+!config/model-catalog/nvidia-spark.json

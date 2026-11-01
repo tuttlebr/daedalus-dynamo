@@ -2,6 +2,7 @@
 extends:
 - ../model.yaml
 - ../../../_hardware/dgx-spark.yaml
+- _tuning.yaml
 recipe:
   release: mx-diffusiongemma-26b-a4b-spark-tp1-c1aa0f
   hardware: dgx-spark
@@ -10,17 +11,15 @@ recipe:
     pp: 1
     dp: 1
   screeningContextLength: 8192
-  qualification: candidate-not-gpu-smoke-tested
+  qualification: requires-image-build-and-gpu-validation
 model:
   name: mx-diffusiongemma-26b-a4b-spark-tp1-c1aa0f
 worker:
   gpu: '1'
   vllmOptions:
     tensor-parallel-size: 1
-  memoryRequest: 26Gi
 modelCache:
   name: mx-diffusiongemma-26b-a4b-spark-tp1-c1aa0f-cache
-  storage: 32Gi
 redis:
   name: mx-diffusiongemma-26b-a4b-spark-tp1-c1aa0f-redis
   dataPvcName: mx-diffusiongemma-26b-a4b-spark-tp1-c1aa0f-redis-data
