@@ -2,6 +2,7 @@
 extends:
 - ../model.yaml
 - ../../../_hardware/l40s.yaml
+- _tuning-tp1-pp1-dp1.yaml
 recipe:
   release: mx-muse-glimmer-30b-nvfp4-l40s-tp1-84d1be
   hardware: l40s

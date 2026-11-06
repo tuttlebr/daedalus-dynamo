@@ -63,6 +63,10 @@ spec:
               value: {{ .Values.frontend.tokenizer | quote }}
             - name: DYN_ROUTER_QUEUE_POLICY
               value: {{ .Values.frontend.queuePolicy | quote }}
+            {{- range .Values.frontend.extraEnv }}
+            - name: {{ .name | quote }}
+              value: {{ .value | quote }}
+            {{- end }}
           command:
             - /bin/bash
             - -lc

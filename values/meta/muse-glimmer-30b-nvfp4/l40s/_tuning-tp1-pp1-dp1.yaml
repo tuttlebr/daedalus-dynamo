@@ -1,0 +1,38 @@
+# Engine tuning for the single-L40S recipe; preserved by catalog regeneration.
+# Auto tool choice and muse_glimmer tool/reasoning parsers are inherited from
+# ../_tuning.yaml under frontend.extraArgs, where Dynamo parses responses.
+# tensor-parallel-size: 1 is set by the generated tp1-pp1-dp1.yaml recipe.
+recipe:
+  buildRequired: true
+model:
+  image: daedalus.ddns.me:5050/btuttle/daedalus-dynamo-muse-glimmer:1.6.1-vlm-tools-v1
+  buildDockerfile: runtime/muse-glimmer/Dockerfile
+  buildContext: runtime/muse-glimmer
+  buildPlatform: linux/amd64,linux/arm64
+frontend:
+  # Frontend and GPU worker can be on different nodes. SHM transfer drops the
+  # raw image after sending a segment that the remote worker cannot access.
+  extraEnv:
+    - name: DYNAMO_DISABLE_NIXL_MM
+      value: "1"
+worker:
+  # All other L40S devices serve existing consumers; replace on the same GPU.
+  annotations:
+    nvidia.com/deployment-rolling-update-max-surge: "0"
+    nvidia.com/deployment-rolling-update-max-unavailable: "1"
+  vllmOptions:
+    # Override the generated text-only baseline after model.yaml is merged.
+    language-model-only: false
+    # Dynamo's request handler has a separate multimodal opt-in from vLLM.
+    enable-multimodal: true
+    generation-config: auto
+    max-num-batched-tokens: 8192
+    enable-chunked-prefill: true
+    async-scheduling: true
+    enable-prefix-caching: true
+    # false omits an option in this chart; true emits the explicit negative flag.
+    no-enable-flashinfer-autotune: true
+    speculative-config:
+      method: dflash
+      model: meta-models/Muse-Glimmer-30B-assistant
+      num_speculative_tokens: 15

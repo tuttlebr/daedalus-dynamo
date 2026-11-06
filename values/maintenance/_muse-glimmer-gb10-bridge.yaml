@@ -1,0 +1,26 @@
+# Private temporary serving capacity during L40S placement experiments.
+# The underscore keeps this operational recipe out of the public model catalog.
+extends:
+  - ../meta/muse-glimmer-30b-nvfp4/dgx-spark/tp1-pp1-dp1.yaml
+  - ../meta/muse-glimmer-30b-nvfp4/l40s/_tuning-tp1-pp1-dp1.yaml
+recipe:
+  gateway: false
+  qualification: validated-maintenance-bridge-131k
+modelCache:
+  # Reuse the retained exact-model cache; never delete it on cleanup.
+  create: false
+frontend:
+  nodeSelector:
+    kubernetes.io/arch: amd64
+    kubernetes.io/hostname: daedalus-03
+modelexpress:
+  nodeSelector:
+    kubernetes.io/arch: amd64
+    kubernetes.io/hostname: daedalus-03
+worker:
+  memoryRequest: 88Gi
+  vllmOptions:
+    max-model-len: 131072
+    gpu-memory-utilization: 0.70
+    speculative-config:
+      revision: c676cce91658f9568aaf264a416211e2782735b7

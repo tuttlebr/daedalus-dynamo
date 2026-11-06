@@ -99,6 +99,8 @@ frontend:
   # Additional frontend CLI arguments for direct deployments. Each list item
   # is one literal argv token, including values that contain spaces or JSON.
   extraArgs: []
+  # Additional literal environment variables for the model's frontend.
+  extraEnv: []
   resources:
     requests:
       cpu: 500m

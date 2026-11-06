@@ -18,7 +18,7 @@
         "runtimeVersionOverride": { "type": "string", "pattern": "^$|^[0-9]+\\.[0-9]+\\.[0-9]+$" },
         "buildDockerfile": { "type": "string", "minLength": 1 },
         "buildContext": { "type": "string", "minLength": 1 },
-        "buildPlatform": { "type": "string", "enum": ["linux/amd64", "linux/arm64"] }
+        "buildPlatform": { "type": "string", "enum": ["linux/amd64", "linux/arm64", "linux/amd64,linux/arm64"] }
       }
     },
     "planner": {
@@ -207,6 +207,7 @@
     "frontend": {
       "type": "object",
       "properties": {
+        "extraEnv": { "$ref": "#/properties/worker/properties/extraEnv" },
         "runtimeProfile": { "type": "string", "pattern": "^[a-zA-Z0-9_./-]*$" },
         "image": { "type": "string" },
         "nodeSelector": { "type": "object", "additionalProperties": { "type": "string" } },

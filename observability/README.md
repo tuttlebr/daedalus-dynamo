@@ -7,6 +7,16 @@ SPDX-License-Identifier: Apache-2.0
 
 ## Efficiency and SLA patterns
 
+Use the platform-owned `dynamo-worker` PodMonitor for workers. The legacy
+`dynamo-decode-worker` monitor overlaps its selectors and must remain absent when
+the platform monitor is installed; production model values leave the optional
+chart monitor disabled. Otherwise raw worker counter sums double-count requests.
+
+Worker latency/request counters also include Dynamo's internal health canaries.
+Use frontend request, TTFT and duration metrics for user-facing latency, and
+compare fixed client requests when tuning the engine. Worker counters alone do
+not establish user latency during periods with little application traffic.
+
 Import `grafana/dynamo-efficiency-dashboard.json` for the simplified dashboard,
 **Dynamo · Efficiency & SLA Patterns** (uid `dynamo-efficiency`). It adds a
 separate dashboard and preserves the existing operations dashboard.

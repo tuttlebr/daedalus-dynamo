@@ -83,6 +83,42 @@ uses this layer to select the vLLM chat processor and `muse_glimmer` reasoning/t
 parsers, with 8 GiB frontend memory. Without these parsers, reasoning and ATEM
 channel markers appeared in `message.content`.
 
+Tuning for just one parallelism configuration belongs in
+`<hardware>/_tuning-<parallelism>.yaml`. The generator includes it after the
+hardware's `_tuning.yaml` and uses the merged settings for fit screening.
+For Muse on one L40S, edit
+`values/meta/muse-glimmer-30b-nvfp4/l40s/_tuning-tp1-pp1-dp1.yaml`:
+`worker.vllmOptions` contains generation, batching, scheduling, caching and DFlash
+settings. A `speculative-config` mapping becomes one JSON command-line argument.
+Use `no-enable-flashinfer-autotune: true` to emit that negative flag; `false`
+would omit it. TP1 remains in the generated recipe, and tool choice/parsers remain
+in the shared Muse `frontend.extraArgs`. The TP2 and Spark recipes do not inherit
+this TP1 tuning. This TP1 profile was GPU smoke-tested with DFlash and image
+inputs on 2026-11-01; the existing memory screening does not account for
+draft-model allocations.
+
+The single-L40S Muse profile uses the versioned runtime in
+`runtime/muse-glimmer/`. It preserves Dynamo 1.6.1 and vLLM 0.31.0 and adds Muse's
+ATEM opening marker to the tool parser so Dynamo retains the reasoning-to-tool
+handoff until the call is complete. The build checks the original parser hash
+before patching and supports both amd64 and arm64, preserving the frontend's
+existing scheduling options and unprivileged runtime user.
+The TP1 tuning overrides the generated `language-model-only` default to `false`,
+enabling the perception encoder, and sets `enable-multimodal: true` to enable
+Dynamo's request handler. Both settings are required for image requests.
+The frontend sets `DYNAMO_DISABLE_NIXL_MM=1` through `frontend.extraEnv`, so the
+worker processes the original image instead of receiving a shared-memory segment
+that is inaccessible when the frontend and GPU worker run on different nodes.
+It also uses zero surge and one unavailable
+worker during updates because the other L40S GPUs serve existing consumers.
+The model ID, gateway routes, credentials and ports are unchanged.
+`runtime/muse-glimmer/test_tool_handoff.py <cached-tokenizer-directory>` exercises
+the installed parser with automatic, required and named tool choices, one or two
+calls, and one-token, 15-token and whole-response chunks. Run it inside the model
+image; it needs only CPU and the cached tokenizer.
+See the [deployment investigation](investigations/muse-glimmer-vlm-2026-11-01.md)
+for the failure mechanism, live validation and rollback instructions.
+
 Muse Spark was GPU smoke-tested on 2026-10-30 with a fixed context: `/v1/models` reported a 32,768-token
 window; short chat and a 31,083-input-token chat request returned the expected
 answer with reasoning separated. The long request took 55.47 seconds and generated

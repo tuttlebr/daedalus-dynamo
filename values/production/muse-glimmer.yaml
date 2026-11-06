@@ -1,0 +1,58 @@
+# Production placement. Preserve the established release, discovery namespace,
+# Service and Redis names while using both L40S devices in node 03.
+extends:
+  - ../meta/muse-glimmer-30b-nvfp4/l40s/tp2-pp1-dp1.yaml
+  - ../meta/muse-glimmer-30b-nvfp4/l40s/_tuning-tp1-pp1-dp1.yaml
+recipe:
+  release: mx-muse-glimmer-30b-nvfp4-l40s-tp1-84d1be
+  qualification: validated-tp2-cudagraphs-dflash15
+model:
+  name: mx-muse-glimmer-30b-nvfp4-l40s-tp1-84d1be
+frontend:
+  nodeSelector:
+    kubernetes.io/arch: amd64
+    kubernetes.io/hostname: daedalus-03
+modelexpress:
+  # Local storage preserves root ownership (unlike the older NFS export).
+  # Use the same UID as vLLM so it can create cache refs and runtime metadata.
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    runAsNonRoot: true
+  nodeSelector:
+    kubernetes.io/arch: amd64
+    kubernetes.io/hostname: daedalus-03
+worker:
+  nodeSelector:
+    kubernetes.io/arch: amd64
+    kubernetes.io/hostname: daedalus-03
+    nvidia.com/gpu.product: NVIDIA-L40S
+  cpuRequest: "4"
+  memoryRequest: 24Gi
+  vllmOptions:
+    tensor-parallel-size: 2
+    # Decode graphs passed text/tool/vision gates and fixed latency trials.
+    # Keep prefill eager; full torch compilation was not part of acceptance.
+    enforce-eager: false
+    compilation-config:
+      mode: 0
+      cudagraph_mode: FULL_DECODE_ONLY
+    speculative-config:
+      # Pin the assistant revision used by the before/after measurements.
+      revision: c676cce91658f9568aaf264a416211e2782735b7
+      num_speculative_tokens: 15
+    # Keep the repository's automatic fit policy; the acceptance gate requires
+    # the running frontend to advertise the original 131072-token context.
+    max-model-len: auto
+modelCache:
+  name: mx-muse-glimmer-l40s-tp2-local-cache
+  storageClassName: local-fast
+  accessModes: [ReadWriteOnce]
+  storage: 64Gi
+redis:
+  name: mx-muse-glimmer-30b-nvfp4-l40s-tp1-84d1be-redis
+  dataPvcName: mx-muse-glimmer-30b-nvfp4-l40s-tp1-84d1be-redis-data
+metrics:
+  podMonitor:
+    # The Dynamo platform's dynamo-worker monitor already scrapes these pods.
+    enabled: false

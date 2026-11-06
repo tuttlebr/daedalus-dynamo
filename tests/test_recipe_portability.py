@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import shutil
 import subprocess
 import sys
@@ -18,6 +19,28 @@ from simulate_model_catalog import prediction  # noqa: E402
 
 
 class RecipePortabilityTests(unittest.TestCase):
+    def test_production_tp2_preserves_serving_contract_and_local_cache_placement(self):
+        values = resolve(ROOT / 'values/production/muse-glimmer.yaml')
+        original = resolve(ROOT / 'values/meta/muse-glimmer-30b-nvfp4/l40s/tp1-pp1-dp1.yaml')
+        self.assertEqual(values['recipe']['release'], original['recipe']['release'])
+        self.assertEqual(values['model'], original['model'])
+        self.assertEqual(values['redis'], original['redis'])
+        self.assertEqual(values['worker']['gpu'], '2')
+        options = values['worker']['vllmOptions']
+        self.assertEqual(options['tensor-parallel-size'], 2)
+        self.assertEqual(options['max-model-len'], 'auto')
+        self.assertFalse(options['enforce-eager'])
+        self.assertEqual(options['compilation-config'], {'mode':0, 'cudagraph_mode':'FULL_DECODE_ONLY'})
+        self.assertEqual(options['speculative-config']['revision'], 'c676cce91658f9568aaf264a416211e2782735b7')
+        self.assertTrue(options['enable-multimodal'])
+        self.assertFalse(options['language-model-only'])
+        self.assertEqual(values['frontend']['extraArgs'], original['frontend']['extraArgs'])
+        self.assertEqual(values['frontend']['extraEnv'], original['frontend']['extraEnv'])
+        self.assertEqual(values['modelCache']['accessModes'], ['ReadWriteOnce'])
+        self.assertEqual(values['modelexpress']['securityContext']['runAsUser'], 1000)
+        self.assertEqual({values[role]['nodeSelector']['kubernetes.io/hostname']
+                          for role in ['frontend', 'modelexpress', 'worker']}, {'daedalus-03'})
+
     def test_context_policy_and_muse_tuning_survive_catalog_regeneration(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -60,6 +83,60 @@ class RecipePortabilityTests(unittest.TestCase):
             self.assertEqual(l40s["gpu-memory-utilization"], 0.9)
             self.assertEqual(l40s["max-model-len"], "auto")
             self.assertEqual(resolve(model / "l40s/tp1-pp1-dp1.yaml")["frontend"]["extraArgs"], values["frontend"]["extraArgs"])
+
+            # TP1-specific engine tuning must survive regeneration, render as
+            # usable argv, and stay out of the TP2 and Spark recipes.
+            rendered = subprocess.check_output([
+                "helm", "template", "muse-l40s-test", "charts/dynamo-model", "-f",
+                values_path(model / "l40s/tp1-pp1-dp1.yaml")], cwd=ROOT, text=True)
+            graph = next(d for d in yaml.safe_load_all(rendered) if d and d["kind"] == "DynamoGraphDeployment")
+            script = graph["spec"]["services"]["VllmWorker"]["extraPodSpec"]["mainContainer"]["args"][0]
+            subprocess.run(["bash", "-n"], input=script, text=True, check=True)
+            argv = shlex.split(script.split("exec python3 -m dynamo.vllm", 1)[1].replace("\\\n", ""))
+            for flag, expected in (("--generation-config", "auto"),
+                                   ("--max-num-batched-tokens", "8192"),
+                                   ("--tensor-parallel-size", "1")):
+                self.assertEqual(argv.count(flag), 1)
+                self.assertEqual(argv[argv.index(flag) + 1], expected)
+            for flag in ("--enable-chunked-prefill", "--async-scheduling",
+                         "--enable-prefix-caching", "--no-enable-flashinfer-autotune"):
+                self.assertEqual(argv.count(flag), 1)
+            self.assertNotIn("--language-model-only", argv)
+            self.assertEqual(argv.count("--enable-multimodal"), 1)
+            self.assertEqual(graph["spec"]["services"]["VllmWorker"]["annotations"], {
+                "nvidia.com/deployment-rolling-update-max-surge": "0",
+                "nvidia.com/deployment-rolling-update-max-unavailable": "1",
+            })
+            integration = resolve(model / "l40s/tp1-pp1-dp1.yaml")
+            self.assertTrue(integration["recipe"]["buildRequired"])
+            self.assertEqual(integration["model"]["buildDockerfile"], "runtime/muse-glimmer/Dockerfile")
+            self.assertEqual(integration["model"]["buildPlatform"], "linux/amd64,linux/arm64")
+            self.assertEqual(graph["spec"]["services"]["Frontend"]["extraPodSpec"]["mainContainer"]["image"],
+                             integration["model"]["image"])
+            frontend_env = graph["spec"]["services"]["Frontend"]["extraPodSpec"]["mainContainer"]["env"]
+            self.assertIn({"name": "DYNAMO_DISABLE_NIXL_MM", "value": "1"}, frontend_env)
+            self.assertEqual(graph["spec"]["services"]["VllmWorker"]["extraPodSpec"]["mainContainer"]["image"],
+                             integration["model"]["image"])
+            self.assertNotIn("--enable-flashinfer-autotune", argv)
+            self.assertEqual(argv.count("--speculative-config"), 1)
+            self.assertEqual(json.loads(argv[argv.index("--speculative-config") + 1]), {
+                "method": "dflash", "model": "meta-models/Muse-Glimmer-30B-assistant",
+                "num_speculative_tokens": 15,
+            })
+            frontend = graph["spec"]["services"]["Frontend"]["extraPodSpec"]["mainContainer"]["args"][0]
+            frontend_argv = shlex.split(frontend.replace("\\\n", ""))
+            self.assertIn("--enable-auto-tool-choice", frontend_argv)
+            for flag in ("--tool-call-parser", "--reasoning-parser"):
+                self.assertEqual(frontend_argv[frontend_argv.index(flag) + 1], "muse_glimmer")
+                self.assertNotIn(flag, argv)
+            for sibling in ("l40s/tp2-pp1-dp1.yaml", "dgx-spark/tp1-pp1-dp1.yaml"):
+                self.assertFalse(resolve(model / sibling)["frontend"].get("extraEnv", []))
+                sibling_options = resolve(model / sibling)["worker"]["vllmOptions"]
+                self.assertTrue(sibling_options["language-model-only"])
+                self.assertNotIn("enable-multimodal", sibling_options)
+                self.assertNotIn("speculative-config", sibling_options)
+                self.assertNotIn("async-scheduling", sibling_options)
+                self.assertEqual(sibling_options["max-num-batched-tokens"], 2048)
 
     def test_simulation_uses_numeric_screening_context_for_auto_serving(self) -> None:
         for path, screening_context in (
